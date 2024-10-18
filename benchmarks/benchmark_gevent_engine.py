@@ -1,0 +1,67 @@
+import random
+import time
+from concurrent.futures import ProcessPoolExecutor
+
+import numpy as np
+import shortuuid
+
+
+def benchmark(args):
+    random.seed(args.seed)
+
+    from gevent.pool import Pool
+
+    from wde.engine.gevent_engine import GeventLLMEngine
+
+    engine = GeventLLMEngine(model=args.model,
+                             seed=args.seed,
+                             dtype=args.dtype,
+                             device=args.device,
+                             max_num_seqs=args.max_model_len)
+
+    _prompt = "if" * args.input_len
+    requests = [_prompt for _ in range(args.num_prompts)]
+
+    def worker(prompt):
+        start = time.perf_counter()
+        request_id = f"{shortuuid.random(length=22)}"
+        outputs = engine.encode(inputs=prompt, request_id=request_id)
+        output = list(outputs)[0]
+        end = time.perf_counter()
+        delay = end - start
+        return output, delay
+
+    for n_works in args.n_works_list:
+        p = Pool(n_works)
+        start = time.perf_counter()
+        delay_list = []
+        for output, delay in p.imap_unordered(worker, requests):
+            delay_list.append(delay)
+
+        end = time.perf_counter()
+        elapsed_time = end - start
+
+        print(f"n_works {n_works}, Throughput: "
+              f"{len(requests) / elapsed_time:.4f} requests/s, "
+              f"Delay {np.mean(delay_list) * 1000:0.2f} ms")
+
+
+if __name__ == '__main__':
+    from easydict import EasyDict as edict
+    args = edict()
+
+    args.input_len = 256
+    args.num_prompts = 10000
+
+    args.model = 'BAAI/bge-m3'
+    args.seed = 0
+    args.dtype = "half"
+    args.device = "cuda"
+    args.max_model_len = 16
+    args.scheduling = "async"
+
+    args.n_works_list = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512]
+
+    with ProcessPoolExecutor(1) as executor:
+        f = executor.submit(benchmark, args)
+        f.result()

@@ -1,0 +1,23 @@
+name: wde_v0.1
+channels:
+  - conda-forge
+  - pytorch
+  - nvidia
+  - defaults
+dependencies:
+  - python=3.11
+  - anaconda
+  - pip
+  - pip:
+      - torch==2.4.0
+      - torchvision==0.19
+      - transformers==4.45.2
+      - fastapi
+      - easydict
+      - pydantic
+      - pyzmq
+      - gevent
+      - uvicorn
+      - shortuuid
+      - modelscope
+      - vllm==v0.6.3
