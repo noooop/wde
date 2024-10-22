@@ -17,7 +17,9 @@ def benchmark(args):
                              seed=args.seed,
                              dtype=args.dtype,
                              device=args.device,
-                             max_num_seqs=args.max_model_len)
+                             max_num_seqs=args.max_model_len,
+                             scheduling=args.scheduling,
+                             waiting=args.waiting)
 
     _prompt = "if" * args.input_len
     requests = [_prompt for _ in range(args.num_prompts)]
@@ -57,11 +59,17 @@ if __name__ == '__main__':
     args.seed = 0
     args.dtype = "half"
     args.device = "cuda"
-    args.max_model_len = 16
     args.scheduling = "async"
 
     args.n_works_list = [1, 2, 4, 8, 16, 32, 64, 128, 256, 512]
 
-    with ProcessPoolExecutor(1) as executor:
-        f = executor.submit(benchmark, args)
-        f.result()
+    for waiting in [None, 0.001]:
+        print("waiting", waiting)
+        args.waiting = waiting
+        for max_model_len in [1, 2, 4, 8, 16, 32, 64]:
+            print("max_model_len:", max_model_len)
+            args.max_model_len = max_model_len
+
+            with ProcessPoolExecutor(1) as executor:
+                f = executor.submit(benchmark, args)
+                f.result()

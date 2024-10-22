@@ -44,6 +44,7 @@ class DecodeOnlyOutputLastHiddenStatesEngineArgs(EngineArgs):
     max_num_seqs: int = 256
     max_num_on_the_fly: Optional[int] = None
     scheduling: str = "async"
+    waiting: Optional[float] = None
 
     data_parallel_size: int = 0
 
@@ -92,7 +93,8 @@ class DecodeOnlyOutputLastHiddenStatesEngineArgs(EngineArgs):
                 max_num_seqs=self.max_num_seqs,
                 max_model_len=model_config.max_model_len,
                 max_num_on_the_fly=self.max_num_on_the_fly,
-                scheduling=self.scheduling)
+                scheduling=self.scheduling,
+                waiting=self.waiting)
         else:
             scheduler_config = DecodeOnlySchedulerConfig()
 

@@ -44,17 +44,8 @@ class DecodeOnlySchedulerConfig(SchedulerConfig):
 class DecodeOnlyEmbeddingSchedulerConfig(DecodeOnlySchedulerConfig,
                                          PrefillOnlySchedulerConfig):
 
-    def __init__(self,
-                 max_model_len: int,
-                 max_num_batched_tokens: Optional[int] = None,
-                 max_num_requests: Optional[int] = None,
-                 max_num_seqs: Optional[int] = None,
-                 max_num_on_the_fly: Optional[int] = None,
-                 scheduling: str = "async") -> None:
-        PrefillOnlySchedulerConfig.__init__(self, max_model_len,
-                                            max_num_batched_tokens,
-                                            max_num_requests, max_num_seqs,
-                                            max_num_on_the_fly, scheduling)
+    def __init__(self, *args, **kwargs) -> None:
+        PrefillOnlySchedulerConfig.__init__(self, *args, **kwargs)
         self.output_last_hidden_states = True
 
 

@@ -18,6 +18,7 @@ class PrefillOnlySchedulerConfig(SchedulerConfig):
                  max_num_seqs: Optional[int] = None,
                  max_num_on_the_fly: Optional[int] = None,
                  scheduling: str = "async",
+                 waiting: Optional[float] = None,
                  *args,
                  **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -25,6 +26,7 @@ class PrefillOnlySchedulerConfig(SchedulerConfig):
         self.max_num_requests: int = 0
         self.max_num_batched_tokens: int = 0
         self.scheduling = scheduling
+        self.waiting = waiting
 
         if max_num_on_the_fly is None:
             if scheduling == "double_buffer":
@@ -68,6 +70,11 @@ class PrefillOnlySchedulerConfig(SchedulerConfig):
         if self.scheduling not in self.supported_scheduling:
             raise ValueError(f"scheduling {self.scheduling} must "
                              f"in {self.supported_scheduling}")
+
+        if self.waiting is not None:
+            if self.waiting < 0.:
+                raise ValueError(
+                    f"waiting {self.scheduling} must be positive.")
 
     @property
     def max_num_seqs(self) -> int:

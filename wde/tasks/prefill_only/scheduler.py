@@ -1,3 +1,4 @@
+import time
 from dataclasses import dataclass, field
 from typing import Set, cast
 
@@ -62,7 +63,12 @@ class PrefillOnlyScheduler(Scheduler):
             max_num_requests=self.scheduler_config.max_num_seqs,
         )
 
+        waiting = self.scheduler_config.waiting
         waiting_queue = self.waiting
+
+        if waiting is not None:
+            if len(waiting_queue) < self.scheduler_config.max_num_seqs / 2:
+                time.sleep(waiting)
 
         scheduled_requests = []
         ignored_requests = []

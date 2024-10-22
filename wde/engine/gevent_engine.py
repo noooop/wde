@@ -1,3 +1,9 @@
+# ruff: noqa: E402
+
+from gevent.monkey import patch_time
+
+patch_time()
+
 import time
 from typing import Dict, Iterator, Optional, Sequence, Union
 
@@ -68,6 +74,10 @@ class GeventLLMEngine:
         self.background_loop = None
         self._new_requests_event = Event()
         self._request_streams: Dict[str, GeventStream] = {}
+
+    @property
+    def info(self):
+        return {"mode": self.engine.engine_config.model_config.model}
 
     @property
     def is_running(self) -> bool:
