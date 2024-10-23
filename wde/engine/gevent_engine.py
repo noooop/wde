@@ -1,5 +1,5 @@
 # ruff: noqa: E402
-
+import gevent
 from gevent.monkey import patch_time
 
 patch_time()
@@ -109,6 +109,7 @@ class GeventLLMEngine:
                     self._request_streams[request_id].put(output)
                     if output.finished:
                         self._request_streams[request_id].finish()
+                gevent.idle()
 
             self._new_requests_event.clear()
 
