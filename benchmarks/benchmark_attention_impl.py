@@ -70,7 +70,6 @@ if __name__ == '__main__':
     args.max_model_len = None
     args.device = "cuda"
     args.batchsize = [1, 2, 4, 8, 16, 32, 64]
-    args.scheduling = "async"
 
     from concurrent.futures import ProcessPoolExecutor
 
@@ -82,10 +81,12 @@ if __name__ == '__main__':
             f = executor.submit(benchmark_wde, args)
             f.result()
 
-    for dtype, attention_impls in AttentionImpls.items():
-        print("dtype:", dtype)
-        for attention_impl in attention_impls:
-            print("attention_impl:", attention_impl)
-            args.attention_impl = attention_impl
-            args.dtype = dtype
-            run_wde(args)
+    for scheduling in ["sync", "async"]:
+        for dtype, attention_impls in AttentionImpls.items():
+            args.scheduling = scheduling
+            print("scheduling:", scheduling, "dtype:", dtype)
+            for attention_impl in attention_impls:
+                print("attention_impl:", attention_impl)
+                args.attention_impl = attention_impl
+                args.dtype = dtype
+                run_wde(args)

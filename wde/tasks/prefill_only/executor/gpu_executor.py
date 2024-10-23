@@ -1,6 +1,7 @@
 import atexit
 import queue
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from queue import Queue
 from typing import Optional
 
@@ -30,7 +31,7 @@ class GPUExecutor:
         self.workflow = workflow
         self.attn_backend = attn_backend
         self._init_executor()
-        self.executor = Executor(self.worker)
+        self.executor = FrierenExecutor(self.worker)
 
     @classmethod
     def from_engine(cls, engine: LLMEngine):
@@ -106,27 +107,32 @@ class GPUAsyncExecutor(GPUExecutor):
             atexit.unregister(self.shutdown_execute_loop)
 
 
-class Executor:
+class FrierenExecutor:
 
     def __init__(self, worker: WorkerBase):
-        self.h2d_stream = torch.cuda.Stream()
-        self.compute_stream = torch.cuda.Stream()
-        self.d2h_stream = torch.cuda.Stream()
+        self.stream_pool = Queue()
         self.worker = worker
 
+    def get_stream(self):
+        if self.stream_pool.empty():
+            stream = torch.cuda.Stream()
+            return stream
+        else:
+            return self.stream_pool.get()
+
+    def put_stream(self, stream):
+        return self.stream_pool.put(stream)
+
     def execute_model(self, execute_input: ExecuteInput) -> ExecuteOutput:
-        with torch.cuda.stream(self.h2d_stream):
+        stream = self.get_stream()
+
+        with torch.cuda.stream(stream):
             self.worker.non_blocking_h2d(execute_input)
-
-        self.compute_stream.wait_stream(self.h2d_stream)
-        with torch.cuda.stream(self.compute_stream):
             execute_output = self.worker(execute_input)
-
-        self.d2h_stream.wait_stream(self.compute_stream)
-        with torch.cuda.stream(self.d2h_stream):
             self.worker.non_blocking_d2h(execute_output)
 
-        self.d2h_stream.synchronize()
+        stream.synchronize()
+        self.put_stream(stream)
 
         return execute_output
 
@@ -145,13 +151,12 @@ class Executor:
             executor_out.put(e)
 
     def async_execute_loop(self, executor_in: Queue, executor_out: Queue):
-        put_thread = ThreadPoolExecutor(1)
+        thread = ThreadPoolExecutor(1)
 
-        def _put(scheduler_output, execute_output):
-            self.d2h_stream.wait_stream(self.compute_stream)
-            with torch.cuda.stream(self.d2h_stream):
-                self.worker.non_blocking_d2h(execute_output)
-                self.d2h_stream.synchronize()
+        # Is there a better way to do it asynchronously?
+        def _put(stream, scheduler_output, execute_output):
+            stream.synchronize()
+            self.put_stream(stream)
             executor_out.put((scheduler_output, execute_output))
 
         try:
@@ -160,46 +165,32 @@ class Executor:
                 if o is None:
                     break
 
+                stream = self.get_stream()
+
                 scheduler_output, execute_input = o
 
-                with torch.cuda.stream(self.h2d_stream):
+                with torch.cuda.stream(stream):
                     self.worker.non_blocking_h2d(execute_input)
-
-                self.compute_stream.wait_stream(self.h2d_stream)
-                with torch.cuda.stream(self.compute_stream):
                     execute_output = self.worker(execute_input)
+                    self.worker.non_blocking_d2h(execute_output)
 
-                put_thread.submit(_put, scheduler_output, execute_output)
+                thread.submit(_put, stream, scheduler_output, execute_output)
         except Exception as e:
             executor_out.put(e)
-        put_thread.shutdown()
+        thread.shutdown()
 
     def double_buffer_execute_loop(self, executor_in: Queue,
                                    executor_out: Queue):
-
-        from dataclasses import dataclass
-
         from wde.tasks.core.schema.engine_io import SchedulerOutput
-
-        h2d_stream = self.h2d_stream
-        compute_stream = self.compute_stream
-        d2h_stream = self.d2h_stream
         worker = self.worker
-        put_thread = ThreadPoolExecutor(1)
-
-        # Is there a better way to do it asynchronously?
-        def _put(scheduler_output, execute_output):
-            d2h_stream.wait_stream(compute_stream)
-            with torch.cuda.stream(d2h_stream):
-                worker.non_blocking_d2h(execute_output)
-                d2h_stream.synchronize()
-            executor_out.put((scheduler_output, execute_output))
+        thread = ThreadPoolExecutor(1)
 
         @dataclass
         class Task:
             scheduler_output: SchedulerOutput
             execute_input: ExecuteInput
             execute_output: Optional[ExecuteOutput]
+            stream: torch.cuda.Stream()
 
             @classmethod
             def get(cls, block=True, timeout=None):
@@ -211,8 +202,32 @@ class Executor:
 
                 task = cls(scheduler_output=scheduler_output,
                            execute_input=execute_input,
-                           execute_output=None)
+                           execute_output=None,
+                           stream=self.get_stream())
                 return task
+
+        def _put(stream, scheduler_output, execute_output):
+            stream.synchronize()
+            self.put_stream(stream)
+            executor_out.put((scheduler_output, execute_output))
+
+        def _prefetch():
+            # Is there any way to achieve
+            # poller = epoll.register(compute_stream, executor_in)
+            # poller.poll()
+
+            try:
+                task = Task.get(timeout=0.001)
+
+                if task is None:
+                    return False
+                else:
+                    with torch.cuda.stream(task.stream):
+                        worker.non_blocking_h2d(task.execute_input)
+                        task.execute_output = worker(task.execute_input)
+                    return task
+            except queue.Empty:
+                return None
 
         current_task: Optional[Task] = None
         next_task: Optional[Task] = None
@@ -226,37 +241,30 @@ class Executor:
                     if current_task is None:
                         break
 
-                    with torch.cuda.stream(h2d_stream):
+                    with torch.cuda.stream(current_task.stream):
                         worker.non_blocking_h2d(current_task.execute_input)
-
-                    compute_stream.wait_stream(h2d_stream)
-                    with torch.cuda.stream(compute_stream):
                         current_task.execute_output = worker(
                             current_task.execute_input)
 
-                try:
-                    # Is there any way to achieve
-                    # poller = epoll.register(compute_stream, executor_in)
-                    # poller.poll()
-                    next_task = Task.get(timeout=0.002)
-                    if next_task is None:
-                        go_on = False
-                    else:
-                        with torch.cuda.stream(h2d_stream):
-                            worker.non_blocking_h2d(next_task.execute_input)
+                with torch.cuda.stream(current_task.stream):
+                    self.worker.non_blocking_d2h(current_task.execute_output)
 
-                        compute_stream.wait_stream(h2d_stream)
+                f = thread.submit(_prefetch)
+                thread.submit(_put, current_task.stream,
+                              current_task.scheduler_output,
+                              current_task.execute_output)
 
-                        with torch.cuda.stream(compute_stream):
-                            next_task.execute_output = worker(
-                                next_task.execute_input)
-                except queue.Empty:
-                    pass
+                maybe_task = f.result()
+                if maybe_task is False:
+                    go_on = False
+                elif isinstance(maybe_task, Task):
+                    next_task = maybe_task
+                else:
+                    next_task = None
 
-                put_thread.submit(_put, current_task.scheduler_output,
-                                  current_task.execute_output)
+                # switch double buffer
                 current_task = next_task
                 next_task = None
         except Exception as e:
             executor_out.put(e)
-        put_thread.shutdown()
+        thread.shutdown()

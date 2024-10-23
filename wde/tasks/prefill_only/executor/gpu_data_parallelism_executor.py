@@ -9,7 +9,7 @@ from wde.tasks.core.config import EngineConfig
 from wde.tasks.core.llm_engine import LLMEngine
 from wde.tasks.core.worker import create_worker
 from wde.tasks.core.workflow import Workflow
-from wde.tasks.prefill_only.executor.gpu_executor import Executor
+from wde.tasks.prefill_only.executor.gpu_executor import FrierenExecutor
 
 logger = init_logger(__name__)
 
@@ -48,7 +48,7 @@ class GPUDataParallelismExecutor:
         worker = create_worker(**worker_kwargs)
         worker.init_device()
         worker.load_model()
-        executor = Executor(worker)
+        executor = FrierenExecutor(worker)
 
         if self.engine_config.scheduler_config.scheduling == "double_buffer":
             execute_loop = executor.double_buffer_execute_loop
