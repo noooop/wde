@@ -93,15 +93,12 @@ class GeventLLMEngine:
             self.background_loop = Greenlet.spawn(self.run_engine_loop)
 
     def run_engine_loop(self):
-
-        def wait_for_new_requests():
-            self._new_requests_event.wait()
-
         while True:
             if not self.engine.has_unfinished_requests():
-                wait_for_new_requests()
+                self._new_requests_event.wait()
 
             while self.engine.has_unfinished_requests():
+                # Not thread safe
                 step_outputs = self.engine.step()
 
                 for output in step_outputs:
@@ -110,7 +107,6 @@ class GeventLLMEngine:
                     if output.finished:
                         self._request_streams[request_id].finish()
                 gevent.idle()
-
             self._new_requests_event.clear()
 
     def add_request(
@@ -181,9 +177,8 @@ class GeventLLMEngine:
         return self._abort(request_id)
 
     def _abort(self, request_id: str) -> None:
-        self._request_tracker.abort_request(request_id)
+        self.engine.abort_request(request_id)
 
     def terminate(self):
         self.background_loop.kill()
         self.engine = None
-        self._request_tracker = None
