@@ -2,6 +2,7 @@ import gc
 import os
 from typing import Any, Dict, List, Optional, TypeVar
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -151,7 +152,14 @@ def compare_embeddings(embeddings1, embeddings2):
 
 
 def compare_embeddings_np(embeddings1, embeddings2):
-    similarities = [e1 @ e2.T for e1, e2 in zip(embeddings1, embeddings2)]
+
+    def cosine_similarity_np(e1, e2):
+        return e1.dot(e2) / (np.linalg.norm(e1) * np.linalg.norm(e2))
+
+    similarities = [
+        cosine_similarity_np(e1, e2)
+        for e1, e2 in zip(embeddings1, embeddings2)
+    ]
     return similarities
 
 

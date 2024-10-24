@@ -1,4 +1,5 @@
 from wde.tasks.prefill_only.workflow import PrefillOnlyWorkflow
+from wde.tasks.retriever.engine.schema import PROTOCOL
 
 
 class EncodeOnlyWorkflow(PrefillOnlyWorkflow):
@@ -7,3 +8,4 @@ class EncodeOnlyWorkflow(PrefillOnlyWorkflow):
     OutputProcessor: str = ("wde.tasks.encode_only.processor."
                             "output_processor:EncodeOnlyOutputProcessor")
     attn_type: str = "ENCODER"
+    protocol: str = PROTOCOL

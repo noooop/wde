@@ -21,3 +21,4 @@ dependencies:
       - shortuuid
       - modelscope
       - vllm==v0.6.3
+      - cachetools
