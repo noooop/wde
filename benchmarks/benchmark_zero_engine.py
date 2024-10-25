@@ -103,10 +103,10 @@ if __name__ == '__main__':
 
     args.n_works_list = [1, 2, 4, 8, 16, 32, 64, 128]
 
-    for waiting in [0.001, 0.005, 0.01]:
+    for waiting in [None, 0.001, 0.005, 0.01]:
         print("waiting", waiting)
         args.waiting = waiting
-        for max_model_len in [1, 2, 4, 8, 16, 32, 64]:
+        for max_model_len in [8, 16]:
             print("max_model_len:", max_model_len)
             args.max_model_len = max_model_len
 

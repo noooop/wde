@@ -21,7 +21,6 @@ logger = init_logger(__name__)
 
 class ZeroServer(object):
     POLL_INTERVAL = 1000
-    POOL_SIZE = None
 
     def __init__(self,
                  name=None,
@@ -30,7 +29,8 @@ class ZeroServer(object):
                  event=None,
                  do_register=True,
                  share_port=None,
-                 nameserver_port=None):
+                 nameserver_port=None,
+                 pool_size=None):
         context = zmq.Context.instance()
         socket = context.socket(zmq.ROUTER)
         if port is None or port == "random":
@@ -51,6 +51,7 @@ class ZeroServer(object):
         if share_port is not None:
             share_port.value = port
 
+        self.pool_size = pool_size
         self.name = name
         self.protocol = protocol or getattr(self, "protocol", None)
         self.nameserver_port = nameserver_port
@@ -141,7 +142,7 @@ class ZeroServer(object):
                     msg = self.socket.recv_multipart()
                     yield msg
 
-        p = Pool(self.POOL_SIZE)
+        p = Pool(self.pool_size)
 
         for x in p.imap_unordered(self.process, get_task()):
             pass
