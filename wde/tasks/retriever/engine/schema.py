@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Optional
 
 from pydantic import BaseModel, Field
 
@@ -15,3 +15,4 @@ class RetrieverRequest(BaseModel):
 class RetrieverResponse(BaseModel):
     model: str
     embedding: Any
+    metrics: Optional[dict] = None

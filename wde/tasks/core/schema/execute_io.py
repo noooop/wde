@@ -23,6 +23,8 @@ class ExecuteInput:
 
 @dataclass
 class ExecuteOutput:
+    execute_begin_ts: Optional[float] = None
+    execute_end_ts: Optional[float] = None
 
     def to(self, target_device, non_blocking=False):
         for k in self.__dict__:

@@ -1,5 +1,6 @@
 import atexit
 import queue
+import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from queue import Queue
@@ -124,8 +125,9 @@ class FrierenExecutor:
         return self.stream_pool.put(stream)
 
     def execute_model(self, execute_input: ExecuteInput) -> ExecuteOutput:
-        stream = self.get_stream()
+        execute_begin_ts = time.perf_counter()
 
+        stream = self.get_stream()
         with torch.cuda.stream(stream):
             self.worker.non_blocking_h2d(execute_input)
             execute_output = self.worker(execute_input)
@@ -134,6 +136,10 @@ class FrierenExecutor:
         stream.synchronize()
         self.put_stream(stream)
 
+        execute_end_ts = time.perf_counter()
+
+        execute_output.execute_begin_ts = execute_begin_ts
+        execute_output.execute_end_ts = execute_end_ts
         return execute_output
 
     def simple_async_execute_loop(self, executor_in: Queue,
@@ -157,6 +163,7 @@ class FrierenExecutor:
         def _put(stream, scheduler_output, execute_output):
             stream.synchronize()
             self.put_stream(stream)
+            execute_output.execute_end_ts = time.perf_counter()
             executor_out.put((scheduler_output, execute_output))
 
         try:
@@ -164,6 +171,8 @@ class FrierenExecutor:
                 o = executor_in.get()
                 if o is None:
                     break
+
+                execute_begin = time.perf_counter()
 
                 stream = self.get_stream()
 
@@ -174,6 +183,7 @@ class FrierenExecutor:
                     execute_output = self.worker(execute_input)
                     self.worker.non_blocking_d2h(execute_output)
 
+                execute_output.execute_begin_ts = execute_begin
                 thread.submit(_put, stream, scheduler_output, execute_output)
         except Exception as e:
             executor_out.put(e)
@@ -191,6 +201,7 @@ class FrierenExecutor:
             execute_input: ExecuteInput
             execute_output: Optional[ExecuteOutput]
             stream: torch.cuda.Stream()
+            execute_begin_ts: float
 
             @classmethod
             def get(cls, block=True, timeout=None):
@@ -203,13 +214,16 @@ class FrierenExecutor:
                 task = cls(scheduler_output=scheduler_output,
                            execute_input=execute_input,
                            execute_output=None,
-                           stream=self.get_stream())
+                           stream=self.get_stream(),
+                           execute_begin_ts=time.perf_counter())
                 return task
 
-        def _put(stream, scheduler_output, execute_output):
-            stream.synchronize()
-            self.put_stream(stream)
-            executor_out.put((scheduler_output, execute_output))
+        def _put(task):
+            task.stream.synchronize()
+            self.put_stream(task.stream)
+            task.execute_output.execute_begin_ts = task.execute_begin_ts
+            task.execute_output.execute_end_ts = time.perf_counter()
+            executor_out.put((task.scheduler_output, task.execute_output))
 
         def _prefetch():
             # Is there any way to achieve
@@ -250,9 +264,7 @@ class FrierenExecutor:
                     self.worker.non_blocking_d2h(current_task.execute_output)
 
                 f = thread.submit(_prefetch)
-                thread.submit(_put, current_task.stream,
-                              current_task.scheduler_output,
-                              current_task.execute_output)
+                thread.submit(_put, current_task)
 
                 maybe_task = f.result()
                 if maybe_task is False:

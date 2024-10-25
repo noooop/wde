@@ -123,6 +123,12 @@ class LLMEngine:
 
         executor_input = self.model_inputs_builder(scheduler_output)
         executor_output = self.executor.execute_model(executor_input)
+
+        execute_time = executor_output.execute_end_ts - executor_output.execute_begin_ts
+        for request in scheduler_output.scheduled_requests:
+            request.metrics.execute_time = execute_time
+            request.metrics.waiting4execution = executor_output.execute_begin_ts - request.metrics.scheduling_end_ts
+
         request_outputs = self.output_processor(scheduler_output,
                                                 executor_output)
         self.scheduler.free_finished_request(request_outputs)
@@ -164,6 +170,11 @@ class LLMEngine:
         # Theoretically, this put is not needed
         # practically, task can be inqueue before doing post-processing
         self._put_as_many_as_possible()
+
+        execute_time = executor_output.execute_end_ts - executor_output.execute_begin_ts
+        for request in scheduler_output.scheduled_requests:
+            request.metrics.execute_time = execute_time
+            request.metrics.waiting4execution = executor_output.execute_begin_ts - request.metrics.scheduling_end_ts
 
         request_outputs = self.output_processor(scheduler_output,
                                                 executor_output)

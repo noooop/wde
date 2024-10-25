@@ -17,6 +17,7 @@ class ZeroEngine(Z_MethodZeroServer):
     def __init__(self, name, engine_args, **kwargs):
         self.engine_args = engine_args
         self.engine = GeventLLMEngine(**self.engine_args)
+        self.return_metrics = self.engine_args.pop("return_metrics", None)
 
         Z_MethodZeroServer.__init__(
             self,
@@ -51,39 +52,43 @@ class ZeroEngine(Z_MethodZeroServer):
 
         output = list(outputs)[0]
 
+        if self.return_metrics:
+            m = output.metrics
+
+            metrics = {
+                "waiting_time": m.waiting_time,
+                "scheduler_time": m.scheduler_time,
+                "n_request_in_batch": m.n_request_in_batch,
+                "waiting4execution": m.waiting4execution,
+                "execute_time": m.execute_time,
+                "delay": m.delay
+            }
+        else:
+            metrics = None
+
         response = RetrieverResponse(model=request.model,
-                                     embedding=output.outputs.numpy())
+                                     embedding=output.outputs.numpy(),
+                                     metrics=metrics)
 
         rep = ZeroServerResponseOk(msg=response)
         self.zero_send(req, rep)
 
 
 def start_zero_engine(engine_args):
+    from wde.microservices.standalone.server import Server
     assert "model" in engine_args
 
-    from wde.microservices.framework.zero.server import ZeroServerProcess
     from wde.microservices.framework.zero_manager.client import \
         ZeroManagerClient
 
-    MANAGER_NAME = "RootZeroManager"
+    server = Server()
+    server.setup()
+    server.run(waiting=False)
+
     server_class = "wde.engine.zero_engine:ZeroEngine"
 
-    nameserver = ZeroServerProcess(
-        "wde.microservices.framework.nameserver.server:ZeroNameServer")
-    manager = ZeroServerProcess(
-        "wde.microservices.framework.zero_manager.server:ZeroManager",
-        server_kwargs={
-            "name":
-            MANAGER_NAME,
-            "server_class":
-            "zerollama.core.framework.zero_manager.server:ZeroManager"
-        })
-
-    nameserver.start()
-    manager.start()
-
-    manager_client = ZeroManagerClient(MANAGER_NAME)
-    manager_client.wait_service_available(MANAGER_NAME)
+    manager_client = ZeroManagerClient(server.MANAGER_NAME)
+    manager_client.wait_service_available(server.MANAGER_NAME)
 
     model_name = engine_args["model"]
 
@@ -92,5 +97,4 @@ def start_zero_engine(engine_args):
                              "server_class": server_class,
                              "engine_args": engine_args
                          })
-
-    return manager, nameserver
+    return server

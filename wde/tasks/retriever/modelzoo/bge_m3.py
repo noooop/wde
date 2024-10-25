@@ -13,7 +13,7 @@ from wde.tasks.core.schema.execute_io import IntermediateTensors
 from wde.tasks.encode_only.modelzoo.xlm_roberta import (LoadWeightsMixin,
                                                         XLMRobertaConfig,
                                                         XLMRobertaModel)
-from wde.tasks.retriever.schema.execute_io import EmbeddingExecuteOutput
+from wde.tasks.retriever.schema.execute_io import RetrieverExecuteOutput
 
 
 class BGEM3Model(nn.Module, LoadWeightsMixin):
@@ -46,7 +46,7 @@ class BGEM3Model(nn.Module, LoadWeightsMixin):
         kv_caches: Optional[List[torch.Tensor]],
         attn_metadata: AttentionMetadata,
         intermediate_tensors: Optional[IntermediateTensors] = None,
-    ) -> EmbeddingExecuteOutput:
+    ) -> RetrieverExecuteOutput:
         assert kv_caches is None
 
         sequence_output = self.roberta(
@@ -62,4 +62,4 @@ class BGEM3Model(nn.Module, LoadWeightsMixin):
         if self.normalized:
             dense_vecs = torch.nn.functional.normalize(dense_vecs, dim=-1)
 
-        return EmbeddingExecuteOutput(embeddings=dense_vecs)
+        return RetrieverExecuteOutput(embeddings=dense_vecs)

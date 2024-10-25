@@ -1,10 +1,8 @@
 from dataclasses import dataclass
 from typing import List
 
-import torch
-
 from wde.tasks.core.schema.engine_io import (PromptInput, Request,
-                                             RequestOutput, SchedulableRequest,
+                                             SchedulableRequest,
                                              SchedulerOutput, TextOnlyInputs)
 
 
@@ -20,7 +18,7 @@ class PrefillOnlyRequest(Request):
 
 @dataclass
 class PrefillOnlySchedulableRequest(SchedulableRequest):
-    inputs: TextOnlyInputs
+    inputs: TextOnlyInputs = None
 
     @property
     def num_new_tokens(self):
@@ -34,19 +32,3 @@ class PrefillOnlySchedulerOutput(SchedulerOutput):
 
     def is_empty(self) -> bool:
         return not self.scheduled_requests
-
-
-class PrefillOnlyRequestOutput(RequestOutput):
-
-    def __init__(self, request_id: str, outputs: torch.Tensor,
-                 prompt_token_ids: List[int], finished: bool):
-        self.request_id = request_id
-        self.prompt_token_ids = prompt_token_ids
-        self.finished = finished
-        self.outputs = outputs
-
-    def __repr__(self):
-        return (f"PrefillOnlyRequestOutput(request_id='{self.request_id}', "
-                f"outputs={repr(self.outputs)}, "
-                f"prompt_token_ids={self.prompt_token_ids}, "
-                f"finished={self.finished})")

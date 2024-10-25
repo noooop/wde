@@ -1,12 +1,12 @@
+import time
 from typing import List
 
 import torch
 
 from wde.tasks.core.llm_engine import LLMEngine
 from wde.tasks.core.processor.output_processor import OutputProcessor
-from wde.tasks.prefill_only.schema.engine_io import (PrefillOnlyRequestOutput,
-                                                     PrefillOnlySchedulerOutput
-                                                     )
+from wde.tasks.prefill_only.schema.engine_io import PrefillOnlySchedulerOutput
+from wde.tasks.retriever.schema.engine_io import EmbeddingRequestOutput
 
 
 class DecodeOnlyHiddenStatesOutputProcessor(OutputProcessor):
@@ -18,21 +18,23 @@ class DecodeOnlyHiddenStatesOutputProcessor(OutputProcessor):
     def from_engine(cls, engine: LLMEngine):
         return cls()
 
-    def __call__(
-            self, scheduler_output: PrefillOnlySchedulerOutput,
-            execute_output: torch.Tensor) -> List[PrefillOnlyRequestOutput]:
+    def __call__(self, scheduler_output: PrefillOnlySchedulerOutput,
+                 execute_output: torch.Tensor) -> List[EmbeddingRequestOutput]:
 
         request_outputs = []
         offset = 0
         for request in scheduler_output.scheduled_requests:
             prompt_token_ids = request.inputs.prompt_token_ids
+            request.metrics.finish_ts = time.perf_counter()
+            request.metrics.delay = request.metrics.finish_ts - request.metrics.first_scheduled_ts
             n_tokens = len(prompt_token_ids)
             request_outputs.append(
-                PrefillOnlyRequestOutput(
-                    request_id=request.request_id,
-                    prompt_token_ids=prompt_token_ids,
-                    finished=True,
-                    # last pooling
-                    outputs=execute_output[offset + n_tokens - 1]))
+                EmbeddingRequestOutput(request_id=request.request_id,
+                                       arrival_time=request.arrival_time,
+                                       metrics=request.metrics,
+                                       prompt_token_ids=prompt_token_ids,
+                                       finished=True,
+                                       outputs=execute_output[offset +
+                                                              n_tokens - 1]))
             offset += n_tokens
         return request_outputs

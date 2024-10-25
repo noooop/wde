@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Optional
 
 import torch
 
@@ -6,5 +7,5 @@ from wde.tasks.core.schema.execute_io import ExecuteOutput
 
 
 @dataclass
-class EmbeddingExecuteOutput(ExecuteOutput):
-    embeddings: torch.Tensor
+class RetrieverExecuteOutput(ExecuteOutput):
+    embeddings: Optional[torch.Tensor] = None

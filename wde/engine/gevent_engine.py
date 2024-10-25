@@ -147,7 +147,7 @@ class GeventLLMEngine:
     ) -> Iterator[Union[RequestOutput]]:
         """Common logic to process requests with SamplingParams or
         PoolingParams."""
-        arrival_time = time.time()
+        arrival_time = time.perf_counter()
 
         stream = self.add_request(
             request_id,

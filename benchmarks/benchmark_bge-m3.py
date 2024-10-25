@@ -1,6 +1,8 @@
 import random
 import time
 
+import numpy as np
+
 
 def benchmark_hf(args):
     random.seed(args.seed)
@@ -61,21 +63,40 @@ def benchmark_wde(args):
         engine.engine_config.scheduler_config.set_args(max_num_seqs=batchsize)
 
         start = time.perf_counter()
+        metrics_list = []
+
         for request_id, prompt in enumerate(requests):
             engine.add_request(str(request_id), prompt)
 
         n_step = 0
         while engine.has_unfinished_requests():
-            engine.step()
             n_step += 1
+            request_outputs = engine.step()
+            for request in request_outputs:
+                metrics_list.append(request.metrics)
+
         end = time.perf_counter()
 
         elapsed_time = end - start
-        delay = elapsed_time / n_step
 
-        print(f"Batchsize {batchsize}, Throughput: "
-              f"{len(requests) / elapsed_time:.4f} requests/s, "
-              f"Delay {delay * 1000:0.2f} ms, n_step {n_step}")
+        scheduler_time = np.mean([m.scheduler_time for m in metrics_list])
+        waiting4execution = np.mean(
+            [m.waiting4execution for m in metrics_list])
+        execute_time = np.mean([m.execute_time for m in metrics_list])
+        n_request_in_batch = np.mean(
+            [m.n_request_in_batch for m in metrics_list])
+        delay = np.mean([m.delay for m in metrics_list])
+        avg_delay = elapsed_time / n_step
+
+        print(
+            f"Batchsize {batchsize}, Throughput: "
+            f"{len(requests) / elapsed_time:.4f} requests/s, "
+            f"Actual batchsize {n_request_in_batch:.2f}, ",
+            f"Scheduler time {scheduler_time * 1000:0.4f} ms, "
+            f"Waiting for Execute {waiting4execution * 1000:0.4f} ms, "
+            f"Execute time {execute_time * 1000:0.4f} ms, "
+            f"Avg Delay {avg_delay * 1000:0.4f} ms, "
+            f"Delay {delay * 1000:0.4f} ms, n_step {n_step}")
 
         engine.executor.shutdown_execute_loop()
         gc.collect()

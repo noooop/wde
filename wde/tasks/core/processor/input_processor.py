@@ -68,7 +68,7 @@ class TextInputProcessor(InputProcessor):
                 f"Input does not support {type(inputs)} data type")
 
         if not arrival_time:
-            arrival_time = time.time()
+            arrival_time = time.perf_counter()
         request = TextRequest(request_id=str(request_id),
                               inputs=inputs,
                               params=params,

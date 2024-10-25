@@ -53,7 +53,7 @@ class WDEZERORunner:
         }
         engine_args.update(**kwargs)
 
-        self.handle = start_zero_engine(engine_args)
+        self.server = start_zero_engine(engine_args)
 
     def encode(self, prompts: List[str]) -> List[List[float]]:
         from wde.tasks.retriever.engine.client import RetrieverClient
@@ -76,8 +76,7 @@ class WDEZERORunner:
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
-        for h in self.handle:
-            h.terminate()
+        self.server.terminate()
 
 
 @pytest.fixture(scope="session")

@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import List, Sequence, Union
+from typing import List, Optional, Sequence, Union
 
 from wde.tasks.core.schema.engine_io import Inputs, Request, RequestOutput
 
@@ -18,17 +18,7 @@ class RerankerRequest(Request):
     inputs: Pairs
 
 
+@dataclass
 class RerankerRequestOutput(RequestOutput):
-
-    def __init__(self, request_id: str, score: float,
-                 prompt_token_ids: List[int], finished: bool):
-        self.request_id = request_id
-        self.prompt_token_ids = prompt_token_ids
-        self.finished = finished
-        self.score = score
-
-    def __repr__(self):
-        return (f"RerankerRequestOutput(request_id='{self.request_id}', "
-                f"score={repr(self.score)}, "
-                f"prompt_token_ids={self.prompt_token_ids}, "
-                f"finished={self.finished})")
+    prompt_token_ids: Optional[List[int]] = None
+    score: Optional[float] = None

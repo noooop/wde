@@ -24,7 +24,7 @@ class RerankerInputProcessor(InputProcessor):
                  params: Optional[Params] = None,
                  arrival_time: Optional[float] = None) -> RerankerRequest:
         if not arrival_time:
-            arrival_time = time.time()
+            arrival_time = time.perf_counter()
 
         if isinstance(inputs, Sequence):
             if len(inputs) != 2:

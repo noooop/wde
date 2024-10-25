@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Union
 
 
@@ -56,7 +56,26 @@ class ValidationError(ValueError):
     pass
 
 
+@dataclass
+class RequestMetrics:
+    first_scheduled_ts: Optional[float] = None
+    scheduling_end_ts: Optional[float] = None
+    execute_begin_ts: Optional[float] = None
+    execute_end_ts: Optional[float] = None
+    finish_ts: Optional[float] = None
+
+    n_request_in_batch: Optional[int] = None
+
+    waiting_time: Optional[float] = None
+    scheduler_time: Optional[float] = None
+    waiting4execution: Optional[float] = None
+    execute_time: Optional[float] = None
+    delay: Optional[float] = None
+
+
+@dataclass
 class SchedulableRequest(Request):
+    metrics: RequestMetrics = field(default_factory=RequestMetrics)
 
     @property
     def num_new_tokens(self):
@@ -65,8 +84,8 @@ class SchedulableRequest(Request):
 
 @dataclass
 class TextSchedulableRequest(SchedulableRequest):
-    inputs: TextOnlyInputs
-    params: Optional[Params]
+    inputs: Optional[TextOnlyInputs] = None
+    params: Params = field(default_factory=Params)
 
     @property
     def num_new_tokens(self):
@@ -80,4 +99,5 @@ class SchedulerOutput:
 
 @dataclass
 class RequestOutput(Request):
-    finished: bool
+    metrics: RequestMetrics = field(default_factory=RequestMetrics)
+    finished: bool = True

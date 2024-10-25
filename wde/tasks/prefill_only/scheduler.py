@@ -58,6 +58,8 @@ class PrefillOnlyScheduler(Scheduler):
                    engine.request_processor)
 
     def schedule(self) -> PrefillOnlySchedulerOutput:
+        scheduling_begin_ts = time.perf_counter()
+
         budget = PrefillOnlySchedulingBudget(
             token_budget=self.scheduler_config.max_num_batched_tokens,
             max_num_requests=self.scheduler_config.max_num_seqs,
@@ -67,7 +69,7 @@ class PrefillOnlyScheduler(Scheduler):
         waiting_queue = self.waiting
 
         if waiting is not None:
-            if len(waiting_queue) < self.scheduler_config.max_num_seqs / 2:
+            if len(waiting_queue) < self.scheduler_config.max_num_seqs:
                 time.sleep(waiting)
 
         scheduled_requests = []
@@ -99,7 +101,18 @@ class PrefillOnlyScheduler(Scheduler):
 
             budget.add_num_batched_tokens(request.request_id, num_new_tokens)
             waiting_queue.popleft()
+
+            request.metrics.first_scheduled_ts = time.perf_counter()
+            request.metrics.waiting_time = request.metrics.first_scheduled_ts - request.arrival_time
             scheduled_requests.append(request)
+
+        scheduling_end_ts = time.perf_counter()
+        scheduler_time = scheduling_end_ts - scheduling_begin_ts
+        n_request_in_batch = len(scheduled_requests)
+        for request in scheduled_requests:
+            request.metrics.scheduler_time = scheduler_time
+            request.metrics.n_request_in_batch = n_request_in_batch
+            request.metrics.scheduling_end_ts = scheduling_end_ts
 
         return PrefillOnlySchedulerOutput(
             scheduled_requests=scheduled_requests,
