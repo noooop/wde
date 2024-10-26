@@ -25,7 +25,8 @@ class ZeroEngine(Z_MethodZeroServer):
             protocol=self.engine.engine.workflow.protocol,
             port=None,
             do_register=True,
-            pool_size=self.engine.engine.engine_config.scheduler_config.max_num_requests * 4,
+            pool_size=self.engine.engine.engine_config.scheduler_config.
+            max_num_requests * 4,
             **kwargs)
 
     def init(self):

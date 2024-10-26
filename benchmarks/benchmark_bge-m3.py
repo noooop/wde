@@ -18,11 +18,14 @@ def benchmark_hf(args):
     with torch.no_grad():
         for batchsize in args.batchsize:
             start = time.perf_counter()
+
             n_step = 0
             for i in range(0, len(requests), batchsize):
                 batch = requests[i:i + batchsize]
                 model.encode(batch, batch_size=batchsize)
                 n_step += 1
+
+            torch.cuda.synchronize()
             end = time.perf_counter()
 
             elapsed_time = end - start

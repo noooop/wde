@@ -69,13 +69,18 @@ class PrefillOnlyScheduler(Scheduler):
         waiting_queue = self.waiting
 
         if waiting is not None:
-            if len(waiting_queue) < self.scheduler_config.max_num_seqs:
+            if self.scheduler_config.max_num_seqs / 2 < len(
+                    waiting_queue) < self.scheduler_config.max_num_seqs:
                 time.sleep(waiting)
 
         scheduled_requests = []
         ignored_requests = []
         while waiting_queue:
+            if budget.num_curr_request == budget.max_num_requests:
+                break
+
             request = waiting_queue[0]
+            first_scheduled_ts = time.perf_counter()
 
             if request.request_id in self.aborted_requests:
                 self.aborted_requests.remove(request.request_id)
@@ -87,6 +92,9 @@ class PrefillOnlyScheduler(Scheduler):
                 waiting_queue[0] = request
 
             request = cast(SchedulableRequest, request)
+
+            request.metrics.first_scheduled_ts = first_scheduled_ts
+            request.metrics.waiting_time = request.metrics.first_scheduled_ts - request.arrival_time
 
             num_new_tokens = request.num_new_tokens
 
@@ -102,8 +110,6 @@ class PrefillOnlyScheduler(Scheduler):
             budget.add_num_batched_tokens(request.request_id, num_new_tokens)
             waiting_queue.popleft()
 
-            request.metrics.first_scheduled_ts = time.perf_counter()
-            request.metrics.waiting_time = request.metrics.first_scheduled_ts - request.arrival_time
             scheduled_requests.append(request)
 
         scheduling_end_ts = time.perf_counter()
