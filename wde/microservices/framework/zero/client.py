@@ -150,16 +150,3 @@ class Z_Client(Client):
     def support_methods(self, **kwargs):
         data = {"method": "support_methods"}
         return self.query(data, **kwargs)
-
-
-if __name__ == '__main__':
-    from pprint import pprint
-    client = Z_Client("tcp://localhost:9527")
-
-    print("=" * 80)
-    pprint(client.query({"no_method": ""}).dict())
-    print("=" * 80)
-    pprint(client.support_methods().dict())
-    print("=" * 80)
-    data = {"method": "method_not_supported"}
-    pprint(client.query(data).dict())

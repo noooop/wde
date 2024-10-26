@@ -1,8 +1,9 @@
+from wde import envs
 from wde.microservices.framework.zero.server import ZeroServerProcess
 
 
 class Server:
-    MANAGER_NAME = "RootZeroManager"
+    MANAGER_NAME = envs.ROOT_MANAGER_NAME
     NAMESERVER_CLASS = "wde.microservices.framework.nameserver.server:ZeroNameServer"
     MANAGER_CLASS = "wde.microservices.framework.zero_manager.server:ZeroManager"
 

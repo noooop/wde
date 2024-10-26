@@ -1,5 +1,6 @@
 import time
 
+import wde.envs as envs
 from wde.microservices.framework.zero.server import ZeroServerProcess
 
 
@@ -34,13 +35,16 @@ def test_server_client():
     from wde.microservices.framework.zero.schema import ZeroServerResponse
 
     server_class = "wde.microservices.framework.zero.server:Z_MethodZeroServer"
-    h = ZeroServerProcess(server_class, {"do_register": False, "port": 9527})
+    h = ZeroServerProcess(server_class, {
+        "do_register": False,
+        "port": envs.NAME_SERVER_PORT
+    })
     h.start()
 
     assert h.is_alive()
 
     try:
-        client = Z_Client("tcp://localhost:9527")
+        client = Z_Client(f"tcp://localhost:{envs.NAME_SERVER_PORT}")
 
         assert client.query({"no_method": ""}) == ZeroServerResponse(
             **{

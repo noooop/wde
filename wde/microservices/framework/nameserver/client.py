@@ -3,11 +3,11 @@ from random import choice
 
 from cachetools import TTLCache, cached
 
+from wde import envs
 from wde.microservices.framework.nameserver.schema import (
     GetServiceNamesRequest, GetServicesRequest, ServerInfo)
 from wde.microservices.framework.zero.client import Timeout, Z_Client
 
-NameServerPort = 9527
 CLIENT_VALIDATION = True
 
 
@@ -16,7 +16,7 @@ class NameServerClient(Z_Client):
 
     def __init__(self, port=None):
         if port is None:
-            self.port = NameServerPort
+            self.port = envs.NAME_SERVER_PORT
         else:
             self.port = port
         Z_Client.__init__(self, f"tcp://localhost:{self.port}")

@@ -1,10 +1,9 @@
+from wde import envs
 from wde.microservices.framework.nameserver.schema import (
     GetServiceNamesRequest, GetServicesRequest, ServerInfo)
 from wde.microservices.framework.zero.schema import (ZeroServerRequest,
                                                      ZeroServerResponseOk)
 from wde.microservices.framework.zero.server import Z_MethodZeroServer
-
-NameServerPort = 9527
 
 
 class NameServerInterfaces(object):
@@ -76,7 +75,7 @@ class ZeroNameServer(Z_MethodZeroServer):
 
     def __init__(self, port=None, nameserver_class=None, **kwargs):
         Z_MethodZeroServer.__init__(self,
-                                    port=port or NameServerPort,
+                                    port=port or envs.NAME_SERVER_PORT,
                                     do_register=False,
                                     **kwargs)
 

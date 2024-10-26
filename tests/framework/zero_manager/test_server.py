@@ -1,5 +1,6 @@
 import time
 
+from wde import envs
 from wde.microservices.framework.nameserver.client import ZeroClient
 from wde.microservices.framework.zero.schema import ZeroServerResponseOk
 from wde.microservices.framework.zero.server import ZeroServerProcess
@@ -11,7 +12,7 @@ def to_model_dump(msg):
 
 
 def test_server():
-    MANAGER_NAME = "RootZeroManager"
+    MANAGER_NAME = envs.ROOT_MANAGER_NAME
     server_class = "wde.microservices.framework.zero.server:Z_MethodZeroServer"
     test_protocols = ["protocol1", "protocol2"]
     n_server = 4

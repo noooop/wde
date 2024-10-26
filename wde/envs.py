@@ -10,6 +10,10 @@ environment_variables: Dict[str, Callable[[], Any]] = {
     lambda: os.getenv("WDE_ATTENTION_BACKEND", None),
     "ENGINE_ITERATION_TIMEOUT_S":
     lambda: int(os.environ.get("WDE_ENGINE_ITERATION_TIMEOUT_S", "60")),
+    "ROOT_MANAGER_NAME":
+    lambda: os.environ.get("WDE_ROOT_MANAGER_NAME", "RootZeroManager"),
+    "NAME_SERVER_PORT":
+    lambda: int(os.environ.get("WDE_NAME_SERVER_PORT", 9527)),
 }
 
 

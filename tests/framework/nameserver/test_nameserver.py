@@ -1,3 +1,4 @@
+from wde import envs
 from wde.microservices.framework.nameserver.schema import ServerInfo
 from wde.microservices.framework.zero.schema import ZeroServerResponseOk
 from wde.microservices.framework.zero.server import ZeroServerProcess
@@ -21,7 +22,7 @@ def test_server():
     protocol = "test"
     server_info = {
         "host": "localhost",
-        "port": 9527,
+        "port": envs.NAME_SERVER_PORT,
         "name": name,
         "protocol": protocol
     }
