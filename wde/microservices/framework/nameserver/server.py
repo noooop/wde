@@ -1,9 +1,12 @@
 from wde import envs
+from wde.logger import init_logger
 from wde.microservices.framework.nameserver.schema import (
     GetServiceNamesRequest, GetServicesRequest, ServerInfo)
 from wde.microservices.framework.zero.schema import (ZeroServerRequest,
                                                      ZeroServerResponseOk)
 from wde.microservices.framework.zero.server import Z_MethodZeroServer
+
+logger = init_logger(__name__)
 
 
 class NameServerInterfaces(object):
@@ -88,8 +91,8 @@ class ZeroNameServer(Z_MethodZeroServer):
 
     def init(self):
         self._nameserver = self.nameserver_class()
-        print(f"ZeroNameServer: {self.nameserver_class.__name__} running!",
-              "port:", self.port)
+        logger.info("ZeroNameServer: %s running! port: %d.",
+                    self.nameserver_class.__name__, self.port)
 
     def z_register(self, req: ZeroServerRequest):
         server_info = ServerInfo(**req.data)

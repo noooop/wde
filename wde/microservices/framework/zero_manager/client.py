@@ -1,9 +1,12 @@
 import time
 
+from wde.logger import init_logger
 from wde.microservices.framework.nameserver.client import Timeout, ZeroClient
 from wde.microservices.framework.zero_manager.schema import (StartRequest,
                                                              StatusRequest,
                                                              TerminateRequest)
+
+logger = init_logger(__name__)
 
 CLIENT_VALIDATION = True
 
@@ -63,14 +66,14 @@ class ZeroManagerClient(ZeroClient):
             exception = rep.msg["exception"]
             if status in ["prepare", "started"]:
                 if verbose:
-                    print(f"{name} {status}.")
+                    logger.info(f"{name} {status}.")
             elif status in ["error"]:
                 if verbose:
-                    print(f"{name} {status}. {exception}.")
+                    logger.info(f"{name} {status}. {exception}.")
                 return status, exception
             elif status in ["running"]:
                 if verbose:
-                    print(f"{name} available now.")
+                    logger.info(f"{name} available now.")
                 return status, exception
 
         raise Timeout

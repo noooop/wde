@@ -103,7 +103,7 @@ class ZeroServer(object):
                     self.port)
 
     def clean_up(self):
-        logger.info("%sis clean_up!", self.__class__.__name__)
+        logger.info("%s is clean_up!", self.__class__.__name__)
 
     def process(self, msg):
         try:
