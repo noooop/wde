@@ -38,7 +38,7 @@ AttentionImpls = {
 
 @pytest.mark.parametrize("model", MODELS)
 @pytest.mark.parametrize("dtype", ["float", "half", "bfloat16"])
-@pytest.mark.parametrize("max_num_seqs", [2])
+@pytest.mark.parametrize("max_num_requests", [2])
 @pytest.mark.parametrize("scheduling", ["sync"])
 @torch.inference_mode
 def test_basic_correctness_fp16(
@@ -46,7 +46,7 @@ def test_basic_correctness_fp16(
     example_prompts,
     model: str,
     dtype: str,
-    max_num_seqs: int,
+    max_num_requests: int,
     scheduling: str,
 ) -> None:
     attention_impls = AttentionImpls[dtype]
@@ -56,7 +56,7 @@ def test_basic_correctness_fp16(
     for attention_impl in attention_impls:
         with wde_runner(model,
                         dtype=dtype,
-                        max_num_seqs=max_num_seqs,
+                        max_num_requests=max_num_requests,
                         scheduling=scheduling,
                         attention_impl=attention_impl,
                         output_last_hidden_states=True) as engine:

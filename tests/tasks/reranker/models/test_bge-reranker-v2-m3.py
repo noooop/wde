@@ -79,7 +79,7 @@ def sigmoid(x):
 
 @pytest.mark.parametrize("model", MODELS)
 @pytest.mark.parametrize("dtype", ["half"])
-@pytest.mark.parametrize("max_num_seqs", [2, 3, 5, 7])
+@pytest.mark.parametrize("max_num_requests", [2, 3, 5, 7])
 @pytest.mark.parametrize("scheduling", ["sync", "async", "double_buffer"])
 @torch.inference_mode
 def test_models(
@@ -88,7 +88,7 @@ def test_models(
     example_prompts,
     model: str,
     dtype: str,
-    max_num_seqs: int,
+    max_num_requests: int,
     scheduling: str,
 ) -> None:
     with hf_runner(model,
@@ -96,7 +96,8 @@ def test_models(
                    auto_cls=AutoModelForSequenceClassification) as hf_model:
         hf_outputs = hf_model.reranker(example_prompts)
 
-    with wde_runner(model, dtype=dtype, max_num_seqs=max_num_seqs) as engine:
+    with wde_runner(model, dtype=dtype,
+                    max_num_requests=max_num_requests) as engine:
         outputs = engine.reranker(example_prompts)
 
     # Without using sigmoid,

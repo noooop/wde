@@ -62,15 +62,15 @@ class PrefillOnlyScheduler(Scheduler):
 
         budget = PrefillOnlySchedulingBudget(
             token_budget=self.scheduler_config.max_num_batched_tokens,
-            max_num_requests=self.scheduler_config.max_num_seqs,
+            max_num_requests=self.scheduler_config.max_num_requests,
         )
 
         waiting = self.scheduler_config.waiting
         waiting_queue = self.waiting
 
         if waiting is not None:
-            if self.scheduler_config.max_num_seqs / 2 < len(
-                    waiting_queue) < self.scheduler_config.max_num_seqs:
+            if self.scheduler_config.max_num_requests / 2 < len(
+                    waiting_queue) < self.scheduler_config.max_num_requests:
                 time.sleep(waiting)
 
         scheduled_requests = []

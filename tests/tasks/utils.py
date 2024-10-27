@@ -19,7 +19,7 @@ class WDERunner:
 
     def __init__(self,
                  model_name: str,
-                 max_num_seqs: int = 4,
+                 max_num_requests: int = 4,
                  tokenizer_name: Optional[str] = None,
                  dtype: str = "half",
                  scheduling: str = "sync",
@@ -31,7 +31,7 @@ class WDERunner:
         self.model = LLM(model=model_name,
                          tokenizer=tokenizer_name,
                          trust_remote_code=True,
-                         max_num_seqs=max_num_seqs,
+                         max_num_requests=max_num_requests,
                          dtype=dtype,
                          scheduling=scheduling,
                          **kwargs)

@@ -41,7 +41,7 @@ class DecodeOnlyOutputLastHiddenStatesEngineArgs(EngineArgs):
     output_last_hidden_states: bool = False
     enable_bidirectional: bool = False
 
-    max_num_seqs: int = 256
+    max_num_requests: int = 8
     max_num_on_the_fly: Optional[int] = None
     scheduling: str = "async"
     waiting: Optional[float] = None
@@ -90,7 +90,7 @@ class DecodeOnlyOutputLastHiddenStatesEngineArgs(EngineArgs):
         if model_config.output_last_hidden_states:
             scheduler_config = DecodeOnlyEmbeddingSchedulerConfig(
                 max_num_batched_tokens=self.max_num_batched_tokens,
-                max_num_seqs=self.max_num_seqs,
+                max_num_requests=self.max_num_requests,
                 max_model_len=model_config.max_model_len,
                 max_num_on_the_fly=self.max_num_on_the_fly,
                 scheduling=self.scheduling,

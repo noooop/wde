@@ -46,7 +46,7 @@ MODELS = ["google-bert/bert-base-uncased"]
 
 @pytest.mark.parametrize("model", MODELS)
 @pytest.mark.parametrize("dtype", ["half"])
-@pytest.mark.parametrize("max_num_seqs", [2, 3, 5, 7])
+@pytest.mark.parametrize("max_num_requests", [2, 3, 5, 7])
 @pytest.mark.parametrize("scheduling", ["sync", "async", "double_buffer"])
 @torch.inference_mode
 def test_models(
@@ -55,7 +55,7 @@ def test_models(
     example_prompts,
     model: str,
     dtype: str,
-    max_num_seqs: int,
+    max_num_requests: int,
     scheduling: str,
 ) -> None:
     with hf_runner(model, dtype=dtype, auto_cls=BertModel) as hf_model:
@@ -63,7 +63,7 @@ def test_models(
 
     with wde_runner(model,
                     dtype=dtype,
-                    max_num_seqs=max_num_seqs,
+                    max_num_requests=max_num_requests,
                     scheduling=scheduling) as engine:
         outputs = engine.encode(example_prompts)
 

@@ -20,7 +20,7 @@ def benchmark(args):
         "seed": args.seed,
         "dtype": args.dtype,
         "device": args.device,
-        "max_num_seqs": args.max_model_len,
+        "max_num_requests": args.max_num_requests,
         "scheduling": args.scheduling,
         "waiting": args.waiting,
         "return_metrics": True
@@ -106,9 +106,9 @@ if __name__ == '__main__':
     for waiting in [None, 0.001, 0.005, 0.01]:
         print("waiting", waiting)
         args.waiting = waiting
-        for max_model_len in [8, 16]:
-            print("max_model_len:", max_model_len)
-            args.max_model_len = max_model_len
+        for max_num_requests in [8, 16]:
+            print("max_num_requests:", max_num_requests)
+            args.max_num_requests = max_num_requests
 
             with ProcessPoolExecutor(1) as executor:
                 f = executor.submit(benchmark, args)

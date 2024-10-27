@@ -24,7 +24,7 @@ def benchmark_wde(args):
         max_model_len=args.max_model_len,
         quantization_param_path=args.quantization_param_path,
         device=args.device,
-        max_num_seqs=32,
+        max_num_requests=1,
         scheduling=args.scheduling)
 
     engine = LLMEngine.from_engine_args(engine_args)
@@ -32,7 +32,7 @@ def benchmark_wde(args):
     def _run():
         for batchsize in args.batchsize:
             engine.engine_config.scheduler_config.set_args(
-                max_num_seqs=batchsize)
+                max_num_requests=batchsize)
 
             start = time.perf_counter()
             for request_id, prompt in enumerate(requests):
