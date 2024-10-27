@@ -1,0 +1,13 @@
+retriever:
+  models:
+    -
+      model: "BAAI/bge-m3"
+      engine_args:
+        max_num_requests: 4
+    -
+      model: "google-bert/bert-base-uncased"
+      engine_args:
+        max_num_requests: 4
+
+
+

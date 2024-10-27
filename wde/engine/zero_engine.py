@@ -87,7 +87,7 @@ def start_zero_engine(engine_args):
     server.setup()
     server.run(waiting=False)
 
-    server_class = "wde.engine.zero_engine:ZeroEngine"
+    INFERENCE_ENGINE_CLASS = "wde.engine.zero_engine:ZeroEngine"
 
     manager_client = ZeroManagerClient(server.MANAGER_NAME)
     manager_client.wait_service_available(server.MANAGER_NAME)
@@ -96,7 +96,7 @@ def start_zero_engine(engine_args):
 
     manager_client.start(name=model_name,
                          engine_kwargs={
-                             "server_class": server_class,
+                             "server_class": INFERENCE_ENGINE_CLASS,
                              "engine_args": engine_args
                          })
     return server

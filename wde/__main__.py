@@ -45,12 +45,20 @@ def terminate(model_name):
     logger.info("%s", out)
 
 
+@click.command()
+@click.argument('config_filename', type=click.Path(exists=True))
+def deploy(config_filename):
+    from wde.microservices.standalone.deploy import Deploy
+    Deploy(config_filename)()
+
+
 @click.group()
 def main():
     pass
 
 
 main.add_command(server)
+main.add_command(deploy)
 main.add_command(start)
 main.add_command(terminate)
 
