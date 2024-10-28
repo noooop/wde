@@ -47,7 +47,7 @@ class LLM:
         outputs = self._run_engine(use_tqdm=use_tqdm)
         return outputs
 
-    def reranker(
+    def compute_score(
         self,
         inputs: RerankerInputs,
         params: Optional[Union[Params, Sequence[Params]]] = None,

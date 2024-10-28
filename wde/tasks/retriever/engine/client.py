@@ -19,14 +19,4 @@ class RetrieverClient(ZeroClient):
             data = RetrieverRequest(**data).model_dump()
 
         rep = self.query(name, method, data)
-        if rep is None:
-            raise RuntimeError(
-                f"{self.__class__.__name__} [{name}] server not found.")
-
-        if rep.state == "ok":
-            rep = RetrieverResponse(**rep.msg)
-        else:
-            raise RuntimeError(
-                f"{self.__class__.__name__} [{name}] error, with error msg [{rep.msg}]"
-            )
-        return rep
+        return self.check_response(name, rep, RetrieverResponse)

@@ -1,4 +1,5 @@
 from wde.tasks.encode_only.workflow import EncodeOnlyWorkflow
+from wde.tasks.reranker.engine.schema import PROTOCOL
 
 
 class RerankerWorkflow(EncodeOnlyWorkflow):
@@ -8,3 +9,4 @@ class RerankerWorkflow(EncodeOnlyWorkflow):
                              "input_processor:RerankerRequestProcessor")
     OutputProcessor: str = ("wde.tasks.reranker.processor."
                             "output_processor:RerankerOutputProcessor")
+    protocol: str = PROTOCOL

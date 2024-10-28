@@ -2,10 +2,12 @@ import gc
 
 import torch
 
+from wde import const, envs
 from wde.engine.gevent_engine import GeventLLMEngine
 from wde.logger import init_logger
 from wde.microservices.framework.zero.schema import ZeroServerResponseOk
 from wde.microservices.framework.zero.server import Z_MethodZeroServer
+from wde.tasks.reranker.engine.schema import RerankerRequest, RerankerResponse
 from wde.tasks.retriever.engine.schema import (RetrieverRequest,
                                                RetrieverResponse)
 
@@ -47,13 +49,7 @@ class ZeroEngine(Z_MethodZeroServer):
         except Exception:
             pass
 
-    def z_encode(self, req):
-        request = RetrieverRequest(**req.data)
-        outputs = self.engine.encode(inputs=request.inputs,
-                                     request_id=str(req.req_id))
-
-        output = list(outputs)[0]
-
+    def get_metrics(self, output):
         if self.return_metrics:
             m = output.metrics
 
@@ -67,10 +63,34 @@ class ZeroEngine(Z_MethodZeroServer):
             }
         else:
             metrics = None
+        return metrics
+
+    def z_encode(self, req):
+        request = RetrieverRequest(**req.data)
+        outputs = self.engine.encode(inputs=request.inputs,
+                                     request_id=str(req.req_id))
+
+        output = list(outputs)[0]
+        metrics = self.get_metrics(output)
 
         response = RetrieverResponse(model=request.model,
                                      embedding=output.outputs.numpy(),
                                      metrics=metrics)
+
+        rep = ZeroServerResponseOk(msg=response)
+        self.zero_send(req, rep)
+
+    def z_compute_score(self, req):
+        request = RerankerRequest(**req.data)
+        outputs = self.engine.compute_score(inputs=request.pairs,
+                                            request_id=str(req.req_id))
+
+        output = list(outputs)[0]
+        metrics = self.get_metrics(output)
+
+        response = RerankerResponse(model=request.model,
+                                    score=output.score,
+                                    metrics=metrics)
 
         rep = ZeroServerResponseOk(msg=response)
         self.zero_send(req, rep)
@@ -87,16 +107,14 @@ def start_zero_engine(engine_args):
     server.setup()
     server.run(waiting=False)
 
-    INFERENCE_ENGINE_CLASS = "wde.engine.zero_engine:ZeroEngine"
-
-    manager_client = ZeroManagerClient(server.MANAGER_NAME)
-    manager_client.wait_service_available(server.MANAGER_NAME)
+    manager_client = ZeroManagerClient(envs.ROOT_MANAGER_NAME)
+    manager_client.wait_service_available(envs.ROOT_MANAGER_NAME)
 
     model_name = engine_args["model"]
 
     manager_client.start(name=model_name,
                          engine_kwargs={
-                             "server_class": INFERENCE_ENGINE_CLASS,
+                             "server_class": const.INFERENCE_ENGINE_CLASS,
                              "engine_args": engine_args
                          })
     return server

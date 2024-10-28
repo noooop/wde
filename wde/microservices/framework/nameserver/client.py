@@ -139,3 +139,16 @@ class ZeroClient(object):
 
         _data = {"method": method, "data": data}
         return client.query(_data, **kwargs)
+
+    def check_response(self, name, rep, rep_cls):
+        if rep is None:
+            raise RuntimeError(
+                f"{self.__class__.__name__} [{name}] server not found.")
+
+        if rep.state == "ok":
+            rep = rep_cls(**rep.msg)
+        else:
+            raise RuntimeError(
+                f"{self.__class__.__name__} [{name}] error, with error msg [{rep.msg}]"
+            )
+        return rep

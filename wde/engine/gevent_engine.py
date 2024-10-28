@@ -13,7 +13,9 @@ from gevent.queue import Queue
 
 from wde.logger import init_logger
 from wde.tasks.core.llm_engine import LLMEngine
-from wde.tasks.core.schema.engine_io import Params, PromptInput, RequestOutput
+from wde.tasks.core.schema.engine_io import (Inputs, Params, PromptInput,
+                                             RequestOutput)
+from wde.tasks.reranker.schema.engine_io import RerankerInputs
 
 logger = init_logger(__name__)
 
@@ -139,10 +141,22 @@ class GeventLLMEngine:
             pooling_params,
         )
 
+    def compute_score(
+        self,
+        request_id: str,
+        inputs: RerankerInputs,
+        params: Optional[Union[Params, Sequence[Params]]] = None,
+    ) -> Iterator[RequestOutput]:
+        return self._process_request(
+            request_id,
+            inputs,
+            params,
+        )
+
     def _process_request(
         self,
         request_id: str,
-        inputs: PromptInput,
+        inputs: Inputs,
         params: Optional[Union[Params, Sequence[Params]]],
     ) -> Iterator[Union[RequestOutput]]:
         """Common logic to process requests with SamplingParams or

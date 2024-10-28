@@ -1,7 +1,7 @@
 import yaml
 from easydict import EasyDict as edict
 
-from wde import envs
+from wde import const, envs
 from wde.logger import init_logger
 from wde.microservices.framework.zero_manager.client import ZeroManagerClient
 
@@ -9,7 +9,6 @@ logger = init_logger(__name__)
 
 
 class Deploy:
-    INFERENCE_ENGINE_CLASS = "wde.engine.zero_engine:ZeroEngine"
 
     def __init__(self, config_path):
         with open(config_path, 'r', encoding="utf-8") as f:
@@ -42,7 +41,7 @@ class Deploy:
                 out = self.manager_client.start(
                     name=config.model,
                     engine_kwargs={
-                        "server_class": self.INFERENCE_ENGINE_CLASS,
+                        "server_class": const.INFERENCE_ENGINE_CLASS,
                         "engine_args": engine_args
                     })
                 logger.info("%s : %s", config.model, out)
