@@ -10,6 +10,7 @@ from transformers import (AutoModelForCausalLM, AutoTokenizer, BatchEncoding,
                           BatchFeature)
 
 from wde import LLM
+from wde.tasks.reranker.schema.engine_io import RerankerInputs
 from wde.utils import STR_DTYPE_TO_TORCH_DTYPE, is_cpu
 
 _T = TypeVar("_T", nn.Module, torch.Tensor, BatchEncoding, BatchFeature)
@@ -46,6 +47,14 @@ class WDERunner:
         for req_output in req_outputs:
             embedding = req_output.outputs
             outputs.append(embedding)
+        return outputs
+
+    def compute_score(self, inputs: RerankerInputs) -> List[float]:
+        req_outputs = self.model.compute_score(inputs)
+        outputs = []
+        for req_output in req_outputs:
+            score = req_output.score
+            outputs.append(score)
         return outputs
 
     def __enter__(self):
@@ -143,6 +152,31 @@ class SentenceTransformersRunner(HfRunner):
                                  normalize_embeddings=False)
 
 
+class HfRerankerRunner(HfRunner):
+
+    def compute_score(self, inputs: RerankerInputs) -> List[float]:
+        encoded_input = self.tokenizer(inputs,
+                                       padding=True,
+                                       truncation=True,
+                                       return_tensors="pt").to("cuda")
+
+        scores = self.model(**encoded_input).logits.view(-1, )
+        return scores.cpu().numpy().tolist()
+
+
+class BertHfRunner(HfRunner):
+
+    @torch.inference_mode
+    def encode(self, prompts: List[str]) -> List[List[torch.Tensor]]:
+        encoded_input = self.tokenizer(prompts,
+                                       padding=True,
+                                       truncation=True,
+                                       return_tensors="pt").to("cuda")
+
+        outputs = self.model(**encoded_input).pooler_output
+        return outputs
+
+
 def compare_embeddings(embeddings1, embeddings2):
     similarities = [
         F.cosine_similarity(e1.to("cuda"), e2.to("cuda"), dim=0)
@@ -161,6 +195,10 @@ def compare_embeddings_np(embeddings1, embeddings2):
         for e1, e2 in zip(embeddings1, embeddings2)
     ]
     return similarities
+
+
+def sigmoid(x):
+    return 1 / (1 + np.exp(-x))
 
 
 def cleanup():

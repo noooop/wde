@@ -9,6 +9,6 @@ pairs = [['query', 'passage'], ['what is panda?', 'hi'],
 
 llm = LLM(model="BAAI/bge-reranker-v2-m3")
 
-outputs = llm.reranker(pairs)
+outputs = llm.compute_score(pairs)
 for output in outputs:
     print(output.score)

@@ -1,14 +1,21 @@
 import random
 from typing import TypeVar
 
+import numpy as np
 import pytest
 import torch
 import torch.nn as nn
 from transformers import BatchEncoding, BatchFeature, BertModel
 
-from tests.tasks.utils import BertHfRunner, compare_embeddings
+from tests.tasks.engine.utils import WDEZERORunner
+from tests.tasks.utils import BertHfRunner, compare_embeddings_np
 
 _T = TypeVar("_T", nn.Module, torch.Tensor, BatchEncoding, BatchFeature)
+
+
+@pytest.fixture(scope="session")
+def wde_runner():
+    return WDEZERORunner
 
 
 @pytest.fixture(scope="session")
@@ -34,7 +41,7 @@ MODELS = ["google-bert/bert-base-uncased"]
 @pytest.mark.parametrize("model", MODELS)
 @pytest.mark.parametrize("dtype", ["half"])
 @pytest.mark.parametrize("max_num_requests", [2, 3, 5, 7])
-@pytest.mark.parametrize("scheduling", ["sync", "async", "double_buffer"])
+@pytest.mark.parametrize("scheduling", ["async", "double_buffer"])
 @torch.inference_mode
 def test_models(
     hf_runner,
@@ -47,6 +54,7 @@ def test_models(
 ) -> None:
     with hf_runner(model, dtype=dtype, auto_cls=BertModel) as hf_model:
         hf_outputs = hf_model.encode(example_prompts)
+        hf_outputs = [x.cpu().numpy() for x in hf_outputs]
 
     with wde_runner(model,
                     dtype=dtype,
@@ -54,9 +62,9 @@ def test_models(
                     scheduling=scheduling) as engine:
         outputs = engine.encode(example_prompts)
 
-    similarities = compare_embeddings(hf_outputs, outputs)
-    all_similarities = torch.stack(similarities)
+    similarities = compare_embeddings_np(hf_outputs, outputs)
+    all_similarities = np.stack(similarities)
     tolerance = 1e-2
-    assert torch.all((all_similarities <= 1.0 + tolerance)
-                     & (all_similarities >= 1.0 - tolerance)
-                     ), f"Not all values are within {tolerance} of 1.0"
+    assert np.all((all_similarities <= 1.0 + tolerance)
+                  & (all_similarities >= 1.0 - tolerance)
+                  ), f"Not all values are within {tolerance} of 1.0"

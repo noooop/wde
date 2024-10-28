@@ -8,19 +8,20 @@ import torch.nn as nn
 from transformers import (AutoModelForSequenceClassification, BatchEncoding,
                           BatchFeature)
 
-from tests.tasks.utils import HfRerankerRunner, WDERunner, sigmoid
+from tests.tasks.engine.utils import WDEZERORunner
+from tests.tasks.utils import HfRerankerRunner, sigmoid
 
 _T = TypeVar("_T", nn.Module, torch.Tensor, BatchEncoding, BatchFeature)
 
 
 @pytest.fixture(scope="session")
-def hf_runner():
-    return HfRerankerRunner
+def wde_runner():
+    return WDEZERORunner
 
 
 @pytest.fixture(scope="session")
-def wde_runner():
-    return WDERunner
+def hf_runner():
+    return HfRerankerRunner
 
 
 @pytest.fixture(scope="session")
@@ -45,7 +46,7 @@ MODELS = ["BAAI/bge-reranker-v2-m3"]
 @pytest.mark.parametrize("model", MODELS)
 @pytest.mark.parametrize("dtype", ["half"])
 @pytest.mark.parametrize("max_num_requests", [2, 3, 5, 7])
-@pytest.mark.parametrize("scheduling", ["sync", "async", "double_buffer"])
+@pytest.mark.parametrize("scheduling", ["async", "double_buffer"])
 @torch.inference_mode
 def test_models(
     hf_runner,

@@ -8,7 +8,8 @@ import torch.nn as nn
 from transformers import (AutoModelForSequenceClassification, BatchEncoding,
                           BatchFeature)
 
-from tests.tasks.utils import HfRerankerRunner, WDERunner, sigmoid
+from tests.tasks.engine.utils import WDEGeventRunner
+from tests.tasks.utils import HfRerankerRunner, sigmoid
 
 _T = TypeVar("_T", nn.Module, torch.Tensor, BatchEncoding, BatchFeature)
 
@@ -20,7 +21,7 @@ def hf_runner():
 
 @pytest.fixture(scope="session")
 def wde_runner():
-    return WDERunner
+    return WDEGeventRunner
 
 
 @pytest.fixture(scope="session")

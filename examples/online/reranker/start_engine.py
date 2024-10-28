@@ -1,25 +1,33 @@
+import sys
 import time
 
-import numpy as np
 from gevent.pool import Pool
 from tqdm import tqdm
 
-from wde import envs
+from wde import const, envs
+from wde.microservices.framework.nameserver.client import NameServerClient
+from wde.microservices.framework.zero.schema import Timeout
 from wde.microservices.framework.zero_manager.client import ZeroManagerClient
-from wde.tasks.retriever.engine.client import RetrieverClient
+from wde.tasks.reranker.engine.client import RerankerClient
+
+nameserver_client = NameServerClient()
+
+try:
+    nameserver_client.support_methods()
+except Timeout:
+    print("Failed to connect to server.\n"
+          "Need to start server in another console.\n"
+          "python -m wde server")
+    sys.exit()
 
 #########################################################
-# Need to start server in another console
-# python -m wde server
 
-model_name = "google-bert/bert-base-uncased"
+model_name = "BAAI/bge-reranker-v2-m3"
 
 engine_args = {"model": model_name}
 
 #########################################################
 # Start engine
-
-server_class = "wde.engine.zero_engine:ZeroEngine"
 
 manager_client = ZeroManagerClient(envs.ROOT_MANAGER_NAME)
 manager_client.wait_service_available(envs.ROOT_MANAGER_NAME)
@@ -28,7 +36,7 @@ model_name = engine_args["model"]
 
 out = manager_client.start(name=model_name,
                            engine_kwargs={
-                               "server_class": server_class,
+                               "server_class": const.INFERENCE_ENGINE_CLASS,
                                "engine_args": engine_args
                            })
 print("Start engine:", out)
@@ -36,7 +44,7 @@ print("Start engine:", out)
 ###############################################################
 # Wait until ready to use
 
-client = RetrieverClient()
+client = RerankerClient()
 
 print("=" * 80)
 print(f"Wait {model_name} available")
@@ -55,34 +63,35 @@ print(client.info(model_name))
 ###############################################################
 # encode
 
-prompts = [
-    "Hello, my name is",
-    "The president of the United States is",
-    "The capital of France is",
-    "The future of AI is",
-] * 100
+pairs_list = [['query', 'passage'], ['what is panda?', 'hi'],
+              [
+                  'what is panda?',
+                  'The giant panda (Ailuropoda melanoleuca), '
+                  'sometimes called a panda bear or simply panda, '
+                  'is a bear species endemic to China.'
+              ]] * 100
 
 
-def worker(prompt):
-    output = client.encode(name=model_name, inputs=prompt)
-    return output.embedding
+def worker(pairs):
+    output = client.compute_score(name=model_name, pairs=pairs)
+    return output.score
 
 
 p = Pool(2)
 out = []
-for embedding in p.imap(worker, tqdm(prompts)):
-    out.append(embedding)
+for score in p.imap(worker, tqdm(pairs_list)):
+    out.append(score)
 
-print(np.stack(out).shape)
+print(len(out))
 
 time.sleep(1)
 
 p = Pool(4)
 out = []
-for embedding in p.imap(worker, tqdm(prompts)):
-    out.append(embedding)
+for score in p.imap(worker, tqdm(pairs_list)):
+    out.append(score)
 
-print(np.stack(out).shape)
+print(len(out))
 
 ###############################################################
 # Terminate engine

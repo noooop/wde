@@ -10,4 +10,5 @@ retriever:
         max_num_requests: 4
 
 
-
+reranker:
+  models: ["BAAI/bge-reranker-v2-m3"]
