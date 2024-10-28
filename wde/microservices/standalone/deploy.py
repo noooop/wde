@@ -46,7 +46,37 @@ class Deploy:
                     })
                 logger.info("%s : %s", config.model, out)
 
+    def http_entrypoint_init(self):
+        if "entrypoints" not in self.config:
+            return
+
+        if "ollama_compatible" in self.config.entrypoints:
+            out = self.manager_client.start(
+                name="ollama_compatible",
+                engine_kwargs={
+                    "server_class": const.ENTRYPOINT_ENGINE_CLASS,
+                    "engine_class":
+                    "wde.microservices.entrypoints.ollama_compatible.api:app",
+                    "engine_kwargs": {
+                        "port": 11434
+                    },
+                })
+            logger.info("%s : %s", "ollama_compatible", out)
+        if "openai_compatible" in self.config.entrypoints:
+            out = self.manager_client.start(
+                name="openai_compatible",
+                engine_kwargs={
+                    "server_class": const.ENTRYPOINT_ENGINE_CLASS,
+                    "engine_class":
+                    "wde.microservices.entrypoints.openai_compatible.api:app",
+                    "engine_kwargs": {
+                        "port": 8080
+                    },
+                })
+            logger.info("%s : %s", "openai_compatible", out)
+
     def __call__(self):
         self.verify()
         self.root_manager_init()
         self.model_init()
+        self.http_entrypoint_init()

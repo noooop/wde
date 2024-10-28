@@ -1,0 +1,8 @@
+retriever:
+  models: ["BAAI/bge-m3"]
+
+reranker:
+  models: ["BAAI/bge-reranker-v2-m3"]
+
+
+entrypoints: ["ollama_compatible", "openai_compatible"]
