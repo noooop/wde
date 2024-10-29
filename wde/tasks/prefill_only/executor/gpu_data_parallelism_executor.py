@@ -3,6 +3,8 @@ from queue import Queue
 from threading import Thread
 from typing import List, Optional
 
+import torch
+
 from wde.backends.attention import AttentionBackend
 from wde.logger import init_logger
 from wde.tasks.core.config import EngineConfig
@@ -41,9 +43,15 @@ class GPUDataParallelismExecutor:
     def thread_target(self, rank: int):
         # Is there a better way to avoid loading the model multiple times?
         # Load to cpu first?
-        worker_kwargs = dict(engine_config=self.engine_config,
-                             attn_backend=self.attn_backend,
-                             envs={'CUDA_VISIBLE_DEVICES': str(rank)})
+        device_count = torch.cuda.device_count()
+
+        if rank >= device_count:
+            logger.warning(f"rank {rank} exceeds device_count {device_count}.")
+
+        worker_kwargs = dict(
+            engine_config=self.engine_config,
+            attn_backend=self.attn_backend,
+            envs={'CUDA_VISIBLE_DEVICES': str(rank % device_count)})
         worker_kwargs.update(module=self.workflow.Worker)
         worker = create_worker(**worker_kwargs)
         worker.init_device()

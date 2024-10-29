@@ -7,8 +7,14 @@ class Tokenizer:
         self.tokenizer_name = tokenizer_name
         self.tokenizer_kwargs = kwargs
 
-        self.tokenizer = get_tokenizer(tokenizer_name=self.tokenizer_name,
-                                       **self.tokenizer_kwargs)
+        self._tokenizer = None
+
+    @property
+    def tokenizer(self):
+        if self._tokenizer is None:
+            self._tokenizer = get_tokenizer(tokenizer_name=self.tokenizer_name,
+                                            **self.tokenizer_kwargs)
+        return self._tokenizer
 
     @classmethod
     def from_engine(cls, engine):
