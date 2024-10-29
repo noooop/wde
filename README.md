@@ -7,7 +7,7 @@
 - [快速入门](./docs/quickstart.md)
 - [配环境&安装](./setup)
 - [支持的模型](./docs/supported_models.md)
-
+- [对 prefill only models 推理性能调优](./docs/performance_tuning_for_prefill_only_models.md)
 
 
 # Acknowledgement
