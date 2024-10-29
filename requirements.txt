@@ -9,5 +9,6 @@ gevent
 uvicorn
 shortuuid
 modelscope
-vllm==v0.6.3
+vllm==v0.6.3.post1
 cachetools
+asyncache

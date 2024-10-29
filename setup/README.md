@@ -1,7 +1,7 @@
 # 试试conda虚拟环境
 环境管理允许用户方便安装不同版本的python环境，并在不同环境之间快速地切换。
 
-## 自动配置
+## 一键安装
 ```
 # ubuntu&wsl2
 $ conda env create -f environment_linux.yml
@@ -26,4 +26,10 @@ $ conda deactivate
 
 # 删除虚拟环境
 conda remove -n wde_v0.1 --all
+```
+
+## 手动安装
+```
+pip install -r requirements.txt
+pip install https://github.com/noooop/wde/archive/refs/heads/main.zip
 ```

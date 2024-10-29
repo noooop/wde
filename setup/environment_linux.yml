@@ -20,5 +20,7 @@ dependencies:
       - uvicorn
       - shortuuid
       - modelscope
-      - vllm==v0.6.3
+      - vllm==v0.6.3.post1
       - cachetools
+      - asyncache
+      - https://github.com/noooop/wde/archive/refs/heads/main.zip
