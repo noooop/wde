@@ -65,6 +65,7 @@ Options:
 Commands:
   deploy
   server
+  serving
   start
   terminate
 ```
@@ -104,6 +105,8 @@ wde terminate BAAI/bge-reranker-v2-m3
 wde deploy examples/online/deploy.yml
 ```
 
+> wde deploy 是将模型部署命令提交到 server， 所以要保持另外一个窗口的 wde server 一直运行
+
 [示例部署文件](https://github.com/noooop/wde/blob/main/examples/online/deploy.yml)
 
 5. 可以使用 api 在代码里启动和停止模型，等待模型加载完成
@@ -137,6 +140,14 @@ print("Terminate engine:", out)
 ```
 
 详细代码 [retriever](https://github.com/noooop/wde/blob/main/examples/online/retriever/start_engine.py) [reranker](https://github.com/noooop/wde/blob/main/examples/online/reranker/start_engine.py)
+
+6. 一键启动模型
+
+```commandline
+wde serving examples/online/deploy.yml
+```
+
+serving 命令相当于 server + deploy 命令，启动服务并部署模型
 
 
 ## 使用 zeromq 客户端
