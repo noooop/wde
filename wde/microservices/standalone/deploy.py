@@ -76,7 +76,28 @@ class Deploy:
             logger.info("%s : %s", "openai_compatible", out)
 
     def __call__(self):
+        ensure_zero_manager_available()
+
         self.verify()
         self.root_manager_init()
         self.model_init()
         self.http_entrypoint_init()
+
+
+def ensure_zero_manager_available():
+    from wde.microservices.framework.nameserver.client import NameServerClient
+    from wde.microservices.framework.zero.schema import Timeout
+
+    nameserver_client = NameServerClient()
+    manager_client = ZeroManagerClient(envs.ROOT_MANAGER_NAME)
+
+    try:
+        nameserver_client.support_methods()
+        manager_client.list()
+    except Timeout:
+        raise RuntimeError("\nFailed to connect to server.\n"
+                           "Need to start server in another console.\n"
+                           "$ wde server\n"
+                           "If you set WDE_NAME_SERVER_PORT, "
+                           "make sure the client and server use the same port."
+                           ).with_traceback(None) from None

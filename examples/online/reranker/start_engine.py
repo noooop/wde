@@ -1,24 +1,14 @@
-import sys
 import time
 
 from gevent.pool import Pool
 from tqdm import tqdm
 
 from wde import const, envs
-from wde.microservices.framework.nameserver.client import NameServerClient
-from wde.microservices.framework.zero.schema import Timeout
 from wde.microservices.framework.zero_manager.client import ZeroManagerClient
+from wde.microservices.standalone.deploy import ensure_zero_manager_available
 from wde.tasks.reranker.engine.client import RerankerClient
 
-nameserver_client = NameServerClient()
-
-try:
-    nameserver_client.support_methods()
-except Timeout:
-    print("Failed to connect to server.\n"
-          "Need to start server in another console.\n"
-          "python -m wde server")
-    sys.exit()
+ensure_zero_manager_available()
 
 #########################################################
 
