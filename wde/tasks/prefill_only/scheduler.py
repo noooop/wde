@@ -80,7 +80,7 @@ class PrefillOnlyScheduler(Scheduler):
                 break
 
             request = waiting_queue[0]
-            first_scheduled_ts = time.perf_counter()
+            scheduled_ts = time.perf_counter()
 
             if request.request_id in self.aborted_requests:
                 self.aborted_requests.remove(request.request_id)
@@ -93,8 +93,10 @@ class PrefillOnlyScheduler(Scheduler):
 
             request = cast(SchedulableRequest, request)
 
-            request.metrics.first_scheduled_ts = first_scheduled_ts
-            request.metrics.waiting_time = request.metrics.first_scheduled_ts - request.arrival_time
+            request.metrics.scheduled_ts = scheduled_ts
+            request.metrics.waiting_time = request.metrics.scheduled_ts - request.metrics.arrival_ts
+            if request.metrics.first_scheduled_ts is None:
+                request.metrics.first_scheduled_ts = scheduled_ts
 
             num_new_tokens = request.num_new_tokens
 
@@ -113,12 +115,13 @@ class PrefillOnlyScheduler(Scheduler):
             scheduled_requests.append(request)
 
         scheduling_end_ts = time.perf_counter()
-        scheduler_time = scheduling_end_ts - scheduling_begin_ts
-        n_request_in_batch = len(scheduled_requests)
+        scheduling_time = scheduling_end_ts - scheduling_begin_ts
+        num_requests = budget.num_curr_request
+        num_batched_tokens = budget.num_batched_tokens
         for request in scheduled_requests:
-            request.metrics.scheduler_time = scheduler_time
-            request.metrics.n_request_in_batch = n_request_in_batch
-            request.metrics.scheduling_end_ts = scheduling_end_ts
+            request.metrics.scheduling_time = scheduling_time
+            request.metrics.num_requests = num_requests
+            request.metrics.num_batched_tokens = num_batched_tokens
 
         return PrefillOnlySchedulerOutput(
             scheduled_requests=scheduled_requests,

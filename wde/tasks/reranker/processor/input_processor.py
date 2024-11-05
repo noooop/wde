@@ -4,7 +4,8 @@ from typing import Optional, Sequence
 from wde.tasks.core.llm_engine import LLMEngine
 from wde.tasks.core.processor.input_processor import (InputProcessor,
                                                       RequestProcessor)
-from wde.tasks.core.schema.engine_io import Params, ValidationError
+from wde.tasks.core.schema.engine_io import (Params, RequestMetrics,
+                                             ValidationError)
 from wde.tasks.prefill_only.processor.tokenizer import Tokenizer
 from wde.tasks.prefill_only.schema.engine_io import (
     PrefillOnlyInput, PrefillOnlySchedulableRequest)
@@ -54,5 +55,5 @@ class RerankerRequestProcessor(RequestProcessor):
             request_id=request.request_id,
             inputs=PrefillOnlyInput(prompt_token_ids=prompt_token_ids,
                                     prompt=None),
-            arrival_time=request.arrival_time)
+            metrics=RequestMetrics(arrival_ts=request.arrival_time))
         return schedulable_request

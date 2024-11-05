@@ -58,23 +58,29 @@ class ValidationError(ValueError):
 
 @dataclass
 class RequestMetrics:
+    arrival_ts: Optional[float] = None
+
     first_scheduled_ts: Optional[float] = None
-    scheduling_end_ts: Optional[float] = None
-    execute_begin_ts: Optional[float] = None
-    execute_end_ts: Optional[float] = None
+    latency_so_far: Optional[float] = None
+
+    scheduled_ts: Optional[float] = None
+    inference_begin_ts: Optional[float] = None
+    inference_end_ts: Optional[float] = None
     finish_ts: Optional[float] = None
 
-    n_request_in_batch: Optional[int] = None
+    scheduling_time: Optional[float] = None
+    num_requests: Optional[int] = None
+    num_batched_tokens: Optional[int] = None
 
     waiting_time: Optional[float] = None
-    scheduler_time: Optional[float] = None
-    waiting4execution: Optional[float] = None
-    execute_time: Optional[float] = None
-    delay: Optional[float] = None
+    scheduling2inference: Optional[float] = None
+    inference_time: Optional[float] = None
+    latency: Optional[float] = None
 
 
 @dataclass
-class SchedulableRequest(Request):
+class SchedulableRequest:
+    request_id: str
     metrics: RequestMetrics = field(default_factory=RequestMetrics)
 
     @property
@@ -98,6 +104,7 @@ class SchedulerOutput:
 
 
 @dataclass
-class RequestOutput(Request):
+class RequestOutput:
+    request_id: str
     metrics: RequestMetrics = field(default_factory=RequestMetrics)
     finished: bool = True

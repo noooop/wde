@@ -51,16 +51,7 @@ class ZeroEngine(Z_MethodZeroServer):
 
     def get_metrics(self, output):
         if self.return_metrics:
-            m = output.metrics
-
-            metrics = {
-                "waiting_time": m.waiting_time,
-                "scheduler_time": m.scheduler_time,
-                "n_request_in_batch": m.n_request_in_batch,
-                "waiting4execution": m.waiting4execution,
-                "execute_time": m.execute_time,
-                "delay": m.delay
-            }
+            metrics = output.metrics.__dict__
         else:
             metrics = None
         return metrics

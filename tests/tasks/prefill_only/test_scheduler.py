@@ -14,11 +14,12 @@ class TestRequestProcessor(RequestProcessor):
         self.num_new_tokens = num_new_tokens
 
     def __call__(self, request: Request) -> TextSchedulableRequest:
-        return TextSchedulableRequest(**request.__dict__,
-                                      inputs=TextOnlyInputs(
-                                          prompt_token_ids=[0] *
-                                          self.num_new_tokens),
-                                      params=None)
+        schedulable_request = TextSchedulableRequest(
+            request_id=request.request_id,
+            inputs=TextOnlyInputs(prompt_token_ids=[0] * self.num_new_tokens),
+        )
+        schedulable_request.metrics.arrival_ts = request.arrival_time
+        return schedulable_request
 
     def from_engine(cls, engine):
         pass
@@ -45,9 +46,7 @@ def test_limited_by_max_num_requests(n_request: int, num_new_tokens: int,
         scheduler_output = scheduler.schedule()
 
         request_outputs = [
-            RequestOutput(request_id=request.request_id,
-                          arrival_time=request.arrival_time,
-                          finished=True)
+            RequestOutput(request_id=request.request_id, finished=True)
             for request in scheduler_output.scheduled_requests
         ]
 
@@ -81,9 +80,7 @@ def test_limited_by_token_budget(n_request: int, num_new_tokens: int,
         n_scheduled_requests += len(scheduler_output.scheduled_requests)
 
         request_outputs = [
-            RequestOutput(request_id=request.request_id,
-                          arrival_time=request.arrival_time,
-                          finished=True)
+            RequestOutput(request_id=request.request_id, finished=True)
             for request in scheduler_output.scheduled_requests
         ]
 

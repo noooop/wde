@@ -125,7 +125,7 @@ class FrierenExecutor:
         return self.stream_pool.put(stream)
 
     def execute_model(self, execute_input: ExecuteInput) -> ExecuteOutput:
-        execute_begin_ts = time.perf_counter()
+        inference_begin_ts = time.perf_counter()
 
         stream = self.get_stream()
         with torch.cuda.stream(stream):
@@ -136,10 +136,10 @@ class FrierenExecutor:
         stream.synchronize()
         self.put_stream(stream)
 
-        execute_end_ts = time.perf_counter()
+        inference_end_ts = time.perf_counter()
 
-        execute_output.execute_begin_ts = execute_begin_ts
-        execute_output.execute_end_ts = execute_end_ts
+        execute_output.inference_begin_ts = inference_begin_ts
+        execute_output.inference_end_ts = inference_end_ts
         return execute_output
 
     def simple_async_execute_loop(self, executor_in: Queue,
@@ -163,7 +163,7 @@ class FrierenExecutor:
         def _put(stream, scheduler_output, execute_output):
             stream.synchronize()
             self.put_stream(stream)
-            execute_output.execute_end_ts = time.perf_counter()
+            execute_output.inference_end_ts = time.perf_counter()
             executor_out.put((scheduler_output, execute_output))
 
         try:
@@ -172,7 +172,7 @@ class FrierenExecutor:
                 if o is None:
                     break
 
-                execute_begin = time.perf_counter()
+                inference_begin_ts = time.perf_counter()
 
                 stream = self.get_stream()
 
@@ -183,7 +183,7 @@ class FrierenExecutor:
                     execute_output = self.worker(execute_input)
                     self.worker.non_blocking_d2h(execute_output)
 
-                execute_output.execute_begin_ts = execute_begin
+                execute_output.inference_begin_ts = inference_begin_ts
                 thread.submit(_put, stream, scheduler_output, execute_output)
         except Exception as e:
             executor_out.put(e)
@@ -201,7 +201,7 @@ class FrierenExecutor:
             execute_input: ExecuteInput
             execute_output: Optional[ExecuteOutput]
             stream: torch.cuda.Stream()
-            execute_begin_ts: float
+            inference_begin_ts: float
 
             @classmethod
             def get(cls, block=True, timeout=None):
@@ -215,14 +215,14 @@ class FrierenExecutor:
                            execute_input=execute_input,
                            execute_output=None,
                            stream=self.get_stream(),
-                           execute_begin_ts=time.perf_counter())
+                           inference_begin_ts=time.perf_counter())
                 return task
 
         def _put(task):
             task.stream.synchronize()
             self.put_stream(task.stream)
-            task.execute_output.execute_begin_ts = task.execute_begin_ts
-            task.execute_output.execute_end_ts = time.perf_counter()
+            task.execute_output.inference_begin_ts = task.inference_begin_ts
+            task.execute_output.inference_end_ts = time.perf_counter()
             executor_out.put((task.scheduler_output, task.execute_output))
 
         def _prefetch():

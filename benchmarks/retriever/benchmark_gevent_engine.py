@@ -36,11 +36,12 @@ def benchmark(args):
 
         metrics = edict({
             "waiting_time": m.waiting_time,
-            "scheduler_time": m.scheduler_time,
-            "n_request_in_batch": m.n_request_in_batch,
-            "waiting4execution": m.waiting4execution,
-            "execute_time": m.execute_time,
-            "delay": m.delay,
+            "scheduling_time": m.scheduling_time,
+            "num_requests": m.num_requests,
+            "num_batched_tokens": m.num_batched_tokens,
+            "scheduling2inference": m.scheduling2inference,
+            "inference_time": m.inference_time,
+            "latency": m.latency,
             "e2e": e2e,
         })
         return metrics
@@ -55,27 +56,32 @@ def benchmark(args):
 
         end = time.perf_counter()
         elapsed_time = end - start
-
         waiting_time = np.mean([m.waiting_time for m in metrics_list])
-        scheduler_time = np.mean([m.scheduler_time for m in metrics_list])
-        waiting4execution = np.mean(
-            [m.waiting4execution for m in metrics_list])
-        execute_time = np.mean([m.execute_time for m in metrics_list])
-        n_request_in_batch = np.mean(
-            [m.n_request_in_batch for m in metrics_list])
-        delay = np.mean([m.delay for m in metrics_list])
+        scheduling_time = np.mean([m.scheduling_time for m in metrics_list])
+        num_requests = np.mean([m.num_requests for m in metrics_list])
+        num_batched_tokens = np.mean(
+            [m.num_batched_tokens for m in metrics_list])
+
+        scheduling2inference = np.mean(
+            [m.scheduling2inference for m in metrics_list])
+        inference_time = np.mean([m.inference_time for m in metrics_list])
+        latency = np.mean([m.latency for m in metrics_list])
         e2e = np.mean([m.e2e for m in metrics_list])
+
+        overhead = e2e - latency - waiting_time
 
         print(
             f"n_works {n_works}, Throughput: "
             f"{len(requests) / elapsed_time:.4f} requests/s, "
-            f"Actual batchsize {n_request_in_batch:.2f}, ",
+            f"Scheduling time {scheduling_time * 1000:0.4f} ms, "
+            f"Num requests {num_requests:.2f}, ",
+            f"Num batched tokens {num_batched_tokens:.2f}, ",
+            f"Scheduling2inference {scheduling2inference * 1000:0.4f} ms, "
+            f"Inference time {inference_time * 1000:0.4f} ms, "
             f"Waiting time {waiting_time * 1000:0.4f} ms, "
-            f"Scheduler time {scheduler_time * 1000:0.4f} ms, "
-            f"Waiting for Execute {waiting4execution * 1000:0.4f} ms, "
-            f"Execute time {execute_time * 1000:0.4f} ms, "
-            f"Delay {delay * 1000:0.4f} ms, "
-            f"E2E {e2e * 1000:0.4f} ms")
+            f"Latency {latency * 1000:0.4f} ms, "
+            f"E2E {e2e * 1000:0.4f} ms, "
+            f"Overhead {overhead * 1000:0.4f} ms.")
 
 
 if __name__ == '__main__':

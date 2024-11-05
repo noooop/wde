@@ -2,12 +2,10 @@ import time
 from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional, cast
 
-from wde.tasks.core.schema.engine_io import (Params, PromptInput, Request,
-                                             SchedulableRequest,
-                                             TextOnlyInputs, TextPrompt,
-                                             TextRequest,
-                                             TextSchedulableRequest,
-                                             TokensPrompt, ValidationError)
+from wde.tasks.core.schema.engine_io import (
+    Params, PromptInput, Request, RequestMetrics, SchedulableRequest,
+    TextOnlyInputs, TextPrompt, TextRequest, TextSchedulableRequest,
+    TokensPrompt, ValidationError)
 from wde.tasks.prefill_only.processor.tokenizer import Tokenizer
 
 
@@ -119,7 +117,7 @@ class TextRequestProcessor(RequestProcessor):
             inputs=TextOnlyInputs(prompt_token_ids=prompt_token_ids,
                                   prompt=inputs.get("prompt")),
             params=request.params,
-            arrival_time=request.arrival_time)
+            metrics=RequestMetrics(arrival_ts=request.arrival_time))
 
         return schedulable_request
 

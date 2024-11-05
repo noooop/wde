@@ -44,8 +44,7 @@ def test_remove_abort_request(n_request: int):
     request_outputs = []
     for i in range(1, n_request + 1):
         scheduler.add_request(Request(request_id=str(i), arrival_time=0.))
-        request_outputs.append(
-            RequestOutput(request_id=str(i), arrival_time=0., finished=True))
+        request_outputs.append(RequestOutput(request_id=str(i), finished=True))
         assert len(scheduler.waiting) == i
         assert len(scheduler.requests) == i
         assert len(request_outputs) == i

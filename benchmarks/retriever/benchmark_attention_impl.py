@@ -52,25 +52,27 @@ def benchmark_wde(args):
         end = time.perf_counter()
 
         elapsed_time = end - start
+        scheduling_time = np.mean([m.scheduling_time for m in metrics_list])
+        num_requests = np.mean([m.num_requests for m in metrics_list])
+        num_batched_tokens = np.mean(
+            [m.num_batched_tokens for m in metrics_list])
 
-        scheduler_time = np.mean([m.scheduler_time for m in metrics_list])
-        waiting4execution = np.mean(
-            [m.waiting4execution for m in metrics_list])
-        execute_time = np.mean([m.execute_time for m in metrics_list])
-        n_request_in_batch = np.mean(
-            [m.n_request_in_batch for m in metrics_list])
-        delay = np.mean([m.delay for m in metrics_list])
-        avg_delay = elapsed_time / n_step
+        scheduling2inference = np.mean(
+            [m.scheduling2inference for m in metrics_list])
+        inference_time = np.mean([m.inference_time for m in metrics_list])
+        latency = np.mean([m.latency for m in metrics_list])
+        avg_latency = elapsed_time / n_step
 
         print(
             f"Batchsize {batchsize}, Throughput: "
             f"{len(requests) / elapsed_time:.4f} requests/s, "
-            f"Actual batchsize {n_request_in_batch:.2f}, ",
-            f"Scheduler time {scheduler_time * 1000:0.4f} ms, "
-            f"Waiting for Execute {waiting4execution * 1000:0.4f} ms, "
-            f"Execute time {execute_time * 1000:0.4f} ms, "
-            f"Avg Delay {avg_delay * 1000:0.4f} ms, "
-            f"Delay {delay * 1000:0.4f} ms, n_step {n_step}")
+            f"Scheduling time {scheduling_time * 1000:0.4f} ms, "
+            f"Num requests {num_requests:.2f}, ",
+            f"Num batched tokens {num_batched_tokens:.2f}, ",
+            f"Scheduling2inference {scheduling2inference * 1000:0.4f} ms, "
+            f"Inference time {inference_time * 1000:0.4f} ms, "
+            f"Avg Latency {avg_latency * 1000:0.4f} ms, "
+            f"Latency {latency * 1000:0.4f} ms, n_step {n_step}")
 
         engine.executor.shutdown_execute_loop()
         gc.collect()
