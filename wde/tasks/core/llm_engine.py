@@ -162,6 +162,10 @@ class LLMEngine:
     def _put_as_many_as_possible(self):
         while self.num_on_the_fly < self.max_num_on_the_fly:
             scheduler_output = self.scheduler.schedule()
+
+            if scheduler_output is None:
+                return
+
             if scheduler_output.is_empty():
                 break
             executor_input = self.model_inputs_builder(scheduler_output)

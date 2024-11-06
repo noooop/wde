@@ -107,14 +107,12 @@ if __name__ == '__main__':
     args.scheduling = "async"
 
     args.n_works_list = [1, 2, 4, 8, 16, 32, 64, 128]
+    args.waiting = None
 
-    for waiting in [None, 0.001, 0.005, 0.01]:
-        print("waiting", waiting)
-        args.waiting = waiting
-        for max_num_requests in [8, 16]:
-            print("max_num_requests:", max_num_requests)
-            args.max_num_requests = max_num_requests
+    for max_num_requests in [8, 16]:
+        print("max_num_requests:", max_num_requests)
+        args.max_num_requests = max_num_requests
 
-            with ProcessPoolExecutor(1) as executor:
-                f = executor.submit(benchmark, args)
-                f.result()
+        with ProcessPoolExecutor(1) as executor:
+            f = executor.submit(benchmark, args)
+            f.result()

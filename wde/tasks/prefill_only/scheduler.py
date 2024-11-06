@@ -1,6 +1,6 @@
 import time
 from dataclasses import dataclass, field
-from typing import Set, cast
+from typing import Optional, Set, cast
 
 from wde.logger import init_logger
 from wde.tasks.core.processor.input_processor import RequestProcessor
@@ -57,7 +57,10 @@ class PrefillOnlyScheduler(Scheduler):
         return cls(engine.engine_config.scheduler_config,
                    engine.request_processor)
 
-    def schedule(self) -> PrefillOnlySchedulerOutput:
+    def schedule(self) -> Optional[PrefillOnlySchedulerOutput]:
+        if not self.waiting:
+            return None
+
         scheduling_begin_ts = time.perf_counter()
 
         budget = PrefillOnlySchedulingBudget(
