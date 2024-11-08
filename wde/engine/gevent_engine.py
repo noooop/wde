@@ -13,7 +13,7 @@ from gevent.queue import Queue
 
 from wde.logger import init_logger
 from wde.tasks.core.llm_engine import LLMEngine
-from wde.tasks.core.schema.engine_io import (Inputs, Params, PromptInput,
+from wde.tasks.core.schema.engine_io import (Inputs, Params, PromptInputs,
                                              RequestOutput)
 from wde.tasks.reranker.schema.engine_io import RerankerInputs
 
@@ -114,7 +114,7 @@ class GeventLLMEngine:
     def add_request(
         self,
         request_id: str,
-        inputs: PromptInput,
+        inputs: PromptInputs,
         params: Params,
         arrival_time: Optional[float] = None,
     ):
@@ -132,7 +132,7 @@ class GeventLLMEngine:
     def encode(
         self,
         request_id: str,
-        inputs: PromptInput,
+        inputs: PromptInputs,
         pooling_params: Optional[Params] = None,
     ) -> Iterator[RequestOutput]:
         return self._process_request(

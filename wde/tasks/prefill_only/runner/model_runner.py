@@ -34,8 +34,8 @@ class ModelRunner:
         self.model: nn.Module  # Set after load_model
 
     def load_model(self) -> None:
-        from wde.tasks.core.loader.loader import (get_model_loader,
-                                                  initialize_model)
+        from wde.backends.loader.loader import (get_model_loader,
+                                                initialize_model)
 
         logger.info("Starting to load model %s...", self.model_config.model)
         with DeviceMemoryProfiler() as m:

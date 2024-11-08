@@ -15,7 +15,6 @@ import torch
 from huggingface_hub import HfFileSystem, hf_hub_download, snapshot_download
 from safetensors.torch import load_file, safe_open, save_file
 from tqdm.auto import tqdm
-from transformers import PretrainedConfig
 from transformers.utils import SAFE_WEIGHTS_INDEX_NAME
 
 from wde.backends.quantization import (QuantizationConfig,
@@ -23,7 +22,7 @@ from wde.backends.quantization import (QuantizationConfig,
 from wde.backends.quantization.schema import QuantParamSchema
 from wde.logger import init_logger
 from wde.platforms import current_platform
-from wde.tasks.core.config import LoadConfig
+from wde.tasks.core.config import LoadConfig, ModelConfig
 from wde.utils import print_warning_once
 
 logger = init_logger(__name__)
@@ -117,23 +116,21 @@ def convert_bin_to_safetensor_file(
             raise RuntimeError(f"The output tensors do not match for key {k}")
 
 
-# TODO(woosuk): Move this to other place.
-def get_quant_config(model: str,
-                     quantization: str,
-                     hf_config: PretrainedConfig,
-                     load_config: LoadConfig,
-                     revision: Optional[str] = None) -> QuantizationConfig:
+def get_quant_config(model_config: ModelConfig,
+                     load_config: LoadConfig) -> QuantizationConfig:
 
-    quant_cls = get_quantization_config(quantization)
+    quant_cls = get_quantization_config(model_config.quantization)
     # Read the quantization config from the HF model config, if available.
-    hf_quant_config = getattr(hf_config, "quantization_config", None)
+    hf_quant_config = getattr(model_config.hf_config, "quantization_config",
+                              None)
     if hf_quant_config is None:
         # compressed-tensors uses a compressions_config
-        hf_quant_config = getattr(hf_config, "compression_config", None)
+        hf_quant_config = getattr(model_config.hf_config, "compression_config",
+                                  None)
     if hf_quant_config is not None:
         return quant_cls.from_config(hf_quant_config)
     # In case of bitsandbytes/QLoRA, get quant config from the adapter model.
-    if quantization == "bitsandbytes":
+    if model_config.quantization == "bitsandbytes":
         if (not load_config.model_loader_extra_config
                 or "qlora_adapter_name_or_path"
                 not in load_config.model_loader_extra_config):
@@ -142,14 +139,14 @@ def get_quant_config(model: str,
             "qlora_adapter_name_or_path"]
 
     else:
-        model_name_or_path = model
+        model_name_or_path = model_config.model
     is_local = os.path.isdir(model_name_or_path)
     if not is_local:
         # Download the config files.
         with get_lock(model_name_or_path, load_config.download_dir):
             hf_folder = snapshot_download(
                 model_name_or_path,
-                revision=revision,
+                revision=model_config.revision,
                 allow_patterns="*.json",
                 cache_dir=load_config.download_dir,
                 local_files_only=huggingface_hub.constants.HF_HUB_OFFLINE,
@@ -171,16 +168,18 @@ def get_quant_config(model: str,
             f.endswith(x) for x in possible_config_filenames)
     ]
     if len(quant_config_files) == 0:
-        raise ValueError(f"Cannot find the config file for {quantization}")
+        raise ValueError(
+            f"Cannot find the config file for {model_config.quantization}")
     if len(quant_config_files) > 1:
-        raise ValueError(f"Found multiple config files for {quantization}: "
-                         f"{quant_config_files}")
+        raise ValueError(
+            f"Found multiple config files for {model_config.quantization}: "
+            f"{quant_config_files}")
 
     quant_config_file = quant_config_files[0]
     with open(quant_config_file, "r") as f:
         config = json.load(f)
 
-        if quantization == "bitsandbytes":
+        if model_config.quantization == "bitsandbytes":
             config["adapter_name_or_path"] = model_name_or_path
 
     return quant_cls.from_config(config)

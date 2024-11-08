@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import List
 
-from wde.tasks.core.schema.engine_io import (PromptInput, Request,
+from wde.tasks.core.schema.engine_io import (PromptInputs, Request,
                                              SchedulableRequest,
                                              SchedulerOutput, TextOnlyInputs)
 
@@ -13,7 +13,7 @@ class PrefillOnlyInput(TextOnlyInputs):
 
 @dataclass
 class PrefillOnlyRequest(Request):
-    inputs: PromptInput
+    inputs: PromptInputs
 
 
 @dataclass

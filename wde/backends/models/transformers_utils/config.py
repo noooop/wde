@@ -3,11 +3,11 @@ from typing import Dict, Optional, Type
 
 from transformers import GenerationConfig, PretrainedConfig
 
-from wde.envs import USE_MODELSCOPE
-from wde.logger import init_logger
-from wde.tasks.core.models.transformers_utils.configs import (
+from wde.backends.models.transformers_utils.configs import (
     ChatGLMConfig, DbrxConfig, InternVLChatConfig, JAISConfig, MedusaConfig,
     MLPSpeculatorConfig, MPTConfig, NemotronConfig, RWConfig)
+from wde.envs import USE_MODELSCOPE
+from wde.logger import init_logger
 
 if USE_MODELSCOPE:
     from modelscope import AutoConfig

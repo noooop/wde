@@ -4,7 +4,7 @@ from tqdm import tqdm
 
 from wde.logger import init_logger
 from wde.tasks.core.llm_engine import LLMEngine
-from wde.tasks.core.schema.engine_io import Params, PromptInput, RequestOutput
+from wde.tasks.core.schema.engine_io import Params, PromptInputs, RequestOutput
 from wde.tasks.reranker.schema.engine_io import RerankerInputs
 from wde.utils import Counter
 
@@ -31,7 +31,7 @@ class LLM:
 
     def encode(
         self,
-        inputs: Union[Union[PromptInput, Sequence[PromptInput]]],
+        inputs: Union[Union[PromptInputs, Sequence[PromptInputs]]],
         pooling_params: Optional[Union[Params, Sequence[Params]]] = None,
         use_tqdm: bool = True,
     ) -> List[RequestOutput]:
@@ -63,7 +63,7 @@ class LLM:
 
     def _validate_and_add_requests(
         self,
-        inputs: Union[Union[PromptInput, Sequence[PromptInput]]],
+        inputs: Union[Union[PromptInputs, Sequence[PromptInputs]]],
         params: Optional[Union[Params, Sequence[Params]]] = None,
     ) -> None:
         if isinstance(inputs, (str, dict)):
@@ -83,7 +83,7 @@ class LLM:
 
     def _add_request(
         self,
-        inputs: Union[Union[PromptInput, Sequence[PromptInput]]],
+        inputs: Union[Union[PromptInputs, Sequence[PromptInputs]]],
         params: Params,
     ) -> None:
         request_id = str(next(self.request_counter))

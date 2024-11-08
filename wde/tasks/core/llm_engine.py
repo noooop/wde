@@ -83,8 +83,8 @@ class LLMEngine:
                                                  EngineArgs]) -> "LLMEngine":
         """Creates an LLM engine from the engine arguments."""
 
-        from wde.tasks.core.loader.utils import get_model_workflow
-        from wde.tasks.core.models.transformers_utils.config import get_config
+        from wde.backends.loader.utils import get_model_workflow
+        from wde.backends.models.transformers_utils.config import get_config
 
         if isinstance(engine_args, EngineArgs):
             engine_args = engine_args.to_dict()

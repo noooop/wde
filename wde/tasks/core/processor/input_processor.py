@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, Optional, cast
 
 from wde.tasks.core.schema.engine_io import (
-    Params, PromptInput, Request, RequestMetrics, SchedulableRequest,
+    Params, PromptInputs, Request, RequestMetrics, SchedulableRequest,
     TextOnlyInputs, TextPrompt, TextRequest, TextSchedulableRequest,
     TokensPrompt, ValidationError)
 from wde.tasks.prefill_only.processor.tokenizer import Tokenizer
@@ -32,7 +32,7 @@ class TextInputProcessor(InputProcessor):
 
     def __call__(self,
                  request_id: str,
-                 inputs: Optional[PromptInput] = None,
+                 inputs: Optional[PromptInputs] = None,
                  params: Optional[Params] = None,
                  arrival_time: Optional[float] = None) -> TextRequest:
 

@@ -28,10 +28,10 @@ from wde.backends.attention import (Attention, AttentionBackend,
                                     AttentionMetadata)
 from wde.backends.linear import (ColumnParallelLinear, QKVParallelLinear,
                                  RowParallelLinear)
+from wde.backends.loader.weight_utils import (default_weight_loader,
+                                              maybe_remap_kv_scale_name)
+from wde.backends.models.utils import is_pp_missing_parameter
 from wde.backends.quantization import QuantizationConfig
-from wde.tasks.core.loader.weight_utils import (default_weight_loader,
-                                                maybe_remap_kv_scale_name)
-from wde.tasks.core.models.utils import is_pp_missing_parameter
 from wde.tasks.core.schema.execute_io import IntermediateTensors
 from wde.tasks.encode_only.schema.execute_io import EncodeOnlyExecuteOutput
 from wde.tasks.reranker.schema.execute_io import RerankerExecuteOutput

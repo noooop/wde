@@ -7,11 +7,10 @@ import torch
 from transformers import PretrainedConfig
 
 import wde.envs as envs
+from wde.backends.models.transformers_utils.config import (get_config,
+                                                           get_hf_text_config)
 from wde.backends.quantization import QUANTIZATION_METHODS
 from wde.logger import init_logger
-from wde.tasks.core.models.transformers_utils.config import (get_config,
-                                                             get_hf_text_config
-                                                             )
 from wde.utils import is_cpu, is_hip, is_neuron, is_openvino, is_xpu
 
 logger = init_logger(__name__)

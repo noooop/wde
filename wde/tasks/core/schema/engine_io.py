@@ -37,7 +37,7 @@ class TextOnlyInputs(Inputs):
     """
 
 
-PromptInput = Union[str, Dict, TextPrompt, TokensPrompt, TextOnlyInputs]
+PromptInputs = Union[str, Dict, TextPrompt, TokensPrompt, TextOnlyInputs]
 
 
 @dataclass

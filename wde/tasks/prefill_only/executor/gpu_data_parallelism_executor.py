@@ -8,10 +8,10 @@ import torch
 from wde.backends.attention import AttentionBackend
 from wde.logger import init_logger
 from wde.tasks.core.config import EngineConfig
+from wde.tasks.core.executor.gpu_executor import FrierenExecutor
 from wde.tasks.core.llm_engine import LLMEngine
 from wde.tasks.core.worker import create_worker
 from wde.tasks.core.workflow import Workflow
-from wde.tasks.prefill_only.executor.gpu_executor import FrierenExecutor
 
 logger = init_logger(__name__)
 

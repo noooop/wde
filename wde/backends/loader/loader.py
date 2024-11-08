@@ -15,19 +15,19 @@ from huggingface_hub import HfApi, hf_hub_download
 from torch import nn
 
 from wde.backends.attention.abstract import AttentionBackend
+from wde.backends.loader.utils import (get_model_architecture,
+                                       set_default_torch_dtype)
+from wde.backends.loader.weight_utils import (
+    download_safetensors_index_file_from_hf, download_weights_from_hf,
+    filter_duplicate_safetensors_files, filter_files_not_needed_for_inference,
+    get_quant_config, np_cache_weights_iterator, pt_weights_iterator,
+    safetensors_weights_iterator)
 from wde.backends.quantization import QuantizationConfig
 from wde.backends.utils import set_weight_attrs
 from wde.envs import USE_MODELSCOPE
 from wde.logger import init_logger
 from wde.tasks.core.config import (CacheConfig, DeviceConfig, LoadConfig,
                                    LoadFormat, ModelConfig, SchedulerConfig)
-from wde.tasks.core.loader.utils import (get_model_architecture,
-                                         set_default_torch_dtype)
-from wde.tasks.core.loader.weight_utils import (
-    download_safetensors_index_file_from_hf, download_weights_from_hf,
-    filter_duplicate_safetensors_files, filter_files_not_needed_for_inference,
-    get_quant_config, np_cache_weights_iterator, pt_weights_iterator,
-    safetensors_weights_iterator)
 from wde.utils import is_pin_memory_available
 
 

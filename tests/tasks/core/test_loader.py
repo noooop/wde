@@ -1,7 +1,7 @@
 import pytest
 
+from wde.backends.loader.loader import get_model_loader, initialize_model
 from wde.tasks.core.config import DeviceConfig, LoadConfig, ModelConfig
-from wde.tasks.core.loader.loader import get_model_loader, initialize_model
 from wde.tasks.encode_only.arg_utils import EncodeOnlyEngineArgs as EngineArgs
 from wde.tasks.prefill_only.backends.attention.backends.abstract import \
     PrefillOnlyAttentionBackend
