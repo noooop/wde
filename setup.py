@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name="wde",
-    version="v0.1.1",
+    version="v0.1.2",
     author="noooop",
     author_email="noooop@live.cn",
     description="Workflow Defined Engine",
