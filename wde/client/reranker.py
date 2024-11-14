@@ -1,7 +1,7 @@
 from wde.microservices.framework.nameserver.async_client import AsyncZeroClient
 from wde.microservices.framework.nameserver.client import ZeroClient
-from wde.tasks.reranker.engine.schema import (PROTOCOL, RerankerRequest,
-                                              RerankerResponse)
+from wde.tasks.reranker.schema.api import (PROTOCOL, RerankerRequest,
+                                           RerankerResponse)
 
 CLIENT_VALIDATION = True
 

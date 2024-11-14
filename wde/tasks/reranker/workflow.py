@@ -1,5 +1,5 @@
 from wde.tasks.encode_only.workflow import EncodeOnlyWorkflow
-from wde.tasks.reranker.engine.schema import PROTOCOL
+from wde.tasks.reranker.schema.api import PROTOCOL
 
 
 class RerankerWorkflow(EncodeOnlyWorkflow):

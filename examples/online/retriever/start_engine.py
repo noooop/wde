@@ -5,9 +5,8 @@ from gevent.pool import Pool
 from tqdm import tqdm
 
 from wde import const, envs
-from wde.microservices.framework.zero_manager.client import ZeroManagerClient
+from wde.client import RetrieverClient, ZeroManagerClient
 from wde.microservices.standalone.deploy import ensure_zero_manager_available
-from wde.tasks.retriever.engine.client import RetrieverClient
 
 ensure_zero_manager_available()
 

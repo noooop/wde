@@ -9,8 +9,8 @@ from tqdm import tqdm
 
 os.environ["WDE_NAME_SERVER_PORT"] = "19527"
 
+from wde.client import RerankerClient
 from wde.engine.zero_engine import start_zero_engine
-from wde.tasks.reranker.engine.client import RerankerClient
 
 model_name = "BAAI/bge-reranker-v2-m3"
 

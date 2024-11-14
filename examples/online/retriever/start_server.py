@@ -10,8 +10,8 @@ from tqdm import tqdm
 
 os.environ["WDE_NAME_SERVER_PORT"] = "19527"
 
+from wde.client import RetrieverClient
 from wde.engine.zero_engine import start_zero_engine
-from wde.tasks.retriever.engine.client import RetrieverClient
 
 model_name = "google-bert/bert-base-uncased"
 

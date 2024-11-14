@@ -1,6 +1,6 @@
 from wde.tasks.decode_only.workflow import DecodeOnlyWorkflow
 from wde.tasks.encode_only.workflow import EncodeOnlyWorkflow
-from wde.tasks.retriever.engine.schema import PROTOCOL
+from wde.tasks.retriever.schema.api import PROTOCOL
 
 
 class RetrieverEncodeOnlyWorkflow(EncodeOnlyWorkflow):

@@ -10,8 +10,8 @@ def benchmark(args):
 
     from gevent.pool import Pool
 
+    from wde.client import RetrieverClient
     from wde.engine.zero_engine import start_zero_engine
-    from wde.tasks.retriever.engine.client import RetrieverClient
 
     model_name = args.model
 

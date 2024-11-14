@@ -5,9 +5,10 @@ from wde.microservices.framework.zero.server import ZeroServerProcess
 
 
 def test_server():
-    import wde.microservices.framework.nameserver.client as client
-    client.CLIENT_VALIDATION = False
-    from wde.microservices.framework.nameserver.client import NameServerClient
+    import wde.microservices.framework.nameserver.client as nameserver_client
+    nameserver_client.CLIENT_VALIDATION = False
+
+    from wde.client import NameServerClient
 
     nameserver = ZeroServerProcess(
         "wde.microservices.framework.nameserver.server:ZeroNameServer")

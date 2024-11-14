@@ -113,7 +113,7 @@ wde deploy examples/online/deploy.yml
 
 ```python
 from wde import const, envs
-from wde.microservices.framework.zero_manager.client import ZeroManagerClient
+from wde.client import ZeroManagerClient
 
 manager_client = ZeroManagerClient(envs.ROOT_MANAGER_NAME)
 manager_client.wait_service_available(envs.ROOT_MANAGER_NAME)
@@ -162,7 +162,7 @@ zeromq 相比 http 吞吐高延迟小，尤其是传输 Embeddings，建议优�
 ```python
 import numpy as np
 from gevent.pool import Pool
-from wde.tasks.retriever.engine.client import RetrieverClient
+from wde.client import RetrieverClient
 
 client = RetrieverClient()
 
@@ -194,7 +194,7 @@ print(np.stack(out).shape)
 项目自带与 ollama 和 openai 兼容的 webserver, 可以使用下面的部署文件一键部署
 
 ```commandline
-wde deploy examples/webserver/deploy.yml
+wde serving examples/webserver/deploy.yml
 ```
 
 [webserver 示例部署文件](https://github.com/noooop/wde/blob/main/examples/webserver/deploy.yml)

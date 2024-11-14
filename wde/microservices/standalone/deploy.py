@@ -2,8 +2,8 @@ import yaml
 from easydict import EasyDict as edict
 
 from wde import const, envs
+from wde.client import ZeroManagerClient
 from wde.logger import init_logger
-from wde.microservices.framework.zero_manager.client import ZeroManagerClient
 
 logger = init_logger(__name__)
 
@@ -85,8 +85,7 @@ class Deploy:
 
 
 def ensure_zero_manager_available():
-    from wde.microservices.framework.nameserver.client import NameServerClient
-    from wde.microservices.framework.zero.schema import Timeout
+    from wde.client import NameServerClient, Timeout
 
     nameserver_client = NameServerClient()
     manager_client = ZeroManagerClient(envs.ROOT_MANAGER_NAME)

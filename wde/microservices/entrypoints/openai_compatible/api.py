@@ -7,8 +7,7 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
 import wde.microservices.entrypoints.openai_compatible.schema as protocol
-from wde.tasks.reranker.engine.client import AsyncRerankerClient
-from wde.tasks.retriever.engine.client import AsyncRetrieverClient
+from wde.client import AsyncRerankerClient, AsyncRetrieverClient
 from wde.utils import random_uuid
 
 retriever_client = AsyncRetrieverClient()

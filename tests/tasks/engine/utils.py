@@ -96,7 +96,7 @@ class WDEZERORunner:
         self.server = start_zero_engine(engine_args)
 
     def encode(self, prompts: List[str]) -> List[List[float]]:
-        from wde.tasks.retriever.engine.client import RetrieverClient
+        from wde.client import RetrieverClient
 
         client = RetrieverClient()
         client.wait_service_available(self.model_name)
@@ -113,7 +113,7 @@ class WDEZERORunner:
         return outputs
 
     def compute_score(self, pairs) -> List[float]:
-        from wde.tasks.reranker.engine.client import RerankerClient
+        from wde.client import RerankerClient
 
         client = RerankerClient()
         client.wait_service_available(self.model_name)

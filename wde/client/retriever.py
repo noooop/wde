@@ -1,7 +1,7 @@
 from wde.microservices.framework.nameserver.async_client import AsyncZeroClient
 from wde.microservices.framework.nameserver.client import ZeroClient
-from wde.tasks.retriever.engine.schema import (PROTOCOL, RetrieverRequest,
-                                               RetrieverResponse)
+from wde.tasks.retriever.schema.api import (PROTOCOL, RetrieverRequest,
+                                            RetrieverResponse)
 
 CLIENT_VALIDATION = True
 

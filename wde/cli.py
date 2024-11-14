@@ -19,8 +19,7 @@ def server():
 @click.argument('model_name')
 @click.option("--wait/--nowait", default=True)
 def start(model_name, wait):
-    from wde.microservices.framework.zero_manager.client import \
-        ZeroManagerClient
+    from wde.client import ZeroManagerClient
 
     manager_client = ZeroManagerClient(envs.ROOT_MANAGER_NAME)
     out = manager_client.start(model_name)
@@ -37,8 +36,7 @@ def start(model_name, wait):
 @click.command()
 @click.argument('model_name')
 def terminate(model_name):
-    from wde.microservices.framework.zero_manager.client import \
-        ZeroManagerClient
+    from wde.client import ZeroManagerClient
 
     manager_client = ZeroManagerClient(envs.ROOT_MANAGER_NAME)
     out = manager_client.terminate(model_name)
@@ -55,8 +53,7 @@ def deploy(config_filename):
 @click.command()
 @click.argument('config_filename', type=click.Path(exists=True))
 def serving(config_filename):
-    from wde.microservices.framework.zero_manager.client import \
-        ZeroManagerClient
+    from wde.client import ZeroManagerClient
     from wde.microservices.standalone.deploy import Deploy
     from wde.microservices.standalone.server import Server
 

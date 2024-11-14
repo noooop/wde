@@ -4,8 +4,7 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
 import wde.microservices.entrypoints.ollama_compatible.schema as protocol
-from wde.tasks.reranker.engine.client import AsyncRerankerClient
-from wde.tasks.retriever.engine.client import AsyncRetrieverClient
+from wde.client import AsyncRerankerClient, AsyncRetrieverClient
 
 retriever_client = AsyncRetrieverClient()
 reranker_client = AsyncRerankerClient()

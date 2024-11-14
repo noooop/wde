@@ -1,10 +1,10 @@
 import time
 
 from wde import envs
+from wde.client import ZeroManagerClient
 from wde.microservices.framework.nameserver.client import ZeroClient
 from wde.microservices.framework.zero.schema import ZeroServerResponseOk
 from wde.microservices.framework.zero.server import ZeroServerProcess
-from wde.microservices.framework.zero_manager.client import ZeroManagerClient
 
 
 def to_model_dump(msg):

@@ -7,9 +7,8 @@ from wde.engine.gevent_engine import GeventLLMEngine
 from wde.logger import init_logger
 from wde.microservices.framework.zero.schema import ZeroServerResponseOk
 from wde.microservices.framework.zero.server import Z_MethodZeroServer
-from wde.tasks.reranker.engine.schema import RerankerRequest, RerankerResponse
-from wde.tasks.retriever.engine.schema import (RetrieverRequest,
-                                               RetrieverResponse)
+from wde.tasks.reranker.schema.api import RerankerRequest, RerankerResponse
+from wde.tasks.retriever.schema.api import RetrieverRequest, RetrieverResponse
 
 logger = init_logger(__name__)
 
@@ -91,8 +90,7 @@ def start_zero_engine(engine_args):
     from wde.microservices.standalone.server import Server
     assert "model" in engine_args
 
-    from wde.microservices.framework.zero_manager.client import \
-        ZeroManagerClient
+    from wde.client import ZeroManagerClient
 
     server = Server()
     server.setup()
