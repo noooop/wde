@@ -86,7 +86,7 @@ class PrefillOnlyScheduler(Scheduler):
             scheduled_ts = time.perf_counter()
 
             if request.request_id in self.aborted_requests:
-                self.aborted_requests.remove(request.request_id)
+                self.actual_abort_request(request.request_id)
                 waiting_queue.popleft()
                 continue
 

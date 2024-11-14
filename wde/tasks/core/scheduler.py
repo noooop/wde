@@ -48,6 +48,9 @@ class Scheduler(ABC):
         self.requests -= request_ids
         self.aborted_requests |= request_ids
 
+    def actual_abort_request(self, request_id: str):
+        self.aborted_requests.remove(request_id)
+
     def remove_abort_request(
             self, request_outputs: List[RequestOutput]) -> List[RequestOutput]:
         if len(self.aborted_requests) == 0:
@@ -63,7 +66,8 @@ class Scheduler(ABC):
             request for request in request_outputs
             if request.request_id not in need_abort
         ]
-        self.aborted_requests -= need_abort
+        for request_id in need_abort:
+            self.actual_abort_request(request_id)
 
         return request_outputs
 
