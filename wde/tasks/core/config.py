@@ -7,7 +7,6 @@ import torch
 from transformers import PretrainedConfig
 from vllm.utils import is_cpu, is_hip, is_neuron, is_openvino, is_xpu
 
-import wde.envs as envs
 from wde.backends.models.transformers_utils.config import (get_config,
                                                            get_hf_text_config)
 from wde.backends.quantization import QUANTIZATION_METHODS
@@ -671,24 +670,18 @@ def _get_and_verify_max_len(
                 f"{derived_max_model_len} or model_max_length="
                 f"{model_max_length} in model's config.json). This may lead "
                 "to incorrect model outputs or CUDA errors.")
-            if envs.VLLM_ALLOW_LONG_MAX_MODEL_LEN:
-                logger.warning(
-                    "%s Make sure the value is correct and within the "
-                    "model context size.", msg)
-            else:
-                raise ValueError(
-                    f"{msg} To allow overriding this maximum, set "
-                    "the env var VLLM_ALLOW_LONG_MAX_MODEL_LEN=1")
+            raise ValueError(msg)
+
     return int(max_model_len)
 
 
-@dataclass(frozen=True)
+@dataclass
 class EngineConfig:
     model_config: ModelConfig
     device_config: DeviceConfig
     load_config: LoadConfig
-    scheduler_config: SchedulerConfig
-    parallel_config: Optional[ParallelConfig]
+    scheduler_config: Optional[SchedulerConfig] = None
+    parallel_config: Optional[ParallelConfig] = None
 
     def to_dict(self):
         """Return the configs as a dictionary, for use in **kwargs.

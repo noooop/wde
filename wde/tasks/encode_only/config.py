@@ -11,7 +11,7 @@ logger = init_logger(__name__)
 _GB = 1 << 30
 
 
-@dataclass(frozen=True)
+@dataclass
 class EncodeOnlyEngineConfig(EngineConfig):
     model_config: ModelConfig
     scheduler_config: PrefillOnlySchedulerConfig

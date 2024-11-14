@@ -1,10 +1,9 @@
 from dataclasses import dataclass
-from typing import List, Optional, Union
+from typing import Optional
 
 from wde.logger import init_logger
 from wde.tasks.core.arg_utils import EngineArgs
-from wde.tasks.core.config import (DeviceConfig, LoadConfig,
-                                   filter_unexpected_fields)
+from wde.tasks.core.config import filter_unexpected_fields
 from wde.tasks.decode_only.output_last_hidden_states.config import (
     DecodeOnlyEmbeddingSchedulerConfig, DecodeOnlyEngineConfig,
     DecodeOnlyModelConfig, DecodeOnlySchedulerConfig,
@@ -22,50 +21,26 @@ def nullable_str(val: str):
 @filter_unexpected_fields
 @dataclass
 class DecodeOnlyOutputLastHiddenStatesEngineArgs(EngineArgs):
-    model: str
-    served_model_name: Optional[Union[List[str]]] = None
-    tokenizer: Optional[str] = None
-    skip_tokenizer_init: bool = False
-    tokenizer_mode: str = 'auto'
-    trust_remote_code: bool = False
-    download_dir: Optional[str] = None
-    load_format: str = 'auto'
-    dtype: str = 'auto'
     kv_cache_dtype: str = 'auto'
-    quantization_param_path: Optional[str] = None
-    disable_sliding_window: bool = False
-    seed: int = 0
-    max_model_len: Optional[int] = None
-    max_num_batched_tokens: Optional[int] = None
-
-    output_last_hidden_states: bool = False
-    enable_bidirectional: bool = False
 
     max_num_requests: int = 8
     max_num_on_the_fly: Optional[int] = None
     scheduling: str = "async"
     waiting: Optional[float] = None
+    max_num_batched_tokens: Optional[int] = None
+
+    output_last_hidden_states: bool = False
+    enable_bidirectional: bool = False
 
     data_parallel_size: int = 0
-
-    disable_log_stats: bool = False
-    revision: Optional[str] = None
-    code_revision: Optional[str] = None
-    rope_scaling: Optional[dict] = None
-    rope_theta: Optional[float] = None
-    tokenizer_revision: Optional[str] = None
-    quantization: Optional[str] = None
-    disable_custom_all_reduce: bool = False
-    device: str = 'auto'
-    model_loader_extra_config: Optional[dict] = None
-    ignore_patterns: Optional[Union[str, List[str]]] = None
 
     def __post_init__(self):
         if self.tokenizer is None:
             self.tokenizer = self.model
 
     def create_engine_config(self) -> DecodeOnlyEngineConfig:
-        device_config = DeviceConfig(device=self.device)
+        engine_config = super().create_engine_config()
+
         model_config = DecodeOnlyModelConfig(
             model=self.model,
             tokenizer=self.tokenizer,
@@ -82,7 +57,6 @@ class DecodeOnlyOutputLastHiddenStatesEngineArgs(EngineArgs):
             quantization=self.quantization,
             quantization_param_path=self.quantization_param_path,
             disable_sliding_window=self.disable_sliding_window,
-            skip_tokenizer_init=self.skip_tokenizer_init,
             served_model_name=self.served_model_name,
             output_last_hidden_states=self.output_last_hidden_states,
             enable_bidirectional=self.enable_bidirectional)
@@ -105,15 +79,9 @@ class DecodeOnlyOutputLastHiddenStatesEngineArgs(EngineArgs):
         else:
             parallel_config = None
 
-        load_config = LoadConfig(
-            load_format=self.load_format,
-            download_dir=self.download_dir,
-            model_loader_extra_config=self.model_loader_extra_config,
-            ignore_patterns=self.ignore_patterns,
-        )
-
-        return DecodeOnlyEngineConfig(model_config=model_config,
-                                      scheduler_config=scheduler_config,
-                                      device_config=device_config,
-                                      load_config=load_config,
-                                      parallel_config=parallel_config)
+        return DecodeOnlyEngineConfig(
+            model_config=model_config,
+            scheduler_config=scheduler_config,
+            device_config=engine_config.device_config,
+            load_config=engine_config.load_config,
+            parallel_config=parallel_config)
