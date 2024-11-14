@@ -8,10 +8,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 from transformers import (AutoModelForCausalLM, AutoTokenizer, BatchEncoding,
                           BatchFeature)
+from vllm.utils import STR_DTYPE_TO_TORCH_DTYPE, is_cpu
 
 from wde import LLM
 from wde.tasks.reranker.schema.engine_io import RerankerInputs
-from wde.utils import STR_DTYPE_TO_TORCH_DTYPE, is_cpu
 
 _T = TypeVar("_T", nn.Module, torch.Tensor, BatchEncoding, BatchFeature)
 

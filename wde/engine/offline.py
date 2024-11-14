@@ -1,12 +1,12 @@
 from typing import List, Optional, Sequence, Union
 
 from tqdm import tqdm
+from vllm.utils import Counter
 
 from wde.logger import init_logger
 from wde.tasks.core.llm_engine import LLMEngine
 from wde.tasks.core.schema.engine_io import Params, PromptInputs, RequestOutput
 from wde.tasks.reranker.schema.engine_io import RerankerInputs
-from wde.utils import Counter
 
 logger = init_logger(__name__)
 

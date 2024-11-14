@@ -13,6 +13,7 @@ import numpy as np
 import torch
 from huggingface_hub import HfApi, hf_hub_download
 from torch import nn
+from vllm.utils import is_pin_memory_available
 
 from wde.backends.attention.abstract import AttentionBackend
 from wde.backends.loader.utils import (get_model_architecture,
@@ -28,7 +29,6 @@ from wde.envs import USE_MODELSCOPE
 from wde.logger import init_logger
 from wde.tasks.core.config import (CacheConfig, DeviceConfig, LoadConfig,
                                    LoadFormat, ModelConfig, SchedulerConfig)
-from wde.utils import is_pin_memory_available
 
 
 @contextmanager

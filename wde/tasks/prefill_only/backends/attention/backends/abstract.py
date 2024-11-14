@@ -3,9 +3,9 @@ from dataclasses import dataclass
 from typing import Any, Dict, Generic, List, Optional, Type, TypeVar
 
 import torch
+from vllm.utils import is_pin_memory_available
 
 from wde.backends.attention.abstract import AttentionType
-from wde.utils import is_pin_memory_available
 
 pin_memory = is_pin_memory_available()
 

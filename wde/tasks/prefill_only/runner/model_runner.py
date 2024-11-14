@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from vllm.utils import DeviceMemoryProfiler, is_pin_memory_available
 
 from wde.backends.attention import AttentionBackend
 from wde.logger import init_logger
@@ -7,7 +8,6 @@ from wde.tasks.core.config import DeviceConfig, LoadConfig, ModelConfig
 from wde.tasks.core.schema.execute_io import ExecuteOutput
 from wde.tasks.prefill_only.config import SchedulerConfig
 from wde.tasks.prefill_only.schema.execute_io import ModelInputForGPU
-from wde.utils import DeviceMemoryProfiler, is_pin_memory_available
 
 logger = init_logger(__name__)
 

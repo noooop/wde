@@ -1,8 +1,8 @@
 import torch
+from vllm.utils import print_warning_once
 
 from wde.backends.quantization.base_config import (QuantizationConfig,
                                                    QuantizeMethodBase)
-from wde.utils import print_warning_once
 
 
 class BaseKVCacheMethod(QuantizeMethodBase):

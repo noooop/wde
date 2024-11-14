@@ -1,4 +1,5 @@
 import torch
+from vllm.utils import is_pin_memory_available
 
 from wde.tasks.core.llm_engine import LLMEngine
 from wde.tasks.core.processor.model_input_builder import ModelInputBuilder
@@ -7,7 +8,6 @@ from wde.tasks.prefill_only.backends.attention.backends.abstract import \
     PrefillOnlyAttentionMetadataBuilder
 from wde.tasks.prefill_only.schema.engine_io import PrefillOnlySchedulerOutput
 from wde.tasks.prefill_only.schema.execute_io import ModelInputForGPU
-from wde.utils import is_pin_memory_available
 
 pin_memory = is_pin_memory_available()
 

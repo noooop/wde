@@ -3,11 +3,11 @@ from os import getpid
 from queue import Queue
 
 import gevent
-import shortuuid
 import zmq.green as zmq
 
 from wde.microservices.framework.zero.schema import (Timeout, ZeroMSQ,
                                                      ZeroServerResponse)
+from wde.utils import random_uuid
 
 
 class Socket(object):
@@ -93,7 +93,7 @@ class Client(object):
         _timeout = timeout or getattr(self, "timeout", None)
 
         for i in range(n_try):
-            req_id = f"{shortuuid.random(length=22)}".encode("utf-8")
+            req_id = random_uuid().encode("utf-8")
             socket = socket_pool.get(self.addr)
 
             try:

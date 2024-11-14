@@ -4,6 +4,7 @@ import torch
 from torch.nn import Module
 from torch.nn.parameter import Parameter
 from vllm import _custom_ops as ops
+from vllm.platforms import current_platform
 
 from wde.backends.linear import (LinearBase, LinearMethodBase,
                                  UnquantizedLinearMethod)
@@ -18,7 +19,6 @@ from wde.backends.quantization.utils.w8a8_utils import (
     cutlass_fp8_supported, requantize_with_max_scale)
 from wde.backends.utils import set_weight_attrs
 from wde.logger import init_logger
-from wde.platforms import current_platform
 
 ACTIVATION_SCHEMES = ["static", "dynamic"]
 

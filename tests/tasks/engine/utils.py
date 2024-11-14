@@ -1,12 +1,12 @@
 import os
 from typing import List, Optional
 
-import shortuuid
 import torch
 from gevent.pool import Pool
 
 from tests.tasks.utils import cleanup
 from wde.engine.gevent_engine import GeventLLMEngine
+from wde.utils import random_uuid
 
 
 class WDEGeventRunner:
@@ -33,7 +33,7 @@ class WDEGeventRunner:
     def encode(self, prompts: List[str]) -> List[List[float]]:
 
         def worker(prompt):
-            request_id = f"{shortuuid.random(length=22)}"
+            request_id = random_uuid()
             outputs = self.model.encode(inputs=prompt, request_id=request_id)
             return list(outputs)[0]
 
@@ -47,7 +47,7 @@ class WDEGeventRunner:
     def compute_score(self, pairs) -> List[float]:
 
         def worker(pairs):
-            request_id = f"{shortuuid.random(length=22)}"
+            request_id = random_uuid()
             outputs = self.model.compute_score(inputs=pairs,
                                                request_id=request_id)
             return list(outputs)[0]

@@ -3,9 +3,9 @@ from typing import List, Optional, Tuple, Union
 import torch
 from torch.nn import Parameter
 from vllm import _custom_ops as ops
+from vllm.platforms import current_platform
 
 from wde.backends.utils import set_weight_attrs
-from wde.platforms import current_platform
 
 
 def cutlass_fp8_supported() -> bool:

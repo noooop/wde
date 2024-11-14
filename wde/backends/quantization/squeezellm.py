@@ -3,12 +3,12 @@ from typing import Any, Dict, List, Optional
 import torch
 from torch.nn.parameter import Parameter
 from vllm import _custom_ops as ops
+from vllm.utils import is_hip
 
 from wde.backends.linear import LinearBase
 from wde.backends.quantization.base_config import (QuantizationConfig,
                                                    QuantizeMethodBase)
 from wde.backends.utils import set_weight_attrs
-from wde.utils import is_hip
 
 
 class SqueezeLLMConfig(QuantizationConfig):

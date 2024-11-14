@@ -1,4 +1,5 @@
 import pytest
+from vllm.utils import DeviceMemoryProfiler
 
 from wde.backends.loader.loader import get_model_loader, initialize_model
 from wde.tasks.core.config import DeviceConfig, LoadConfig, ModelConfig
@@ -9,7 +10,6 @@ from wde.tasks.prefill_only.backends.attention.selector import (AttentionImpls,
                                                                 AttentionType,
                                                                 AttnBackend,
                                                                 _Backend)
-from wde.utils import DeviceMemoryProfiler
 
 MODELS = ["google-bert/bert-base-uncased"]
 

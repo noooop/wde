@@ -3,13 +3,13 @@ import itertools as it
 import pytest
 import torch
 import torch.nn.functional as F
+from vllm.utils import STR_DTYPE_TO_TORCH_DTYPE
 
 from wde.backends.attention.abstract import AttentionType
 from wde.backends.attention.layer import Attention
 from wde.tasks.prefill_only.backends.attention.selector import (AttentionImpls,
                                                                 AttnBackend,
                                                                 _Backend)
-from wde.utils import STR_DTYPE_TO_TORCH_DTYPE
 
 
 def compare_embeddings(embeddings1, embeddings2):

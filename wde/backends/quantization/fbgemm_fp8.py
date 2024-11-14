@@ -3,6 +3,7 @@ from typing import Any, Dict, List, Optional
 import torch
 from torch.nn import Module
 from torch.nn.parameter import Parameter
+from vllm.platforms import current_platform
 
 from wde.backends.linear import (LinearBase, LinearMethodBase,
                                  UnquantizedLinearMethod)
@@ -16,7 +17,6 @@ from wde.backends.quantization.utils.w8a8_utils import (
     apply_fp8_linear, create_per_channel_scale_param)
 from wde.backends.utils import set_weight_attrs
 from wde.logger import init_logger
-from wde.platforms import current_platform
 
 logger = init_logger(__name__)
 

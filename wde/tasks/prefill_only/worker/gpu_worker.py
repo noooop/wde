@@ -1,10 +1,10 @@
 import os
 
 import torch
+from vllm.platforms import current_platform
 
 from wde.backends.attention import AttentionBackend
 from wde.backends.utils import set_random_seed
-from wde.platforms import current_platform
 from wde.tasks.core.config import (DeviceConfig, EngineConfig, LoadConfig,
                                    ModelConfig)
 from wde.tasks.core.schema.execute_io import ExecuteOutput
@@ -27,7 +27,7 @@ class Worker(WorkerBase):
         self.device = self.device_config.device
         if self.model_config.trust_remote_code:
             # note: lazy import to avoid importing torch before initializing
-            from wde.utils import init_cached_hf_modules
+            from vllm.utils import init_cached_hf_modules
             init_cached_hf_modules()
 
         self.model_runner = ModelRunner(self.model_config,

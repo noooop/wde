@@ -3,7 +3,8 @@ import time
 from concurrent.futures import ProcessPoolExecutor
 
 import numpy as np
-import shortuuid
+
+from wde.utils import random_uuid
 
 
 def benchmark(args):
@@ -26,7 +27,7 @@ def benchmark(args):
 
     def worker(prompt):
         start = time.perf_counter()
-        request_id = f"{shortuuid.random(length=22)}"
+        request_id = random_uuid()
         outputs = engine.encode(inputs=prompt, request_id=request_id)
         output = list(outputs)[0]
         end = time.perf_counter()

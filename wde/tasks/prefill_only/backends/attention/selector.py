@@ -2,11 +2,11 @@ import enum
 from typing import Optional
 
 import torch
+from vllm.platforms import current_platform
 
 import wde.envs as envs
 from wde.backends.attention.abstract import AttentionType
 from wde.logger import init_logger
-from wde.platforms import current_platform
 from wde.tasks.core.llm_engine import LLMEngine
 
 logger = init_logger(__name__)

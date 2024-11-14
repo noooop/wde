@@ -16,14 +16,14 @@ from huggingface_hub import HfFileSystem, hf_hub_download, snapshot_download
 from safetensors.torch import load_file, safe_open, save_file
 from tqdm.auto import tqdm
 from transformers.utils import SAFE_WEIGHTS_INDEX_NAME
+from vllm.platforms import current_platform
+from vllm.utils import print_warning_once
 
 from wde.backends.quantization import (QuantizationConfig,
                                        get_quantization_config)
 from wde.backends.quantization.schema import QuantParamSchema
 from wde.logger import init_logger
-from wde.platforms import current_platform
 from wde.tasks.core.config import LoadConfig, ModelConfig
-from wde.utils import print_warning_once
 
 logger = init_logger(__name__)
 

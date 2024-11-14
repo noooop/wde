@@ -3,9 +3,10 @@ import os
 from abc import ABC, abstractmethod
 from typing import Callable, Dict, Optional, Type
 
+from vllm.utils import update_environment_variables
+
 from wde.logger import init_logger
 from wde.tasks.core.schema.execute_io import ExecuteInput, ExecuteOutput
-from wde.utils import update_environment_variables
 
 logger = init_logger(__name__)
 
@@ -51,7 +52,7 @@ class WorkerWrapperBase:
         self.worker: Optional[WorkerBase] = None
         if trust_remote_code:
             # note: lazy import to avoid importing torch before initializing
-            from wde.utils import init_cached_hf_modules
+            from vllm.utils import init_cached_hf_modules
             init_cached_hf_modules()
 
     @staticmethod
