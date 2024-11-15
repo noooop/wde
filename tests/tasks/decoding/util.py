@@ -164,6 +164,7 @@ class WDERunner:
             trust_remote_code=True,
             dtype=dtype,
             max_model_len=max_model_len,
+            gpu_memory_utilization=0.7,
             **kwargs,
         )
 

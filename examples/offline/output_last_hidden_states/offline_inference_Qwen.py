@@ -7,7 +7,7 @@ prompts = [
     "The future of AI is",
 ]
 
-llm = LLM(model="Qwen/Qwen2-0.5B-Instruct", output_last_hidden_states=True)
+llm = LLM(model="Qwen/Qwen2.5-0.5B-Instruct", output_last_hidden_states=True)
 
 outputs = llm.encode(prompts)
 for output in outputs:

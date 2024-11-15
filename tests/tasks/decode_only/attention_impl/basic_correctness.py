@@ -19,7 +19,7 @@ def example_prompts():
     return prompts
 
 
-MODELS = ["Qwen/Qwen2-0.5B-Instruct"]
+MODELS = ["Qwen/Qwen2.5-0.5B-Instruct"]
 
 AttentionImpls_fp32 = ["TORCH_SDPA", "XFORMERS", "TORCH_NAIVE"]
 AttentionImpls_fp16 = [

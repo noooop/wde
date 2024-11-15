@@ -53,8 +53,7 @@ def test_models(
     with wde_runner(model,
                     dtype=dtype,
                     max_num_requests=max_num_requests,
-                    scheduling=scheduling,
-                    switch_to_gte_Qwen2=True) as engine:
+                    scheduling=scheduling) as engine:
         outputs = engine.encode(example_prompts)
 
     similarities = compare_embeddings(hf_outputs, outputs)

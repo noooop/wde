@@ -36,7 +36,8 @@ def example_prompts():
 @pytest.mark.parametrize("model", MODELS)
 @pytest.mark.parametrize("dtype", ["bfloat16"])
 @pytest.mark.parametrize("max_tokens", [5])
-@pytest.mark.parametrize("scheduling", ["sync", "simple_async", "async"])
+@pytest.mark.parametrize("scheduling",
+                         ["sync", "simple_async", "async", "double_buffer"])
 def test_models(
     hf_runner,
     wde_runner,

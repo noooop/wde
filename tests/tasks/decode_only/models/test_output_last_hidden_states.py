@@ -48,7 +48,7 @@ def example_prompts():
     return prompts
 
 
-MODELS = ["Qwen/Qwen2-0.5B-Instruct"]
+MODELS = ["Qwen/Qwen2.5-0.5B-Instruct"]
 
 
 @pytest.mark.parametrize("model", MODELS)
