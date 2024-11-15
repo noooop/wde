@@ -296,6 +296,9 @@ class HfDecodingRunner(HfRunner):
         hidden_states: Tuple[Tuple[torch.Tensor, ...], ...],
     ) -> List[torch.Tensor]:
         output_embeddings = self.model.get_output_embeddings()
+        if output_embeddings is None:
+            # ChatGLMModel
+            output_embeddings = self.model.transformer.output_layer
 
         seq_logprobs: List[torch.Tensor] = []
         for _, hidden_state in enumerate(hidden_states):
