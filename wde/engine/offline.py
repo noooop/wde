@@ -1,4 +1,4 @@
-from typing import List, Optional, Sequence, Union
+from typing import List, Optional, Sequence, Union, cast
 
 from tqdm import tqdm
 from vllm.utils import Counter
@@ -6,6 +6,8 @@ from vllm.utils import Counter
 from wde.logger import init_logger
 from wde.tasks.core.llm_engine import LLMEngine
 from wde.tasks.core.schema.engine_io import Params, PromptInputs, RequestOutput
+from wde.tasks.decoding import SamplingParams
+from wde.tasks.decoding.schema.engine_io import DecodingRequestOutput
 from wde.tasks.reranker.schema.engine_io import RerankerInputs
 
 logger = init_logger(__name__)
@@ -28,6 +30,25 @@ class LLM:
         )
         self.engine = LLMEngine.from_engine_args(engine_args)
         self.request_counter = Counter()
+
+    def generate(
+        self,
+        inputs: Union[Union[PromptInputs, Sequence[PromptInputs]],
+                      Optional[Union[str, List[str]]]] = None,
+        sampling_params: Optional[Union[SamplingParams,
+                                        Sequence[SamplingParams]]] = None,
+        use_tqdm: bool = True,
+    ) -> List[RequestOutput]:
+
+        inputs = cast(Union[PromptInputs, Sequence[PromptInputs]], inputs)
+
+        if sampling_params is None:
+            sampling_params = SamplingParams()
+
+        self._validate_and_add_requests(inputs=inputs, params=sampling_params)
+
+        outputs = self._run_engine(use_tqdm=use_tqdm)
+        return outputs
 
     def encode(
         self,
@@ -102,12 +123,26 @@ class LLM:
             )
         # Run the engine.
         outputs: List[RequestOutput] = []
+        total_in_toks = 0
+        total_out_toks = 0
         while self.engine.has_unfinished_requests():
             step_outputs = self.engine.step()
             for output in step_outputs:
                 if output.finished:
                     outputs.append(output)
                     if use_tqdm:
+                        if isinstance(output, DecodingRequestOutput):
+                            # Calculate tokens only for RequestOutput
+                            assert output.prompt_token_ids is not None
+                            total_in_toks += len(output.prompt_token_ids)
+                            in_spd = total_in_toks / pbar.format_dict["elapsed"]
+                            total_out_toks += sum(
+                                len(stp.token_ids) for stp in output.outputs)
+                            out_spd = (total_out_toks /
+                                       pbar.format_dict["elapsed"])
+                            pbar.postfix = (
+                                f"est. speed input: {in_spd:.2f} toks/s, "
+                                f"output: {out_spd:.2f} toks/s")
                         pbar.update(1)
         if use_tqdm:
             pbar.close()

@@ -87,6 +87,12 @@ class SchedulableRequest:
     def num_new_tokens(self):
         raise NotImplementedError
 
+    def set_scheduled_ts(self, scheduled_ts):
+        self.metrics.scheduled_ts = scheduled_ts
+        self.metrics.waiting_time = self.metrics.scheduled_ts - self.metrics.arrival_ts
+        if self.metrics.first_scheduled_ts is None:
+            self.metrics.first_scheduled_ts = scheduled_ts
+
 
 @dataclass
 class TextSchedulableRequest(SchedulableRequest):

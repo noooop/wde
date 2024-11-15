@@ -14,6 +14,8 @@ environment_variables: Dict[str, Callable[[], Any]] = {
     lambda: os.environ.get("WDE_ROOT_MANAGER_NAME", "RootZeroManager"),
     "NAME_SERVER_PORT":
     lambda: int(os.environ.get("WDE_NAME_SERVER_PORT", 9527)),
+    "USE_FLASHINFER_SAMPLER":
+    lambda: bool(int(os.getenv("WDE_USE_FLASHINFER_SAMPLER", "0"))),
 }
 
 
