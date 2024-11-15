@@ -1,5 +1,4 @@
-from wde import LLM
-from wde.tasks.decoding import SamplingParams
+from wde import LLM, SamplingParams
 
 prompts = [
     "Hello, my name is",

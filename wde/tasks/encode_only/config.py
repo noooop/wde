@@ -2,9 +2,9 @@ from dataclasses import dataclass, fields
 from typing import Optional
 
 from wde.logger import init_logger
-from wde.tasks.core.config import EngineConfig, ModelConfig
-from wde.tasks.prefill_only.config import (PrefillOnlyParallelConfig,
-                                           PrefillOnlySchedulerConfig)
+from wde.workflows.core.config import EngineConfig, ModelConfig
+from wde.workflows.prefill_only.config import (PrefillOnlyParallelConfig,
+                                               PrefillOnlySchedulerConfig)
 
 logger = init_logger(__name__)
 

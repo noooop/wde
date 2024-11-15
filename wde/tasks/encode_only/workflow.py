@@ -1,5 +1,5 @@
-from wde.tasks.prefill_only.workflow import PrefillOnlyWorkflow
 from wde.tasks.retriever.schema.api import PROTOCOL
+from wde.workflows.prefill_only.workflow import PrefillOnlyWorkflow
 
 
 class EncodeOnlyWorkflow(PrefillOnlyWorkflow):

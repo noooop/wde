@@ -42,8 +42,8 @@ from wde.backends.models.utils import is_pp_missing_parameter, make_layers
 from wde.backends.quantization import QuantizationConfig
 from wde.backends.rotary_embedding import get_rope
 from wde.backends.vocab_embedding import ParallelLMHead, VocabParallelEmbedding
-from wde.tasks.core.config import CacheConfig
-from wde.tasks.core.schema.execute_io import IntermediateTensors
+from wde.workflows.core.config import CacheConfig
+from wde.workflows.core.schema.execute_io import IntermediateTensors
 
 
 class Qwen2MLP(nn.Module):

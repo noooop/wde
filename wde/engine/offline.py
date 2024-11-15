@@ -4,11 +4,12 @@ from tqdm import tqdm
 from vllm.utils import Counter
 
 from wde.logger import init_logger
-from wde.tasks.core.llm_engine import LLMEngine
-from wde.tasks.core.schema.engine_io import Params, PromptInputs, RequestOutput
-from wde.tasks.decoding import SamplingParams
-from wde.tasks.decoding.schema.engine_io import DecodingRequestOutput
 from wde.tasks.reranker.schema.engine_io import RerankerInputs
+from wde.workflows.core.llm_engine import LLMEngine
+from wde.workflows.core.schema.engine_io import (Params, PromptInputs,
+                                                 RequestOutput)
+from wde.workflows.decoding import SamplingParams
+from wde.workflows.decoding.schema.engine_io import DecodingRequestOutput
 
 logger = init_logger(__name__)
 

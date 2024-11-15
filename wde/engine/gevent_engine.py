@@ -12,10 +12,10 @@ from gevent.event import Event
 from gevent.queue import Queue
 
 from wde.logger import init_logger
-from wde.tasks.core.llm_engine import LLMEngine
-from wde.tasks.core.schema.engine_io import (Inputs, Params, PromptInputs,
-                                             RequestOutput)
 from wde.tasks.reranker.schema.engine_io import RerankerInputs
+from wde.workflows.core.llm_engine import LLMEngine
+from wde.workflows.core.schema.engine_io import (Inputs, Params, PromptInputs,
+                                                 RequestOutput)
 
 logger = init_logger(__name__)
 

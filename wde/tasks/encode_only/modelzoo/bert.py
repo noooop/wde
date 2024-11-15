@@ -33,8 +33,8 @@ from wde.backends.loader.weight_utils import (default_weight_loader,
 from wde.backends.models.utils import is_pp_missing_parameter
 from wde.backends.quantization import QuantizationConfig
 from wde.backends.vocab_embedding import VocabParallelEmbedding
-from wde.tasks.core.schema.execute_io import IntermediateTensors
 from wde.tasks.encode_only.schema.execute_io import EncodeOnlyExecuteOutput
+from wde.workflows.core.schema.execute_io import IntermediateTensors
 
 logger = logging.get_logger(__name__)
 

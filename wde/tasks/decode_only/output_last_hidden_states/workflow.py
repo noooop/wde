@@ -1,5 +1,5 @@
-from wde.tasks.core.workflow import Workflow
-from wde.tasks.prefill_only.workflow import PrefillOnlyWorkflow
+from wde.workflows.core.workflow import Workflow
+from wde.workflows.prefill_only.workflow import PrefillOnlyWorkflow
 
 
 class DecodeOnlyOutputLastHiddenStatesWorkflow(Workflow):

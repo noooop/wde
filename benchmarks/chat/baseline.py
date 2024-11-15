@@ -7,9 +7,9 @@ import numpy as np
 def benchmark(args):
     random.seed(args.seed)
 
-    from wde import LLMEngine
-    from wde.tasks.decoding import SamplingParams
-    from wde.tasks.decoding.arg_utils import DecodingEngineArgs as EngineArgs
+    from wde import LLMEngine, SamplingParams
+    from wde.workflows.decoding.arg_utils import \
+        DecodingEngineArgs as EngineArgs
 
     engine_args = EngineArgs(
         model=args.model,

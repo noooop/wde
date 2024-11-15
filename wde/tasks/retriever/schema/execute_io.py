@@ -3,7 +3,7 @@ from typing import Optional
 
 import torch
 
-from wde.tasks.core.schema.execute_io import ExecuteOutput
+from wde.workflows.core.schema.execute_io import ExecuteOutput
 
 
 @dataclass

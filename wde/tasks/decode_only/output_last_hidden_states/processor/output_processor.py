@@ -2,10 +2,11 @@ from typing import List
 
 import torch
 
-from wde.tasks.core.llm_engine import LLMEngine
-from wde.tasks.core.processor.output_processor import OutputProcessor
-from wde.tasks.prefill_only.schema.engine_io import PrefillOnlySchedulerOutput
 from wde.tasks.retriever.schema.engine_io import EmbeddingRequestOutput
+from wde.workflows.core.llm_engine import LLMEngine
+from wde.workflows.core.processor.output_processor import OutputProcessor
+from wde.workflows.prefill_only.schema.engine_io import \
+    PrefillOnlySchedulerOutput
 
 
 class DecodeOnlyHiddenStatesOutputProcessor(OutputProcessor):

@@ -2,12 +2,12 @@ from dataclasses import dataclass
 from typing import Optional
 
 from wde.logger import init_logger
-from wde.tasks.core.arg_utils import EngineArgs
-from wde.tasks.core.config import filter_unexpected_fields
 from wde.tasks.decode_only.output_last_hidden_states.config import (
     DecodeOnlyEmbeddingSchedulerConfig, DecodeOnlyEngineConfig,
     DecodeOnlyModelConfig, DecodeOnlySchedulerConfig,
     PrefillOnlyParallelConfig)
+from wde.workflows.core.arg_utils import EngineArgs
+from wde.workflows.core.config import filter_unexpected_fields
 
 logger = init_logger(__name__)
 

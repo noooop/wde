@@ -43,9 +43,9 @@ def benchmark_wde(args):
 
     import torch
 
-    from wde.tasks.core.llm_engine import LLMEngine
     from wde.tasks.encode_only.arg_utils import \
         EncodeOnlyEngineArgs as EngineArgs
+    from wde.workflows.core.llm_engine import LLMEngine
 
     _prompt = "if" * args.input_len
     requests = [_prompt for _ in range(args.num_prompts)]

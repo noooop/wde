@@ -3,7 +3,7 @@ from typing import List, Optional
 
 import torch
 
-from wde.tasks.core.schema.engine_io import RequestOutput
+from wde.workflows.core.schema.engine_io import RequestOutput
 
 
 @dataclass

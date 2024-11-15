@@ -27,8 +27,9 @@ from wde.backends.quantization import QuantizationConfig
 from wde.backends.utils import set_weight_attrs
 from wde.envs import USE_MODELSCOPE
 from wde.logger import init_logger
-from wde.tasks.core.config import (CacheConfig, DeviceConfig, LoadConfig,
-                                   LoadFormat, ModelConfig, SchedulerConfig)
+from wde.workflows.core.config import (CacheConfig, DeviceConfig, LoadConfig,
+                                       LoadFormat, ModelConfig,
+                                       SchedulerConfig)
 
 
 @contextmanager

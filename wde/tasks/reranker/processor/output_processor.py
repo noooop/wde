@@ -1,10 +1,11 @@
 from typing import List
 
-from wde.tasks.core.llm_engine import LLMEngine
-from wde.tasks.core.processor.output_processor import OutputProcessor
-from wde.tasks.prefill_only.schema.engine_io import PrefillOnlySchedulerOutput
 from wde.tasks.reranker.schema.engine_io import RerankerRequestOutput
 from wde.tasks.reranker.schema.execute_io import RerankerExecuteOutput
+from wde.workflows.core.llm_engine import LLMEngine
+from wde.workflows.core.processor.output_processor import OutputProcessor
+from wde.workflows.prefill_only.schema.engine_io import \
+    PrefillOnlySchedulerOutput
 
 
 class RerankerOutputProcessor(OutputProcessor):

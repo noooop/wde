@@ -1,9 +1,9 @@
 from typing import Dict
 
-from wde.tasks.core.workflow import Workflow
 from wde.tasks.decode_only.output_last_hidden_states.workflow import \
     DecodeOnlyOutputLastHiddenStatesWorkflow
-from wde.tasks.decoding.workflow import DecodeOnlyDecodingWorkflow
+from wde.workflows.core.workflow import Workflow
+from wde.workflows.decoding.workflow import DecodeOnlyDecodingWorkflow
 
 
 class DecodeOnlyWorkflow(Workflow):

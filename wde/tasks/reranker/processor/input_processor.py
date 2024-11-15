@@ -1,16 +1,16 @@
 import time
 from typing import Optional, Sequence
 
-from wde.tasks.core.llm_engine import LLMEngine
-from wde.tasks.core.processor.input_processor import (InputProcessor,
-                                                      RequestProcessor)
-from wde.tasks.core.schema.engine_io import (Params, RequestMetrics,
-                                             ValidationError)
-from wde.tasks.prefill_only.processor.tokenizer import Tokenizer
-from wde.tasks.prefill_only.schema.engine_io import (
-    PrefillOnlyInput, PrefillOnlySchedulableRequest)
 from wde.tasks.reranker.schema.engine_io import (Pairs, RerankerInputs,
                                                  RerankerRequest)
+from wde.workflows.core.llm_engine import LLMEngine
+from wde.workflows.core.processor.input_processor import (InputProcessor,
+                                                          RequestProcessor)
+from wde.workflows.core.schema.engine_io import (Params, RequestMetrics,
+                                                 ValidationError)
+from wde.workflows.prefill_only.processor.tokenizer import Tokenizer
+from wde.workflows.prefill_only.schema.engine_io import (
+    PrefillOnlyInput, PrefillOnlySchedulableRequest)
 
 
 class RerankerInputProcessor(InputProcessor):

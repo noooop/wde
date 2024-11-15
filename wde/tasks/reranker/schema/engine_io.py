@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import List, Optional, Sequence, Union
 
-from wde.tasks.core.schema.engine_io import Inputs, Request, RequestOutput
+from wde.workflows.core.schema.engine_io import Inputs, Request, RequestOutput
 
 
 @dataclass

@@ -2,9 +2,10 @@ from typing import List
 
 from wde.tasks.encode_only.processor.output_processor import \
     EncodeOnlyOutputProcessor
-from wde.tasks.prefill_only.schema.engine_io import PrefillOnlySchedulerOutput
 from wde.tasks.retriever.schema.engine_io import EmbeddingRequestOutput
 from wde.tasks.retriever.schema.execute_io import RetrieverExecuteOutput
+from wde.workflows.prefill_only.schema.engine_io import \
+    PrefillOnlySchedulerOutput
 
 
 class RetrieverOutputProcessor(EncodeOnlyOutputProcessor):

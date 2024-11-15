@@ -13,9 +13,9 @@ def benchmark_wde(args):
 
     import torch
 
-    from wde.tasks.core.llm_engine import LLMEngine
     from wde.tasks.encode_only.arg_utils import \
         EncodeOnlyEngineArgs as EngineArgs
+    from wde.workflows.core.llm_engine import LLMEngine
 
     prompt = "if" * args.input_len
     requests = [prompt for _ in range(args.num_prompts)]
@@ -97,7 +97,7 @@ if __name__ == '__main__':
 
     from concurrent.futures import ProcessPoolExecutor
 
-    from wde.tasks.prefill_only.backends.attention.selector import \
+    from wde.workflows.prefill_only.backends.attention.selector import \
         AttentionImpls
 
     def run_wde(args):

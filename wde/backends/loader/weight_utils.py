@@ -23,7 +23,7 @@ from wde.backends.quantization import (QuantizationConfig,
                                        get_quantization_config)
 from wde.backends.quantization.schema import QuantParamSchema
 from wde.logger import init_logger
-from wde.tasks.core.config import LoadConfig, ModelConfig
+from wde.workflows.core.config import LoadConfig, ModelConfig
 
 logger = init_logger(__name__)
 

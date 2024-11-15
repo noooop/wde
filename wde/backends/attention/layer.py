@@ -8,7 +8,7 @@ from wde.backends.attention import (AttentionBackend, AttentionMetadata,
                                     AttentionType)
 from wde.backends.quantization import QuantizationConfig
 from wde.backends.quantization.kv_cache import BaseKVCacheMethod
-from wde.tasks.core.config import CacheConfig
+from wde.workflows.core.config import CacheConfig
 
 
 class Attention(nn.Module):

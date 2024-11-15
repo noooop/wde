@@ -6,8 +6,8 @@ import torch
 from torch import nn
 from transformers import PretrainedConfig
 
-from wde.tasks.core.config import ModelConfig
-from wde.tasks.core.modelzoo import ModelRegistry
+from wde.workflows.core.config import ModelConfig
+from wde.workflows.core.modelzoo import ModelRegistry
 
 
 @contextlib.contextmanager

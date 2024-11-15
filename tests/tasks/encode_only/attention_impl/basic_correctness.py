@@ -8,7 +8,8 @@ import torch.nn as nn
 from transformers import BatchEncoding, BatchFeature
 
 from tests.tasks.utils import compare_embeddings
-from wde.tasks.prefill_only.backends.attention.selector import AttentionImpls
+from wde.workflows.prefill_only.backends.attention.selector import \
+    AttentionImpls
 
 _T = TypeVar("_T", nn.Module, torch.Tensor, BatchEncoding, BatchFeature)
 
