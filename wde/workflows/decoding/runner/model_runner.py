@@ -108,13 +108,13 @@ class GPUModelRunner:
         # Enable top-k sampling to reflect the accurate memory usage.
         sampling_params = SamplingParams(top_p=0.99, top_k=self.vocab_size - 1)
         max_num_batched_tokens = self.scheduler_config.max_num_batched_tokens
-        max_num_seqs = self.scheduler_config.max_num_seqs
+        max_num_requests = self.scheduler_config.max_num_requests
 
         seqs: List[SequenceGroupMetadata] = []
         batch_size = 0
-        for group_id in range(max_num_seqs):
-            seq_len = (max_num_batched_tokens // max_num_seqs +
-                       (group_id < max_num_batched_tokens % max_num_seqs))
+        for group_id in range(max_num_requests):
+            seq_len = (max_num_batched_tokens // max_num_requests +
+                       (group_id < max_num_batched_tokens % max_num_requests))
             batch_size += seq_len
 
             seq_data = SequenceData.from_token_counts((0, seq_len))

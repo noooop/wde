@@ -26,7 +26,7 @@ def benchmark(args):
         enable_prefix_caching=args.enable_prefix_caching,
         download_dir=args.download_dir,
         max_num_batched_tokens=args.max_num_batched_tokens,
-        max_num_seqs=args.max_num_seqs,
+        max_num_requests=args.max_num_requests,
         scheduling=args.scheduling)
 
     engine = LLMEngine.from_engine_args(engine_args)
@@ -70,7 +70,7 @@ def benchmark(args):
     avg_latency = elapsed_time / n_step
 
     print(
-        f"Batchsize {args.max_num_seqs}, Throughput: "
+        f"Batchsize {args.max_num_requests}, Throughput: "
         f"{len(requests) / elapsed_time:.4f} requests/s, "
         f"Scheduling time {scheduling_time * 1000:0.4f} ms, "
         f"Num requests {num_requests:.2f}, ",
@@ -120,17 +120,17 @@ if __name__ == '__main__':
             traceback.print_exc()
 
     if "full" in sys.argv:
-        max_num_seqs_list = [1536, 1024, 768, 512, 384, 256, 128, 64, 32]
+        max_num_requests_list = [1536, 1024, 768, 512, 384, 256, 128, 64, 32]
     else:
-        max_num_seqs_list = [256, 128]
+        max_num_requests_list = [256, 128]
 
     for scheduling in ["sync", "simple_async", "async", "double_buffer"]:
         print(f"scheduling: {scheduling}")
         args.scheduling = scheduling
 
         print()
-        for max_num_seqs in max_num_seqs_list:
-            print("max_num_seqs", max_num_seqs)
-            args.max_num_seqs = max_num_seqs
-            args.max_num_batched_tokens = args.max_num_seqs
+        for max_num_requests in max_num_requests_list:
+            print("max_num_requests", max_num_requests)
+            args.max_num_requests = max_num_requests
+            args.max_num_batched_tokens = args.max_num_requests
             run(args)

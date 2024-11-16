@@ -17,7 +17,7 @@ def benchmark_vllm(args):
               quantization=None,
               max_model_len=128,
               scheduling=args.scheduling,
-              max_num_seqs=2,
+              max_num_requests=2,
               max_num_batched_tokens=512)
 
     for i in range(2):

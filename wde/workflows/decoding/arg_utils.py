@@ -30,11 +30,11 @@ class DecodingEngineArgs(EngineArgs):
     cpu_offload_gb: int = 0  # GiB
     gpu_memory_utilization: float = 0.90
     max_num_batched_tokens: Optional[int] = None
-    max_num_seqs: int = 256
+    max_num_requests: int = 256
     max_logprobs: int = 20  # Default value for OpenAI Chat Completions API
 
     max_num_on_the_fly: Optional[int] = None
-    scheduling: str = "sync"
+    scheduling: str = "async"
     preemption_mode: Optional[str] = None
 
     device: str = 'auto'
@@ -85,7 +85,7 @@ class DecodingEngineArgs(EngineArgs):
 
         scheduler_config = DecodingSchedulerConfig(
             max_num_batched_tokens=self.max_num_batched_tokens,
-            max_num_seqs=self.max_num_seqs,
+            max_num_requests=self.max_num_requests,
             max_model_len=engine_config.model_config.max_model_len,
             preemption_mode=self.preemption_mode,
             max_num_on_the_fly=self.max_num_on_the_fly,

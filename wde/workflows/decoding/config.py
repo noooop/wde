@@ -21,7 +21,7 @@ class DecodingSchedulerConfig:
 
     def __init__(self,
                  max_num_batched_tokens: Optional[int],
-                 max_num_seqs: int,
+                 max_num_requests: int,
                  max_model_len: int,
                  preemption_mode: Optional[str] = None,
                  max_num_on_the_fly: Optional[int] = None,
@@ -43,18 +43,18 @@ class DecodingSchedulerConfig:
         else:
             self.max_num_on_the_fly = max_num_on_the_fly
 
-        self.max_num_seqs = max_num_seqs
+        self.max_num_requests = max_num_requests
         self.max_model_len = max_model_len
         self.preemption_mode = preemption_mode
         self.scheduling = scheduling
         self._verify_args()
 
     def _verify_args(self) -> None:
-        if self.max_num_batched_tokens < self.max_num_seqs:
+        if self.max_num_batched_tokens < self.max_num_requests:
             raise ValueError(
                 f"max_num_batched_tokens ({self.max_num_batched_tokens}) must "
-                "be greater than or equal to max_num_seqs "
-                f"({self.max_num_seqs}).")
+                "be greater than or equal to max_num_requests "
+                f"({self.max_num_requests}).")
 
         if self.max_num_on_the_fly < 2:
             raise ValueError(

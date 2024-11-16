@@ -30,7 +30,7 @@ class PreemptionMode(enum.Enum):
 @dataclass
 class DecodingSchedulingBudget:
     token_budget: int
-    max_num_seqs: int
+    max_num_requests: int
     _request_ids_num_batched_tokens: Set[str] = field(default_factory=set)
     _request_ids_num_curr_seqs: Set[str] = field(default_factory=set)
     _num_batched_tokens: int = 0
@@ -40,7 +40,7 @@ class DecodingSchedulingBudget:
         assert num_new_tokens != 0
         assert num_new_seqs != 0
         return (self.num_batched_tokens + num_new_tokens <= self.token_budget
-                and self.num_curr_seqs + num_new_seqs <= self.max_num_seqs)
+                and self.num_curr_seqs + num_new_seqs <= self.max_num_requests)
 
     def remaining_token_budget(self):
         return self.token_budget - self.num_batched_tokens
@@ -441,7 +441,7 @@ class DecodingScheduler(Scheduler):
     def _schedule(self) -> DecodingSchedulerOutput:
         budget = DecodingSchedulingBudget(
             token_budget=self.scheduler_config.max_num_batched_tokens,
-            max_num_seqs=self.scheduler_config.max_num_seqs,
+            max_num_requests=self.scheduler_config.max_num_requests,
         )
 
         running_scheduled = self._schedule_running(budget)
@@ -456,7 +456,7 @@ class DecodingScheduler(Scheduler):
 
         assert (budget.num_batched_tokens
                 <= self.scheduler_config.max_num_batched_tokens)
-        assert budget.num_curr_seqs <= self.scheduler_config.max_num_seqs
+        assert budget.num_curr_seqs <= self.scheduler_config.max_num_requests
 
         # Update waiting requests.
         self.waiting.extendleft(running_scheduled.preempted)

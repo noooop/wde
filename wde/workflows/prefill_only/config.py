@@ -15,7 +15,6 @@ class PrefillOnlySchedulerConfig(SchedulerConfig):
                  max_model_len: int,
                  max_num_batched_tokens: Optional[int] = None,
                  max_num_requests: Optional[int] = None,
-                 max_num_seqs: Optional[int] = None,
                  max_num_on_the_fly: Optional[int] = None,
                  scheduling: str = "async",
                  waiting: Optional[float] = None,
@@ -36,16 +35,12 @@ class PrefillOnlySchedulerConfig(SchedulerConfig):
         else:
             self.max_num_on_the_fly = max_num_on_the_fly
 
-        self.set_args(max_num_batched_tokens, max_num_requests, max_num_seqs)
+        self.set_args(max_num_batched_tokens, max_num_requests)
 
     def set_args(self,
                  max_num_batched_tokens: Optional[int] = None,
-                 max_num_requests: Optional[int] = None,
-                 max_num_seqs: Optional[int] = None):
-        if max_num_seqs is not None:
-            self.max_num_requests = max_num_seqs
-        else:
-            self.max_num_requests = max_num_requests
+                 max_num_requests: Optional[int] = None):
+        self.max_num_requests = max_num_requests
 
         if max_num_batched_tokens is not None:
             self.max_num_batched_tokens = max_num_batched_tokens
@@ -75,10 +70,6 @@ class PrefillOnlySchedulerConfig(SchedulerConfig):
             if self.waiting < 0.:
                 raise ValueError(
                     f"waiting {self.scheduling} must be positive.")
-
-    @property
-    def max_num_seqs(self) -> int:
-        return self.max_num_requests
 
 
 class PrefillOnlyParallelConfig(ParallelConfig):
