@@ -11,6 +11,7 @@ from gevent import Greenlet
 from gevent.event import Event
 from gevent.queue import Queue
 
+from wde import SamplingParams
 from wde.logger import init_logger
 from wde.tasks.reranker.schema.engine_io import RerankerInputs
 from wde.workflows.core.llm_engine import LLMEngine
@@ -82,6 +83,10 @@ class GeventLLMEngine:
         return {"mode": self.engine.engine_config.model_config.model}
 
     @property
+    def served_model_name(self):
+        return self.engine.engine_config.model_config.served_model_name
+
+    @property
     def is_running(self) -> bool:
         return (self.background_loop is not None
                 and not self.background_loop.dead)
@@ -89,6 +94,9 @@ class GeventLLMEngine:
     @property
     def is_stopped(self) -> bool:
         return not self.is_running
+
+    def get_tokenizer(self):
+        return self.engine.tokenizer
 
     def ensure_start_execute_loop(self):
         if self.background_loop is None:
@@ -151,6 +159,18 @@ class GeventLLMEngine:
             request_id,
             inputs,
             params,
+        )
+
+    def generate(
+        self,
+        request_id: str,
+        inputs: PromptInputs,
+        sampling_params: Optional[SamplingParams] = None,
+    ):
+        return self._process_request(
+            request_id,
+            inputs,
+            sampling_params,
         )
 
     def _process_request(

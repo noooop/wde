@@ -121,6 +121,8 @@ class Client(object):
                         try:
                             with gevent.Timeout(_timeout):
                                 out = socket.recv_multipart()
+                                rep_id = out[0]
+                                rcv_more = rep_id[22:23]
                                 yield out
                         except gevent.timeout.Timeout:
                             socket_pool.delete(socket)

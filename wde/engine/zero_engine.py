@@ -1,14 +1,23 @@
 import gc
+import inspect
+from concurrent.futures import ThreadPoolExecutor
 
 import torch
 
-from wde import const, envs
+from wde import SamplingParams, const, envs
 from wde.engine.gevent_engine import GeventLLMEngine
 from wde.logger import init_logger
-from wde.microservices.framework.zero.schema import ZeroServerResponseOk
+from wde.microservices.framework.zero.schema import (ZeroServerResponseOk,
+                                                     ZeroServerStreamResponseOk
+                                                     )
 from wde.microservices.framework.zero.server import Z_MethodZeroServer
+from wde.tasks.chat.schema.api import (ChatCompletionRequest,
+                                       ChatCompletionResponse,
+                                       ChatCompletionStreamResponse,
+                                       ChatCompletionStreamResponseDone)
 from wde.tasks.reranker.schema.api import RerankerRequest, RerankerResponse
 from wde.tasks.retriever.schema.api import RetrieverRequest, RetrieverResponse
+from wde.workflows.core.schema.engine_io import TextOnlyInputs
 
 logger = init_logger(__name__)
 
@@ -16,9 +25,12 @@ logger = init_logger(__name__)
 class ZeroEngine(Z_MethodZeroServer):
 
     def __init__(self, name, engine_args, **kwargs):
+        self.n_threads = engine_args.pop("n_threads", 4)
+        self.return_metrics = engine_args.pop("return_metrics", None)
+
         self.engine_args = engine_args
         self.engine = GeventLLMEngine(**self.engine_args)
-        self.return_metrics = self.engine_args.pop("return_metrics", None)
+        self.threads = ThreadPoolExecutor(self.n_threads)
 
         Z_MethodZeroServer.__init__(
             self,
@@ -57,10 +69,10 @@ class ZeroEngine(Z_MethodZeroServer):
 
     def z_encode(self, req):
         request = RetrieverRequest(**req.data)
-        outputs = self.engine.encode(inputs=request.inputs,
-                                     request_id=str(req.req_id))
+        generator = self.engine.encode(inputs=request.inputs,
+                                       request_id=str(req.req_id))
 
-        output = list(outputs)[0]
+        output = list(generator)[0]
         metrics = self.get_metrics(output)
 
         response = RetrieverResponse(model=request.model,
@@ -72,10 +84,10 @@ class ZeroEngine(Z_MethodZeroServer):
 
     def z_compute_score(self, req):
         request = RerankerRequest(**req.data)
-        outputs = self.engine.compute_score(inputs=request.pairs,
-                                            request_id=str(req.req_id))
+        generator = self.engine.compute_score(inputs=request.pairs,
+                                              request_id=str(req.req_id))
 
-        output = list(outputs)[0]
+        output = list(generator)[0]
         metrics = self.get_metrics(output)
 
         response = RerankerResponse(model=request.model,
@@ -84,6 +96,118 @@ class ZeroEngine(Z_MethodZeroServer):
 
         rep = ZeroServerResponseOk(msg=response)
         self.zero_send(req, rep)
+
+    def z_generate(self, req):
+        request = ChatCompletionRequest(**req.data)
+        assert self.engine.served_model_name == request.model
+
+        options = request.options or {}
+        skip_empty_delta_text = options.pop("skip_empty_delta_text", True)
+        request_id = str(req.req_id)
+        sampling_params = SamplingParams(**options)
+
+        def apply_chat_template(messages, tools=None):
+            tokenizer = self.engine.get_tokenizer()
+
+            if tools is None:
+                prompt = tokenizer.apply_chat_template(
+                    conversation=messages,
+                    tokenize=False,
+                    add_generation_prompt=True,
+                )
+            else:
+                prompt = tokenizer.apply_chat_template(
+                    messages,
+                    chat_template="tool_use",
+                    tools=tools,
+                    add_generation_prompt=True,
+                    tokenize=False)
+            prompt_token_ids = tokenizer.encode(prompt)
+
+            inputs = TextOnlyInputs(prompt=prompt,
+                                    prompt_token_ids=prompt_token_ids)
+            return inputs
+
+        f = self.threads.submit(apply_chat_template, request.messages,
+                                request.tools)
+
+        inputs = f.result()
+        generator = self.engine.generate(inputs=inputs,
+                                         request_id=request_id,
+                                         sampling_params=sampling_params)
+
+        def get_response():
+            if not request.stream:
+                final_res = None
+                for res in generator:
+                    final_res = res
+
+                output = final_res.outputs[0]
+
+                num_prompt_tokens = len(final_res.prompt_token_ids)
+                num_generated_tokens = len(output.token_ids)
+
+                return ChatCompletionResponse(
+                    **{
+                        "model": request.model,
+                        "content": output.text,
+                        "finish_reason": output.finish_reason,
+                        "completion_tokens": num_generated_tokens,
+                        "prompt_tokens": num_prompt_tokens,
+                        "total_tokens": num_prompt_tokens +
+                        num_generated_tokens
+                    })
+
+            else:
+
+                def outputs_generator():
+                    previous_texts = ""
+                    prompt_tokens = 0
+                    completion_tokens = 0
+                    finish_reason = None
+
+                    for res in generator:
+                        output = res.outputs[0]
+
+                        delta_text = output.text[len(previous_texts):]
+                        previous_texts = output.text
+                        finish_reason = output.finish_reason
+                        prompt_tokens = len(res.prompt_token_ids)
+                        completion_tokens = len(output.token_ids)
+
+                        if not delta_text and skip_empty_delta_text:
+                            continue
+
+                        yield ChatCompletionStreamResponse(
+                            **{
+                                "model": request.model,
+                                "delta_content": delta_text
+                            })
+
+                    yield ChatCompletionStreamResponseDone(
+                        **{
+                            "model": request.model,
+                            "finish_reason": finish_reason,
+                            "prompt_tokens": prompt_tokens,
+                            "completion_tokens": completion_tokens,
+                            "total_tokens": prompt_tokens + completion_tokens
+                        })
+
+                return outputs_generator()
+
+        response = get_response()
+
+        if not inspect.isgenerator(response):
+            rep = ZeroServerResponseOk(msg=response)
+            self.zero_send(req, rep)
+        else:
+            for rep_id, rsp in enumerate(response):
+                rep = ZeroServerStreamResponseOk(
+                    msg=rsp,
+                    snd_more=not isinstance(rsp,
+                                            ChatCompletionStreamResponseDone),
+                    rep_id=rep_id)
+                self.zero_send(req, rep)
 
 
 def start_zero_engine(engine_args):

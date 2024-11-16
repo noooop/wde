@@ -1,3 +1,4 @@
+from wde.tasks.chat.schema.api import PROTOCOL
 from wde.workflows.core.workflow import Workflow
 
 
@@ -21,6 +22,7 @@ class DecodeOnlyDecodingWorkflow(Workflow):
     AttnBackend: str = ("wde.workflows.decoding.backends.attention.selector:"
                         "DecodingAttnBackend")
     attn_type: str = "DECODER"
+    protocol: str = PROTOCOL
 
     @classmethod
     def from_engine(cls, engine):
