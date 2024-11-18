@@ -11,3 +11,7 @@
 
 # Reranker models
 - bge-reranker-v2-m3
+
+# Decode only (chat) models
+- Qwen
+- chatglm

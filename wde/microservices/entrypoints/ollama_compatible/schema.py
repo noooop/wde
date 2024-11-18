@@ -18,3 +18,10 @@ class RerankerRequest(BaseModel):
     query: str
     passage: str
     options: Optional[dict] = Field(default_factory=dict)
+
+
+class ChatCompletionRequest(BaseModel):
+    model: str
+    messages: list = []
+    options: Optional[dict] = Field(default_factory=dict)
+    stream: bool = True

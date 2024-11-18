@@ -64,6 +64,10 @@ class ChatClient(ZeroClient):
 
 
 class AsyncChatClient(AsyncZeroClient):
+    protocol = PROTOCOL
+
+    def __init__(self, nameserver_port=None):
+        AsyncZeroClient.__init__(self, self.protocol, nameserver_port)
 
     async def chat(self,
                    name,
@@ -86,7 +90,7 @@ class AsyncChatClient(AsyncZeroClient):
         if response is None:
             raise RuntimeError(f"Chat [{name}] server not found.")
 
-        if not inspect.isgenerator(response):
+        if not inspect.isasyncgen(response):
             if response.state != "ok":
                 raise RuntimeError(
                     f"Chat [{name}] error, with error msg [{response.msg}]")
@@ -96,7 +100,7 @@ class AsyncChatClient(AsyncZeroClient):
         else:
 
             async def generator():
-                for rep in response:
+                async for rep in response:
                     if rep is None:
                         raise RuntimeError(f"Chat [{name}] server not found.")
 

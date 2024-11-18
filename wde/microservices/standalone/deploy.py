@@ -1,3 +1,5 @@
+import time
+
 import yaml
 from easydict import EasyDict as edict
 
@@ -20,7 +22,7 @@ class Deploy:
         self.manager_client = ZeroManagerClient(envs.ROOT_MANAGER_NAME)
 
     def verify(self):
-        for protocol in ["retriever", "reranker"]:
+        for protocol in ["chat", "retriever", "reranker"]:
             if protocol not in self.config:
                 continue
 
@@ -31,7 +33,7 @@ class Deploy:
         self.config = edict(self.config)
 
     def model_init(self):
-        for protocol in ["retriever", "reranker"]:
+        for protocol in ["chat", "retriever", "reranker"]:
             if protocol not in self.config:
                 continue
 
@@ -45,6 +47,7 @@ class Deploy:
                         "engine_args": engine_args
                     })
                 logger.info("%s : %s", config.model, out)
+                time.sleep(10)
 
     def http_entrypoint_init(self):
         if "entrypoints" not in self.config:

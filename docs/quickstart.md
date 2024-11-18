@@ -41,6 +41,27 @@ for output in outputs:
     print(output.score)
 ```
 
+## chat 模型
+
+```python
+from wde import LLM, SamplingParams
+
+prompts = [
+    "prompt1", "prompt2",
+]
+
+sampling_params = SamplingParams(temperature=0.8, top_p=0.95)
+
+llm = LLM(model="Qwen/Qwen2.5-7B-Instruct", quantization="fp8")
+
+outputs = llm.generate(prompts, sampling_params)
+
+for output in outputs:
+    prompt = output.prompt
+    generated_text = output.outputs[0].text
+    print(f"Prompt: {prompt!r}, Generated text: {generated_text!r}")
+```
+
 [支持的模型](https://github.com/noooop/wde/blob/main/docs/supported_models.md)
  
 更多示例 [请移步](https://github.com/noooop/wde/blob/main/examples/offline/)
@@ -85,6 +106,7 @@ server 窗口已经占用了，需要另外一个窗口运行下面命令
 ```commandline
 wde start BAAI/bge-m3
 wde start BAAI/bge-reranker-v2-m3
+wde start Qwen/Qwen2.5-7B-Instruct
 ```
 
 下载模型比较慢，建议先下载好模型再运行模型
@@ -92,12 +114,14 @@ wde start BAAI/bge-reranker-v2-m3
 ```commandline
 huggingface-cli download BAAI/bge-m3
 huggingface-cli download BAAI/bge-reranker-v2-m3
+huggingface-cli download Qwen/Qwen2.5-7B-Instruct
 ```
 
 3. 停止模型 
 ```commandline
 wde terminate BAAI/bge-m3
 wde terminate BAAI/bge-reranker-v2-m3
+wde terminate Qwen/Qwen2.5-7B-Instruct
 ```
 
 4. 使用部署文件一次性部署多个模型
@@ -139,7 +163,7 @@ print("Terminate engine:", out)
 
 ```
 
-详细代码 [retriever](https://github.com/noooop/wde/blob/main/examples/online/retriever/start_engine.py) [reranker](https://github.com/noooop/wde/blob/main/examples/online/reranker/start_engine.py)
+详细代码 [retriever](https://github.com/noooop/wde/blob/main/examples/online/retriever/start_engine.py) [reranker](https://github.com/noooop/wde/blob/main/examples/online/reranker/start_engine.py) [chat](https://github.com/noooop/wde/blob/main/examples/online/chat/start_engine.py)
 
 6. 一键启动模型
 
@@ -156,7 +180,7 @@ zeromq 相比 http 吞吐高延迟小，尤其是传输 Embeddings，建议优�
 
 可以使用 gevent 和 asyncio 并发请求，下面以 gevent 为例，展示大概代码框架
 
-详细代码 [retriever](https://github.com/noooop/wde/blob/main/examples/online/retriever/start_engine.py) [reranker](https://github.com/noooop/wde/blob/main/examples/online/reranker/start_engine.py)
+详细代码 [retriever](https://github.com/noooop/wde/blob/main/examples/online/retriever/start_engine.py) [reranker](https://github.com/noooop/wde/blob/main/examples/online/reranker/start_engine.py) [chat](https://github.com/noooop/wde/blob/main/examples/online/chat/start_engine.py)
 
 
 ```python
@@ -224,6 +248,6 @@ print(len(response.json()["embedding"]))
 
 > 注意使用 WDE_NAME_SERVER_PORT 设定一个没有占用的端口避免冲突
 
-详细代码 [retriever](https://github.com/noooop/wde/blob/main/examples/online/retriever/start_server.py) [reranker](https://github.com/noooop/wde/blob/main/examples/online/reranker/start_server.py)
+详细代码 [retriever](https://github.com/noooop/wde/blob/main/examples/online/retriever/start_server.py) [reranker](https://github.com/noooop/wde/blob/main/examples/online/reranker/start_server.py) [chat](https://github.com/noooop/wde/blob/main/examples/online/chat/start_server.py)
 
 

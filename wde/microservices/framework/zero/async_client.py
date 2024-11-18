@@ -122,6 +122,8 @@ class AsyncClient(object):
                         try:
                             with gevent.Timeout(_timeout):
                                 out = await socket.recv_multipart()
+                                rep_id = out[0]
+                                rcv_more = rep_id[22:23]
                                 yield out
                         except gevent.timeout.Timeout:
                             socket_pool.delete(socket)
@@ -134,13 +136,13 @@ class AsyncClient(object):
     async def query(self, data, **kwargs):
         req, req_payload = ZeroMSQ.load(data)
         response = await self._query(req, req_payload, **kwargs)
-        if not inspect.isgenerator(response):
+        if not inspect.isasyncgen(response):
             req_id, msg, *payload = response
             return ZeroServerResponse(**ZeroMSQ.unload(msg, payload))
         else:
 
             async def generator():
-                for req_id, msg, *payload in response:
+                async for req_id, msg, *payload in response:
                     yield ZeroServerResponse(**ZeroMSQ.unload(msg, payload))
 
             return generator()

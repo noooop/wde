@@ -27,7 +27,7 @@ class ZeroEngine(Z_MethodZeroServer):
     def __init__(self, name, engine_args, **kwargs):
         self.n_threads = engine_args.pop("n_threads", 4)
         self.return_metrics = engine_args.pop("return_metrics", None)
-
+        self.default_options = engine_args.pop("default_options", {})
         self.engine_args = engine_args
         self.engine = GeventLLMEngine(**self.engine_args)
         self.threads = ThreadPoolExecutor(self.n_threads)
@@ -102,6 +102,7 @@ class ZeroEngine(Z_MethodZeroServer):
         assert self.engine.served_model_name == request.model
 
         options = request.options or {}
+        options = {**options, **self.default_options}
         skip_empty_delta_text = options.pop("skip_empty_delta_text", True)
         request_id = str(req.req_id)
         sampling_params = SamplingParams(**options)

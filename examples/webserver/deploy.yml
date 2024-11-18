@@ -1,8 +1,26 @@
 retriever:
-  models: ["BAAI/bge-m3"]
+  models:
+    -
+      model: "BAAI/bge-m3"
+      engine_args:
+        max_num_requests: 4
 
 reranker:
-  models: ["BAAI/bge-reranker-v2-m3"]
+  models:
+    -
+      model: "BAAI/bge-reranker-v2-m3"
+      engine_args:
+        max_num_requests: 4
 
+chat:
+  models:
+    -
+      model: "Qwen/Qwen2.5-7B-Instruct"
+      engine_args:
+        gpu_memory_utilization: 0.7
+        quantization: "fp8"
+        max_num_batched_tokens: 256
+        default_options:
+          max_tokens: 1024
 
 entrypoints: ["ollama_compatible", "openai_compatible"]
