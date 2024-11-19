@@ -7,28 +7,29 @@ import numpy as np
 def benchmark(args):
     random.seed(args.seed)
 
-    import wde
-    from wde import LLMEngine, SamplingParams
-    from wde.workflows.decoding.arg_utils import \
-        DecodingEngineArgs as EngineArgs
+    import vllm
+    from vllm import EngineArgs, LLMEngine, SamplingParams, TextPrompt
 
-    print(wde.__version__)
+    print(vllm.__version__)
 
     engine_args = EngineArgs(
         model=args.model,
-        tokenizer=args.tokenizer,
         quantization=args.quantization,
+        tensor_parallel_size=args.tensor_parallel_size,
         seed=args.seed,
+        trust_remote_code=args.trust_remote_code,
         dtype=args.dtype,
         max_model_len=args.max_model_len,
         gpu_memory_utilization=args.gpu_memory_utilization,
+        enforce_eager=args.enforce_eager,
         kv_cache_dtype=args.kv_cache_dtype,
         quantization_param_path=args.quantization_param_path,
         device=args.device,
         enable_prefix_caching=args.enable_prefix_caching,
+        enable_chunked_prefill=args.enable_chunked_prefill,
         max_num_batched_tokens=args.max_num_batched_tokens,
-        max_num_requests=args.max_num_requests,
-        scheduling=args.scheduling)
+        max_num_seqs=args.max_num_seqs,
+        disable_log_stats=True)
 
     engine = LLMEngine.from_engine_args(engine_args)
 
@@ -37,11 +38,10 @@ def benchmark(args):
                 for _ in range(args.num_prompts)]
 
     start = time.perf_counter()
-    metrics_list = []
-
     for request_id, (prompt, _, output_len) in enumerate(requests):
-        inputs = prompt
+        inputs = TextPrompt(prompt=prompt)
         sampling_params = SamplingParams(
+            n=args.n,
             temperature=1.0,
             top_p=1.0,
             ignore_eos=True,
@@ -49,36 +49,34 @@ def benchmark(args):
         )
         engine.add_request(str(request_id), inputs, sampling_params)
 
-    n_step = 0
+    out = []
     while engine.has_unfinished_requests():
-        n_step += 1
         request_outputs = engine.step()
-        for request in request_outputs:
-            metrics_list.append(request.metrics)
-
+        out.append((time.perf_counter(), request_outputs))
     end = time.perf_counter()
 
+    timestamp = {}
+    for t, rs in out:
+        for r in rs:
+            request_id = r.request_id
+            if request_id not in timestamp:
+                timestamp[request_id] = []
+            timestamp[request_id].append(t)
+
+    tpot = []
+    for v in timestamp.values():
+        dd = [v[i] - v[i - 1] for i in range(1, len(v))]
+        tpot.extend(dd)
+
+    tpot = np.mean(tpot)
     elapsed_time = end - start
-    scheduling_time = np.mean([m.scheduling_time for m in metrics_list])
-    num_requests = np.mean([m.num_requests for m in metrics_list])
-    num_batched_tokens = np.mean([m.num_batched_tokens for m in metrics_list])
 
-    scheduling2inference = np.mean(
-        [m.scheduling2inference for m in metrics_list])
-    inference_time = np.mean([m.inference_time for m in metrics_list])
-    latency = np.mean([m.latency for m in metrics_list])
-    avg_latency = elapsed_time / n_step
+    total_num_tokens = sum(prompt_len + output_len
+                           for _, prompt_len, output_len in requests)
 
-    print(
-        f"Batchsize {args.max_num_requests}, Throughput: "
-        f"{len(requests) / elapsed_time:.4f} requests/s, "
-        f"Scheduling time {scheduling_time * 1000:0.4f} ms, "
-        f"Num requests {num_requests:.2f}, ",
-        f"Num batched tokens {num_batched_tokens:.2f}, ",
-        f"Scheduling2inference {scheduling2inference * 1000:0.4f} ms, "
-        f"Inference time {inference_time * 1000:0.4f} ms, "
-        f"Avg Latency {avg_latency * 1000:0.4f} ms, "
-        f"Latency {latency * 1000:0.4f} ms, n_step {n_step}")
+    print(f"Throughput: {len(requests) / elapsed_time:.4f} requests/s, "
+          f"{total_num_tokens / elapsed_time:.4f} tokens/s, "
+          f"Delay {tpot*1000:0.2f} ms")
 
 
 if __name__ == '__main__':
@@ -98,8 +96,14 @@ if __name__ == '__main__':
 
     args.max_model_len = 1000
 
-    args.tokenizer = args.model
+    args.enable_chunked_prefill = True
+
+    args.trust_remote_code = False
     args.quantization_param_path = None
+    args.tensor_parallel_size = 1
+
+    args.n = 1
+    args.enforce_eager = False
     args.enable_prefix_caching = False
     args.gpu_memory_utilization = 0.9
 
@@ -116,13 +120,8 @@ if __name__ == '__main__':
 
     max_num_batched_tokens_list = [1536, 1024, 768, 512, 384, 256, 128, 64, 32]
 
-    for scheduling in ["sync", "simple_async", "async", "double_buffer"]:
-        print(f"scheduling: {scheduling}")
-        args.scheduling = scheduling
-
-        print()
-        for max_num_batched_tokens in max_num_batched_tokens_list:
-            print("max_num_batched_tokens", max_num_batched_tokens)
-            args.max_num_requests = max_num_batched_tokens
-            args.max_num_batched_tokens = max_num_batched_tokens
-            run(args)
+    for max_num_batched_tokens in max_num_batched_tokens_list:
+        print("max_num_batched_tokens", max_num_batched_tokens)
+        args.max_num_seqs = max_num_batched_tokens
+        args.max_num_batched_tokens = max_num_batched_tokens
+        run(args)
