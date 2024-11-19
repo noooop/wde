@@ -46,7 +46,7 @@ python -m benchmarks.retriever.benchmark_attention_impl
 
 <img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/imps/bf16-sync.png?raw=true" width="400">
 
-> 以上三张图的延迟计算口径为模型执行时间，反应模型推理性能，包括数据H2D，GPU计算，结果D2H。不包括预处理、调度、后处理。
+> 图1 以上三张图的延迟计算口径为模型执行时间，反应模型推理性能，包括数据H2D，GPU计算，结果D2H。不包括预处理、调度、后处理。
 
 可以看到
 - 对模型推理性能影响最大的是浮点数据格式，bf16 ≈ fp16 > fp32
@@ -61,7 +61,7 @@ python -m benchmarks.retriever.benchmark_bge-m3
 
 <img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/imps/fp16-hf.png?raw=true" width="400">
 
-> 上图延迟计算口径为离线批处理端到端时间，包括 tokenizer.encode 时间，GPU计算时间，transformers 没有执行结果D2H， wde框架执行结果D2H，当然差别不大
+> 图2 上图延迟计算口径为离线批处理端到端时间，包括 tokenizer.encode 时间，GPU计算时间，transformers 没有执行结果D2H， wde框架执行结果D2H，当然差别不大
 
 
 > [RoBERTa-based Add support for sdpa #30510](https://github.com/huggingface/transformers/pull/30510)
@@ -74,24 +74,41 @@ sdpa 优化的 transformers 已经不好欺负了， 作为这次推理性能调
 
 > 本文以下使用 bge-m3 模型在单张 4090 使用 FLASH_ATTN 和 fp16 推理性能举例
 
-## 调度优化
+## 离线批量推理优化性能
+
+为了更好的对系统性能观察和调优，记录了以下Metrics。一个请求的生命周期如下：
+
+时间戳
+- arrival_ts：请求进入系统时间戳
+- scheduled_ts：调度器调度请求的时间戳
+- inference_begin_ts：执行器执行开始的时间戳
+- inference_end_ts：执行器执行完成的时间戳
+- finish_ts：请求完成的时间戳
+
+通过时间戳可以计算以下时间
+- waiting_time = scheduled_ts - arrival_ts： 请求在调度前队列里等待的时间
+- scheduling2inference = inference_begin_ts - scheduled_ts：请求从调度到执行的时间
+- inference_time = inference_end_ts - inference_begin_ts：请求执行器推理的时间
+- latency = finish_ts - scheduled_ts：请求从调度到完成的时间
+
+离线批量推理情景下 waiting_time 跟总请求量有关，一般不关注，所以有两个延迟口径需要关注：
+- inference_time = inference_end_ts - inference_begin_ts：请求执行器推理的时间
+- latency = finish_ts - scheduled_ts：请求从调度到完成的时间
 
 先看图，经过同步调度 sync、简单异步调度 simple_async、异步调度 async、双缓存 double_buffer优化之后，性能明显提升
 
-<img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/profiler/execute.png?raw=true" width="400">
+<img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/benchmark_bge-m3/inference_time.png?raw=true" width="400">
 
-> 上图的延迟计算口径为模型执行时间，反应模型推理性能，包括数据H2D，GPU计算，结果D2H。不包括预处理、调度、后处理。
+> 图3 上图的延迟计算口径为 inference_time = inference_end_ts - inference_begin_ts，请求执行器推理的时间
 
-<img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/profiler/e2e.png?raw=true" width="400">
+<img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/benchmark_bge-m3/latency.png?raw=true" width="400">
 
-> 上图延迟计算口径为离线批处理端到端时间，包括 tokenizer.encode，GPU计算，结果D2H，后处理
-
-以上两张图被称为 “离线不同调度吞吐-延迟图”
+> 图4 上图延迟计算口径为 latency = finish_ts - scheduled_ts，请求从调度到完成的时间
 
 
 ### 同步调度分析
 ```commandline
-python -m benchmarks.profiler.profiling_executor
+python -m benchmarks.retriever.profiler.profiling_executor
 ```
 
 [同步调度代码](https://github.com/noooop/wde/blob/c1920124c750ea2c66bce0b28ad443e615467995/wde/tasks/prefill_only/executor/gpu_executor.py#L127C1-L143C30)
@@ -100,9 +117,9 @@ python -m benchmarks.profiler.profiling_executor
 
 <img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/profiler/sync.png?raw=true" width="400">
 
-可以看到同步调度时，两次模型计算之间有一些空隙，系统在运行上一个批次请求的后处理和下一个批次调度、预处理，GPU处于空闲状态。
+> 图5 可以看到同步调度时，两次模型计算之间有一些空隙，系统在运行上一个批次请求的后处理和下一个批次调度、预处理，GPU处于空闲状态。
 
-从 “离线不同调度吞吐-延迟图” sync曲线可以看到，同步调度性能跟transformers差不多。
+从 图3图4 sync曲线可以看到，同步调度性能跟transformers差不多。
 
 如何能消除GPU空闲，提高GPU利用率，提高系统吞吐呢？
 
@@ -120,9 +137,9 @@ python -m benchmarks.profiler.profiling_executor
 
 <img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/profiler/simple_async.png?raw=true" width="400">
 
-可以看到简单异步调度，基本上消除了GPU空闲
+> 图6 可以看到简单异步调度，基本上消除了GPU空闲
 
-从 “离线不同调度吞吐-延迟图” 可以看到simple_async曲线跟之前sync曲线，有一定提高
+从 图3图4 可以看到simple_async曲线跟之前sync曲线，有一定提高
 
 接下来能如何提高系统性能呢?
 
@@ -139,7 +156,9 @@ python -m benchmarks.profiler.profiling_executor
 
 <img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/profiler/async.png?raw=true" width="400">
 
-从 “离线不同调度吞吐-延迟图” 可以看到 async 曲线，相对simple_async曲线、sync曲线，效果非常显著
+> 图7 GPU空闲被两条重叠的Stream完全填补
+
+从 图3图4 可以看到 async 曲线，相对simple_async曲线、sync曲线，效果非常显著
 
 ### double_buffer
 
@@ -153,10 +172,12 @@ python -m benchmarks.profiler.profiling_executor
 
 <img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/profiler/double_buffer.png?raw=true" width="400">
 
-虽然 double_buffer 看起来很酷，但从 “离线不同调度吞吐-延迟图” 可以看到 double_buffer 对比 async 几乎没有性能提升
+> 图8 GPU时间线的两条Stream完全占满
+
+虽然 double_buffer 看起来很酷，但从 图3图4 可以看到 double_buffer 对比 async 几乎没有性能提升
 
 所以虽然可以设计一个使用 100 个 cuda.Stream、1000 个 batch，10000 个 batch计算并行的调度方式，但估计也不会更多的有性能提升，甚至可能有性能下降。
 
-尤其是在线服务，很难同时凑满 double_buffer 使用的三个 batch，所以 async 调度为本系统默认调度方式
+尤其是在线服务，很难同时凑满 double_buffer 使用的三个 batch，所以 async 调度为wde系统默认调度方式
 
 ## 未完待续
