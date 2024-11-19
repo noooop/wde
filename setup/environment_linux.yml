@@ -1,4 +1,4 @@
-name: wde_v0.1
+name: wde
 channels:
   - conda-forge
   - pytorch

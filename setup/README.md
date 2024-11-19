@@ -10,13 +10,13 @@ $ conda env create -f environment_linux.yml
 ## conda 常用命令
 ```
 # 创建虚拟环境
-$ conda create -n wde_v0.1 python=3.11 anaconda
+$ conda create -n wde python=3.11 anaconda
 
 # 查看虚拟环境
 $ conda env list 
 
 # 激活虚拟环境
-$ conda activate wde_v0.1
+$ conda activate wde
 
 # 安装依赖, 只会安装在这个虚拟环境里
 # pip install .....
@@ -25,7 +25,7 @@ $ conda activate wde_v0.1
 $ conda deactivate
 
 # 删除虚拟环境
-conda remove -n wde_v0.1 --all
+conda remove -n wde --all
 ```
 
 ## 手动安装
