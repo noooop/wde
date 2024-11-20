@@ -168,23 +168,40 @@ python -m benchmarks.chat.profiler.profiling_decoding
 
 <img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/chat/profiling_decoding/latency-7b-fp8.png?raw=true" width="400">
 
-> 图11 latency = finish_ts - scheduled_ts：从调度到完成的时间
+> 图12 latency = finish_ts - scheduled_ts：从调度到完成的时间
 
 <img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/chat/profiling_decoding/latency-1.5b-bf16.png?raw=true" width="400">
 
-> 图11 latency = finish_ts - scheduled_ts：从调度到完成的时间， 对于1.5b的小模型，加速效果要更好一些
+> 图13 latency = finish_ts - scheduled_ts：从调度到完成的时间， 对于1.5b的小模型，加速效果要更好一些
 
 
 ### 与其他系统对比
 
-跟 vllm-0.6.3.post1 和 sgl-0.3.5.post2 友善的对比一下
+跟 vllm-0.6.3.post1 和 sgl-0.3.5.post2 友善的对比一下 Qwen2.5-7B-Instruct-fp8
+
+（为什么不测Qwen2.5-7B-Instruct-bp16， 24G的 4090 没法上很大的 max_num_batched_tokens 跑不到模型峰值
+
+> 严重拉偏架警告 (狗头) 
+> 
+> 这个测试肯定是严重偏向异步调度的
+> 
+> 0. 从上我们知道 max_num_batched_tokens 变大，吞吐变大延迟变高，这里面可是有很多文章可以做的
+> 1. 虽然写的是 max_num_batched_tokens，但异步调度需要交错调度两个批次的请求，也就是需要两倍的 max_num_batched_tokens 才能跑起来
+> 2. 没有测延迟，一方面不同的软件库很难做到记录相同口径的延迟，更重要的也要掩盖异步调度需要交错调度两个批次延迟翻倍的负面影响
+
 
 <img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/chat/profiling_decoding/throughput.png?raw=true" width="400">
 
-> 图11 latency = finish_ts - scheduled_ts：从调度到完成的时间
+> 图14 横坐标 max_num_batched_tokens， 纵坐标 qps
 > - vllm 和 sync 一模一样，毕竟wde的代码就是建立在vllm基础上的
 > - sgl 确实要快一些，但不知道为什么 chunked_prefill_size 小于256会报错
-> - 异步调度能提升吞吐，可以用更小的chunked_prefill_size达到性能饱和
+> - 刨去以上拉偏架行为，异步调度确实可以提高GPU利用率，可以用更小的 max_num_batched_tokens 达到性能饱和
+
+友善的对比一下 Qwen2.5-3B-Instruct-bf16
+
+<img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/chat/profiling_decoding/throughput-3B.png?raw=true" width="400">
+
+> 图 15 横坐标 max_num_batched_tokens， 纵坐标 qps， 小模型异步调度的优势要更明显一点
 
 ## 未完待续
 

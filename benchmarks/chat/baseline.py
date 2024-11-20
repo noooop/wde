@@ -90,8 +90,8 @@ if __name__ == '__main__':
     args.num_prompts = 1000
 
     args.seed = 0
-    args.model = "Qwen/Qwen2.5-7B-Instruct"
-    args.quantization = "fp8"
+    args.model = "Qwen/Qwen2.5-3B-Instruct"
+    args.quantization = None
     args.dtype = 'auto'
     args.kv_cache_dtype = "auto"
     args.device = "cuda"
