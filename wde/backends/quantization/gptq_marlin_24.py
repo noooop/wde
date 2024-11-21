@@ -3,10 +3,10 @@ from typing import Any, Dict, List, Optional
 import torch
 from torch.nn.parameter import Parameter
 from vllm import _custom_ops as ops
+from vllm.scalar_type import scalar_types
 
 from wde.backends.linear import LinearBase, LinearMethodBase
 from wde.backends.quantization.base_config import QuantizationConfig
-from wde.backends.scalar_type import scalar_types
 from wde.backends.utils import set_weight_attrs
 from wde.logger import init_logger
 

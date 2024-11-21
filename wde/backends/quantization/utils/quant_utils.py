@@ -3,9 +3,9 @@ from typing import List
 
 import numpy
 import torch
+from vllm.scalar_type import ScalarType, scalar_types
 
 from wde.backends.quantization.qqq import MARLIN_QQQ_SUPPORTED_NUM_BITS
-from wde.backends.scalar_type import ScalarType, scalar_types
 
 SUPPORTED_GPTQ_QUANT_TYPES = [scalar_types.uint4b8, scalar_types.uint8b128]
 SUPPORTED_GROUP_SIZES = [-1, 32, 64, 128]

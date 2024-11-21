@@ -5,7 +5,7 @@ from typing import List, Optional, Union
 
 import torch
 from transformers import PretrainedConfig
-from vllm.utils import is_cpu, is_hip, is_neuron, is_openvino, is_xpu
+from vllm.platforms import current_platform
 
 from wde.backends.models.transformers_utils.config import (get_config,
                                                            get_hf_text_config)
@@ -23,18 +23,22 @@ class DeviceConfig:
     def __init__(self, device: str = "auto") -> None:
         if device == "auto":
             # Automated device type detection
-            if is_neuron():
+            if current_platform.is_cuda_alike():
+                self.device_type = "cuda"
+            elif current_platform.is_neuron():
                 self.device_type = "neuron"
-            elif is_openvino():
+            elif current_platform.is_hpu():
+                self.device_type = "hpu"
+            elif current_platform.is_openvino():
                 self.device_type = "openvino"
-            elif is_cpu():
+            elif current_platform.is_tpu():
+                self.device_type = "tpu"
+            elif current_platform.is_cpu():
                 self.device_type = "cpu"
-            elif is_xpu():
+            elif current_platform.is_xpu():
                 self.device_type = "xpu"
             else:
-                # We don't call torch.cuda.is_available() here to
-                # avoid initializing CUDA before workers are forked
-                self.device_type = "cuda"
+                raise RuntimeError("Failed to infer device type")
         else:
             # Device type is assigned explicitly
             self.device_type = device
@@ -112,7 +116,8 @@ class LoadConfig:
         self.load_format = LoadFormat(load_format)
 
         rocm_not_supported_load_format: List[str] = []
-        if is_hip() and load_format in rocm_not_supported_load_format:
+        if current_platform.is_hpu(
+        ) and load_format in rocm_not_supported_load_format:
             rocm_supported_load_format = [
                 f for f in LoadFormat.__members__
                 if (f not in rocm_not_supported_load_format)
@@ -354,7 +359,7 @@ class ModelConfig:
                 raise ValueError(
                     f"Unknown quantization method: {self.quantization}. Must "
                     f"be one of {supported_quantization}.")
-            if is_hip(
+            if current_platform.is_hpu(
             ) and self.quantization not in rocm_supported_quantization:
                 raise ValueError(
                     f"{self.quantization} quantization is currently not "

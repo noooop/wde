@@ -5,12 +5,12 @@ channels:
   - nvidia
   - defaults
 dependencies:
-  - python=3.11
+  - python=3.12
   - anaconda
   - pip
   - pip:
-      - torch==2.4.0
-      - torchvision==0.19
+      - torch==2.5.1
+      - torchvision==0.20.1
       - transformers==4.45.2
       - fastapi
       - easydict
@@ -20,7 +20,7 @@ dependencies:
       - uvicorn
       - shortuuid
       - modelscope
-      - vllm==v0.6.3.post1
+      - vllm==v0.6.4.post1
       - cachetools
       - asyncache
       - https://github.com/noooop/wde/archive/refs/heads/main.zip

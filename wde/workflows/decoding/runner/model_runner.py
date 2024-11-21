@@ -4,7 +4,8 @@ from typing import List, Optional
 import torch
 import torch.distributed
 import torch.nn as nn
-from vllm.utils import DeviceMemoryProfiler, is_hip, is_pin_memory_available
+from vllm.platforms import current_platform
+from vllm.utils import DeviceMemoryProfiler, is_pin_memory_available
 
 from wde.backends.models.utils import set_cpu_offload_max_bytes
 from wde.logger import init_logger
@@ -76,7 +77,7 @@ class GPUModelRunner:
                               model_config=self.model_config,
                               device_config=self.device_config)
 
-        if self.kv_cache_dtype == "fp8" and is_hip():
+        if self.kv_cache_dtype == "fp8" and current_platform.is_hpu():
             # Currently only ROCm accepts kv-cache scaling factors
             # via quantization_param_path and this will be deprecated
             # in the future.

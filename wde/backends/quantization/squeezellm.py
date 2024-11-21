@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Optional
 import torch
 from torch.nn.parameter import Parameter
 from vllm import _custom_ops as ops
-from vllm.utils import is_hip
+from vllm.platforms import current_platform
 
 from wde.backends.linear import LinearBase
 from wde.backends.quantization.base_config import (QuantizationConfig,
@@ -124,7 +124,7 @@ class SqueezeLLMLinearMethod(QuantizeMethodBase):
         lookup_table = layer.lookup_table
         out_shape = x.shape[:-1] + (qweight.shape[-1], )
         reshaped_x = x.reshape(-1, x.shape[-1])
-        if is_hip():
+        if current_platform.is_hpu():
             out_f = torch.zeros(out_shape, dtype=torch.float)
             ops.squeezellm_gemm(reshaped_x, qweight, out_f, lookup_table)
             out = out_f.to(dtype=torch.float16)

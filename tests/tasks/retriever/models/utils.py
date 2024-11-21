@@ -4,8 +4,9 @@ import numpy as np
 import torch
 import torch.nn as nn
 from transformers import BatchEncoding, BatchFeature
+from vllm.platforms import current_platform
 
-from tests.tasks.utils import cleanup, is_cpu
+from tests.tasks.utils import cleanup
 
 _T = TypeVar("_T", nn.Module, torch.Tensor, BatchEncoding, BatchFeature)
 
@@ -13,7 +14,7 @@ _T = TypeVar("_T", nn.Module, torch.Tensor, BatchEncoding, BatchFeature)
 class FlagEmbeddingRunner:
 
     def wrap_device(self, input: _T) -> _T:
-        if not is_cpu():
+        if not current_platform.is_cpu():
             # Check if the input is already on the GPU
             if hasattr(input, "device") and input.device.type == "cuda":
                 return input  # Already on GPU, no need to move

@@ -1,6 +1,5 @@
 import torch.nn as nn
 from vllm.platforms import current_platform
-from vllm.utils import is_cpu, is_hip, is_xpu
 
 
 class CustomOp(nn.Module):
@@ -48,13 +47,13 @@ class CustomOp(nn.Module):
         return self.forward_native(*args, **kwargs)
 
     def dispatch_forward(self):
-        if is_hip():
+        if current_platform.is_hpu():
             return self.forward_hip
-        elif is_cpu():
+        elif current_platform.is_cpu():
             return self.forward_cpu
         elif current_platform.is_tpu():
             return self.forward_tpu
-        elif is_xpu():
+        elif current_platform.is_xpu():
             return self.forward_xpu
         else:
             return self.forward_cuda

@@ -9,7 +9,7 @@ from wde.workflows.prefill_only.config import \
 from wde.workflows.prefill_only.scheduler import PrefillOnlyScheduler
 
 
-class TestRequestProcessor(RequestProcessor):
+class RequestProcessor4Test(RequestProcessor):
 
     def __init__(self, num_new_tokens):
         self.num_new_tokens = num_new_tokens
@@ -38,7 +38,7 @@ def test_limited_by_max_num_requests(n_request: int, num_new_tokens: int,
                                          max_num_requests,
                                          max_model_len=max_model_len,
                                          max_num_requests=max_num_requests),
-        request_processor=TestRequestProcessor(num_new_tokens=num_new_tokens))
+        request_processor=RequestProcessor4Test(num_new_tokens=num_new_tokens))
 
     for i in range(1, n_request + 1):
         scheduler.add_request(Request(request_id=str(i), arrival_time=0.))
@@ -69,7 +69,7 @@ def test_limited_by_token_budget(n_request: int, num_new_tokens: int,
         max_model_len=num_new_tokens + 1,
         max_num_requests=max_num_requests,
         max_num_batched_tokens=(num_new_tokens + 1) * (max_num_requests - 1)),
-                                     request_processor=TestRequestProcessor(
+                                     request_processor=RequestProcessor4Test(
                                          num_new_tokens=num_new_tokens))
 
     for i in range(1, n_request + 1):
@@ -110,7 +110,7 @@ def test_ignored_requests(n_request: int, num_new_tokens: int,
                                          max_num_requests,
                                          max_model_len=max_model_len,
                                          max_num_requests=max_num_requests),
-        request_processor=TestRequestProcessor(num_new_tokens=num_new_tokens))
+        request_processor=RequestProcessor4Test(num_new_tokens=num_new_tokens))
 
     for i in range(1, n_request + 1):
         scheduler.add_request(Request(request_id=str(i), arrival_time=0.))

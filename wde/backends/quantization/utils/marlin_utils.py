@@ -4,8 +4,7 @@ import numpy
 import torch
 from vllm import _custom_ops as ops
 from vllm.platforms import current_platform
-
-from wde.backends.scalar_type import ScalarType, scalar_types
+from vllm.scalar_type import ScalarType, scalar_types
 
 from .quant_utils import pack_cols, unpack_cols
 

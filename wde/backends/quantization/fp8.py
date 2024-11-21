@@ -8,6 +8,8 @@ from vllm.platforms import current_platform
 
 from wde.backends.linear import (LinearBase, LinearMethodBase,
                                  UnquantizedLinearMethod)
+from wde.backends.parameter import (ModelWeightParameter,
+                                    PerTensorScaleParameter)
 from wde.backends.quantization.base_config import (QuantizationConfig,
                                                    QuantizeMethodBase)
 from wde.backends.quantization.kv_cache import BaseKVCacheMethod
@@ -15,9 +17,8 @@ from wde.backends.quantization.utils.marlin_utils_fp8 import (
     apply_fp8_marlin_linear, prepare_fp8_layer_for_marlin)
 from wde.backends.quantization.utils.quant_utils import is_layer_skipped
 from wde.backends.quantization.utils.w8a8_utils import (
-    apply_fp8_linear, convert_to_channelwise, create_per_tensor_scale_param,
-    cutlass_fp8_supported, requantize_with_max_scale)
-from wde.backends.utils import set_weight_attrs
+    apply_fp8_linear, convert_to_channelwise, cutlass_fp8_supported,
+    normalize_e4m3fn_to_e4m3fnuz, requantize_with_max_scale)
 from wde.logger import init_logger
 
 ACTIVATION_SCHEMES = ["static", "dynamic"]
@@ -32,7 +33,7 @@ class Fp8Config(QuantizationConfig):
         self,
         is_checkpoint_fp8_serialized: bool = False,
         activation_scheme: str = "dynamic",
-        ignored_backends: Optional[List[str]] = None,
+        ignored_layers: Optional[List[str]] = None,
     ) -> None:
         self.is_checkpoint_fp8_serialized = is_checkpoint_fp8_serialized
         if is_checkpoint_fp8_serialized:
@@ -42,7 +43,7 @@ class Fp8Config(QuantizationConfig):
             raise ValueError(
                 f"Unsupported activation scheme {activation_scheme}")
         self.activation_scheme = activation_scheme
-        self.ignored_backends = ignored_backends or []
+        self.ignored_layers = ignored_layers or []
 
     @classmethod
     def get_name(cls) -> str:
@@ -65,11 +66,10 @@ class Fp8Config(QuantizationConfig):
         quant_method = cls.get_from_keys(config, ["quant_method"])
         is_checkpoint_fp8_serialized = ("fp8" in quant_method)
         activation_scheme = cls.get_from_keys(config, ["activation_scheme"])
-        ignored_backends = cls.get_from_keys_or(config, ["ignored_backends"],
-                                                None)
+        ignored_layers = cls.get_from_keys_or(config, ["ignored_layers"], None)
         return cls(is_checkpoint_fp8_serialized=is_checkpoint_fp8_serialized,
                    activation_scheme=activation_scheme,
-                   ignored_backends=ignored_backends)
+                   ignored_layers=ignored_layers)
 
     def get_quant_method(self, layer: torch.nn.Module,
                          prefix: str) -> Optional["QuantizeMethodBase"]:
@@ -77,15 +77,12 @@ class Fp8Config(QuantizationConfig):
             Attention  # Avoid circular import
 
         if isinstance(layer, LinearBase):
-            if is_layer_skipped(prefix, self.ignored_backends):
+            if is_layer_skipped(prefix, self.ignored_layers):
                 return UnquantizedLinearMethod()
             return Fp8LinearMethod(self)
         elif isinstance(layer, Attention):
             return Fp8KVCacheMethod(self)
         return None
-
-    def get_scaled_act_names(self) -> List[str]:
-        return []
 
 
 class Fp8LinearMethod(LinearMethodBase):
@@ -112,9 +109,10 @@ class Fp8LinearMethod(LinearMethodBase):
 
         # For GPUs that lack FP8 hardware support, we can leverage the Marlin
         # kernel for fast weight-only FP8 quantization
-        capability = current_platform.get_device_capability()
-        capability = capability[0] * 10 + capability[1]
-        self.use_marlin = capability < 89
+        self.use_marlin = not current_platform.has_device_capability(89)
+        # Disable marlin for rocm
+        if current_platform.is_rocm():
+            self.use_marlin = False
 
     def create_weights(
         self,
@@ -128,6 +126,7 @@ class Fp8LinearMethod(LinearMethodBase):
     ):
         del input_size, output_size
         output_size_per_partition = sum(output_partition_sizes)
+        weight_loader = extra_weight_attrs.get("weight_loader")
 
         layer.logical_widths = output_partition_sizes
 
@@ -139,36 +138,53 @@ class Fp8LinearMethod(LinearMethodBase):
         weight_dtype = (torch.float8_e4m3fn
                         if self.quant_config.is_checkpoint_fp8_serialized else
                         params_dtype)
-        weight = Parameter(torch.empty(output_size_per_partition,
-                                       input_size_per_partition,
-                                       dtype=weight_dtype),
-                           requires_grad=False)
+
+        weight = ModelWeightParameter(data=torch.empty(
+            output_size_per_partition,
+            input_size_per_partition,
+            dtype=weight_dtype),
+                                      input_dim=1,
+                                      output_dim=0,
+                                      weight_loader=weight_loader)
         layer.register_parameter("weight", weight)
-        set_weight_attrs(weight, {
-            **extra_weight_attrs,
-            "input_dim": 1,
-            "output_dim": 0,
-        })
 
         # If checkpoint is serialized fp8, load them.
         # Otherwise, wait until process_weights_after_loading.
         if self.quant_config.is_checkpoint_fp8_serialized:
             # WEIGHT SCALE
-            scale = create_per_tensor_scale_param(output_partition_sizes,
-                                                  **extra_weight_attrs)
+            scale = PerTensorScaleParameter(data=torch.empty(
+                len(output_partition_sizes), dtype=torch.float32),
+                                            weight_loader=weight_loader)
+
+            scale[:] = torch.finfo(torch.float32).min
             layer.register_parameter("weight_scale", scale)
 
             # INPUT ACTIVATION SCALE
             if self.quant_config.activation_scheme == "static":
-                scale = create_per_tensor_scale_param(output_partition_sizes,
-                                                      **extra_weight_attrs)
+                scale = PerTensorScaleParameter(data=torch.empty(
+                    len(output_partition_sizes), dtype=torch.float32),
+                                                weight_loader=weight_loader)
+
+                scale[:] = torch.finfo(torch.float32).min
                 layer.register_parameter("input_scale", scale)
+            else:
+                layer.register_parameter("input_scale", None)
 
     def process_weights_after_loading(self, layer: Module) -> None:
+        layer.weight = torch.nn.Parameter(layer.weight.data,
+                                          requires_grad=False)
         # If checkpoint not serialized fp8, quantize the weights.
         if not self.quant_config.is_checkpoint_fp8_serialized:
             qweight, weight_scale = ops.scaled_fp8_quant(layer.weight,
                                                          scale=None)
+
+            # If using marlin (w8a16), kernel uses channelwise weights,
+            # so extend the weight scales to be channelwise.
+            if self.use_marlin:
+                assert weight_scale.numel() == 1
+                weight_scale = convert_to_channelwise(
+                    weight_scale.expand(len(layer.logical_widths)),
+                    layer.logical_widths)
 
             # Update the layer with the new values.
             layer.weight = Parameter(qweight.t(), requires_grad=False)
@@ -178,6 +194,11 @@ class Fp8LinearMethod(LinearMethodBase):
         # If checkpoint is fp8, handle that there are N scales for N
         # shards in a fused module
         else:
+            layer.weight_scale = torch.nn.Parameter(layer.weight_scale.data,
+                                                    requires_grad=False)
+            if self.quant_config.activation_scheme == "static":
+                layer.input_scale = torch.nn.Parameter(layer.input_scale.data,
+                                                       requires_grad=False)
             # If using marlin (w8a16), kernel uses channelwise weights,
             # so extend the weight scales to be channelwise.
             if self.use_marlin:
@@ -189,9 +210,23 @@ class Fp8LinearMethod(LinearMethodBase):
             # requantize the logical shards as a single weight.
             else:
                 # Dequant -> Quant with max scale so we can run per tensor.
+                weight = layer.weight
+                weight_scale = layer.weight_scale
+
+                # If rocm, use float8_e4m3fnuz.
+                if current_platform.is_rocm():
+                    weight, weight_scale, input_scale = \
+                        normalize_e4m3fn_to_e4m3fnuz(
+                            weight=weight,
+                            weight_scale=weight_scale,
+                            input_scale=layer.input_scale)
+                    if input_scale is not None:
+                        layer.input_scale = Parameter(input_scale,
+                                                      requires_grad=False)
+
                 weight_scale, weight = requantize_with_max_scale(
-                    weight=layer.weight,
-                    weight_scale=layer.weight_scale,
+                    weight=weight,
+                    weight_scale=weight_scale,
                     logical_widths=layer.logical_widths,
                 )
 
@@ -201,8 +236,6 @@ class Fp8LinearMethod(LinearMethodBase):
             if self.quant_config.activation_scheme == "static":
                 layer.input_scale = Parameter(layer.input_scale.max(),
                                               requires_grad=False)
-            else:
-                layer.input_scale = None
 
         if self.use_marlin:
             prepare_fp8_layer_for_marlin(layer)

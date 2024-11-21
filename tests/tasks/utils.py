@@ -8,7 +8,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from transformers import (AutoModelForCausalLM, AutoTokenizer, BatchEncoding,
                           BatchFeature)
-from vllm.utils import STR_DTYPE_TO_TORCH_DTYPE, is_cpu
+from vllm.platforms import current_platform
+from vllm.utils import STR_DTYPE_TO_TORCH_DTYPE
 
 from wde import LLM
 from wde.tasks.reranker.schema.engine_io import RerankerInputs
@@ -68,7 +69,7 @@ class WDERunner:
 class HfRunner:
 
     def wrap_device(self, input: _T) -> _T:
-        if not is_cpu():
+        if not current_platform.is_cpu():
             # Check if the input is already on the GPU
             if hasattr(input, "device") and input.device.type == "cuda":
                 return input  # Already on GPU, no need to move
@@ -178,8 +179,17 @@ class BertHfRunner(HfRunner):
 
 
 def compare_embeddings(embeddings1, embeddings2):
+
+    def to_cuda_tenser(e):
+        if isinstance(e, np.ndarray):
+            e = torch.tensor(e)
+
+        assert isinstance(e, torch.Tensor)
+
+        return e.cuda()
+
     similarities = [
-        F.cosine_similarity(e1.to("cuda"), e2.to("cuda"), dim=0)
+        F.cosine_similarity(to_cuda_tenser(e1), to_cuda_tenser(e2), dim=0)
         for e1, e2 in zip(embeddings1, embeddings2)
     ]
     return similarities
@@ -203,5 +213,5 @@ def sigmoid(x):
 
 def cleanup():
     gc.collect()
-    if not is_cpu():
+    if not current_platform.is_cpu():
         torch.cuda.empty_cache()

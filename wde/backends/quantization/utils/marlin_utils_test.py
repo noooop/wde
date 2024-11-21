@@ -4,8 +4,7 @@ from typing import List
 
 import numpy as np
 import torch
-
-from wde.backends.scalar_type import ScalarType
+from vllm.scalar_type import ScalarType
 
 from .marlin_utils import (GPTQ_MARLIN_TILE, marlin_permute_scales,
                            marlin_zero_points)

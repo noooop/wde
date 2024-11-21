@@ -5,8 +5,7 @@ from typing import List
 
 import numpy
 import torch
-
-from wde.backends.scalar_type import ScalarType
+from vllm.scalar_type import ScalarType
 
 from .marlin_utils_test import marlin_weights
 from .quant_utils import gptq_quantize_weights

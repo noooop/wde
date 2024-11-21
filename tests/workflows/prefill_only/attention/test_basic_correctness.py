@@ -2,22 +2,13 @@ import itertools as it
 
 import pytest
 import torch
-import torch.nn.functional as F
 from vllm.utils import STR_DTYPE_TO_TORCH_DTYPE
 
+from tests.tasks.utils import compare_embeddings
 from wde.backends.attention.abstract import AttentionType
 from wde.backends.attention.layer import Attention
 from wde.workflows.prefill_only.backends.attention.selector import (
     AttentionImpls, AttnBackend, _Backend)
-
-
-def compare_embeddings(embeddings1, embeddings2):
-    similarities = [
-        F.cosine_similarity(torch.tensor(e1), torch.tensor(e2), dim=0)
-        for e1, e2 in zip(embeddings1, embeddings2)
-    ]
-    return similarities
-
 
 SEQ_LENS = [1, 2, 3, 5, 7, 11, 13, 17, 19, 23, 29]
 
