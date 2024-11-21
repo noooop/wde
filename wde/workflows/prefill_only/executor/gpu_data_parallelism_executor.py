@@ -56,7 +56,10 @@ class GPUDataParallelismExecutor:
         worker = create_worker(**worker_kwargs)
         worker.init_device()
         worker.load_model()
-        executor = FrierenExecutor(worker)
+        executor = FrierenExecutor(
+            worker,
+            max_workers=self.engine_config.max_workers_config.
+            frieren_executor_max_workers)
 
         if self.engine_config.scheduler_config.scheduling == "double_buffer":
             execute_loop = executor.double_buffer_execute_loop

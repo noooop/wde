@@ -27,7 +27,10 @@ class GPUExecutor:
         self.workflow = workflow
         self.attn_backend = attn_backend
         self._init_executor()
-        self.executor = FrierenExecutor(self.worker)
+        self.executor = FrierenExecutor(
+            self.worker,
+            max_workers=engine_config.max_workers_config.
+            frieren_executor_max_workers)
 
     @classmethod
     def from_engine(cls, engine: LLMEngine):

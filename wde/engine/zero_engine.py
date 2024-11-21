@@ -1,6 +1,5 @@
 import gc
 import inspect
-from concurrent.futures import ThreadPoolExecutor
 
 import torch
 
@@ -25,12 +24,11 @@ logger = init_logger(__name__)
 class ZeroEngine(Z_MethodZeroServer):
 
     def __init__(self, name, engine_args, **kwargs):
-        self.n_threads = engine_args.pop("n_threads", 4)
         self.return_metrics = engine_args.pop("return_metrics", None)
         self.default_options = engine_args.pop("default_options", {})
         self.engine_args = engine_args
         self.engine = GeventLLMEngine(**self.engine_args)
-        self.threads = ThreadPoolExecutor(self.n_threads)
+        self.threadpool = self.engine.threadpool
 
         Z_MethodZeroServer.__init__(
             self,
@@ -38,8 +36,8 @@ class ZeroEngine(Z_MethodZeroServer):
             protocol=self.engine.engine.workflow.protocol,
             port=None,
             do_register=True,
-            pool_size=self.engine.engine.engine_config.scheduler_config.
-            max_num_requests * 4,
+            pool_size=self.engine.engine.engine_config.max_workers_config.
+            zero_server_pool_size,
             **kwargs)
 
     def init(self):
@@ -129,8 +127,8 @@ class ZeroEngine(Z_MethodZeroServer):
                                     prompt_token_ids=prompt_token_ids)
             return inputs
 
-        f = self.threads.submit(apply_chat_template, request.messages,
-                                request.tools)
+        f = self.threadpool.submit(apply_chat_template, request.messages,
+                                   request.tools)
 
         inputs = f.result()
         generator = self.engine.generate(inputs=inputs,

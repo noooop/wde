@@ -13,9 +13,10 @@ from wde.workflows.core.worker import WorkerBase
 
 class FrierenExecutor:
 
-    def __init__(self, worker: WorkerBase):
+    def __init__(self, worker: WorkerBase, max_workers=1):
         self.stream_pool = Queue()
         self.worker = worker
+        self.max_workers = max_workers
 
     def get_stream(self):
         if self.stream_pool.empty():
@@ -60,7 +61,7 @@ class FrierenExecutor:
             executor_out.put(e)
 
     def async_execute_loop(self, executor_in: Queue, executor_out: Queue):
-        thread = ThreadPoolExecutor(1)
+        thread = ThreadPoolExecutor(self.max_workers)
 
         # Is there a better way to do it asynchronously?
         def _put(stream, scheduler_output, execute_output):
@@ -96,7 +97,7 @@ class FrierenExecutor:
                                    executor_out: Queue):
         from wde.workflows.core.schema.engine_io import SchedulerOutput
         worker = self.worker
-        thread = ThreadPoolExecutor(1)
+        thread = ThreadPoolExecutor(self.max_workers)
 
         @dataclass
         class Task:

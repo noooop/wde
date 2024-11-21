@@ -5,7 +5,8 @@ from typing import Dict, Iterable, List, Optional, Type, Union
 from wde.logger import init_logger
 from wde.workflows.core.arg_utils import EngineArgs
 from wde.workflows.core.config import EngineConfig
-from wde.workflows.core.schema.engine_io import Inputs, Params, RequestOutput
+from wde.workflows.core.schema.engine_io import (Inputs, Params, RequestOutput,
+                                                 SchedulableRequest)
 from wde.workflows.core.workflow import Workflow
 
 logger = init_logger(__name__)
@@ -108,10 +109,24 @@ class LLMEngine:
                     inputs: Optional[Union[str, Inputs]] = None,
                     params: Optional[Params] = None,
                     arrival_time: Optional[float] = None) -> None:
+        # The raised ValidationError will be passed to the upper call stack
         request = self.input_processor(request_id, inputs, params,
                                        arrival_time)
 
-        # The raised ValidationError will be passed to the upper call stack
+        self.add_request_raw(request)
+
+    def preprocessing(
+            self,
+            request_id: str,
+            inputs: Optional[Union[str, Inputs]] = None,
+            params: Optional[Params] = None,
+            arrival_time: Optional[float] = None) -> SchedulableRequest:
+        request = self.input_processor(request_id, inputs, params,
+                                       arrival_time)
+        schedulable_request = self.request_processor(request)
+        return schedulable_request
+
+    def add_request_raw(self, request):
         self.scheduler.add_request(request)
 
     def abort_request(self, request_id: Union[str, Iterable[str]]) -> None:
@@ -150,8 +165,11 @@ class LLMEngine:
         self._record_latency(request_outputs)
         return request_outputs
 
-    def async_step(self) -> List[RequestOutput]:
+    def ensure_start_execute_loop(self):
         self.executor.ensure_start_execute_loop()
+
+    def async_step(self) -> List[RequestOutput]:
+        self.ensure_start_execute_loop()
         self._put_as_many_as_possible()
 
         if self.num_on_the_fly == 0:
@@ -218,3 +236,6 @@ class LLMEngine:
         # Use getattr since __init__ can fail before the field is set
         if executor := getattr(self, "executor", None):
             executor.shutdown_execute_loop()
+
+    def shutdown_execute_loop(self):
+        self.engine.executor.shutdown_execute_loop()

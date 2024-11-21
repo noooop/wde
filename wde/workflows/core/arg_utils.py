@@ -3,7 +3,7 @@ from typing import List, Optional, Union
 
 from wde.logger import init_logger
 from wde.workflows.core.config import (DeviceConfig, EngineConfig, LoadConfig,
-                                       ModelConfig)
+                                       MaxWorkersConfig, ModelConfig)
 
 logger = init_logger(__name__)
 
@@ -43,6 +43,11 @@ class EngineArgs:
 
     device: str = 'auto'
 
+    max_num_requests: int = 16
+    gevent_engine_threadpool_size: int = None
+    frieren_executor_max_workers: int = 1
+    zero_server_pool_size: int = None
+
     def create_engine_config(self):
         device_config = DeviceConfig(device=self.device)
         model_config = ModelConfig(
@@ -69,9 +74,16 @@ class EngineArgs:
             ignore_patterns=self.ignore_patterns,
         )
 
+        max_workers_config = MaxWorkersConfig(
+            max_num_requests=self.max_num_requests,
+            gevent_engine_threadpool_size=self.gevent_engine_threadpool_size,
+            frieren_executor_max_workers=self.frieren_executor_max_workers,
+            zero_server_pool_size=self.zero_server_pool_size)
+
         return EngineConfig(model_config=model_config,
                             device_config=device_config,
-                            load_config=load_config)
+                            load_config=load_config,
+                            max_workers_config=max_workers_config)
 
     def to_dict(self):
         return dict(

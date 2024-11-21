@@ -91,9 +91,11 @@ class DecodingEngineArgs(EngineArgs):
             max_num_on_the_fly=self.max_num_on_the_fly,
             scheduling=self.scheduling)
 
-        return DecodingEngineConfig(model_config=model_config,
-                                    cache_config=cache_config,
-                                    scheduler_config=scheduler_config,
-                                    device_config=engine_config.device_config,
-                                    load_config=engine_config.load_config,
-                                    parallel_config=None)
+        return DecodingEngineConfig(
+            model_config=model_config,
+            cache_config=cache_config,
+            scheduler_config=scheduler_config,
+            device_config=engine_config.device_config,
+            load_config=engine_config.load_config,
+            max_workers_config=engine_config.max_workers_config,
+            parallel_config=None)

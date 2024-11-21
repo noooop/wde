@@ -54,4 +54,5 @@ class EncodeOnlyEngineArgs(EngineArgs):
             scheduler_config=scheduler_config,
             device_config=engine_config.device_config,
             load_config=engine_config.load_config,
+            max_workers_config=engine_config.max_workers_config,
             parallel_config=parallel_config)

@@ -18,6 +18,7 @@ class ZeroManager(Z_MethodZeroServer):
         super().__init__(name=name, port=None, do_register=True, **kwargs)
         self._engines = None
         self.server_class = server_class
+        self.executor = ThreadPoolExecutor(1)
 
     def init(self):
         self._engines = {}
@@ -49,9 +50,7 @@ class ZeroManager(Z_MethodZeroServer):
         engine = ZeroServerProcess(server_class, kwargs.engine_kwargs)
         self._engines[kwargs.name] = engine
 
-        with ThreadPoolExecutor(1) as executor:
-            f = executor.submit(engine.start)
-            f.result()
+        self.executor.submit(engine.start).result()
 
         rep = ZeroServerResponseOk(msg={"already_started": False})
         self.zero_send(req, rep)

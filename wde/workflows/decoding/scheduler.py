@@ -263,14 +263,6 @@ class DecodingScheduler(Scheduler):
 
             if not isinstance(request, DecodingSchedulableRequest):
                 request = self.request_processor(request)
-                seq_group = request.seq_group
-
-                request = DecodingSchedulableRequest(
-                    request_id=seq_group.request_id,
-                    seq_group=seq_group,
-                    token_chunk_size=0,
-                    metrics=request.metrics)
-
                 waiting_queue[0] = request
 
             seq_group = request.seq_group

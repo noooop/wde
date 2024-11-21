@@ -491,6 +491,35 @@ class ParallelConfig:
     pass
 
 
+class MaxWorkersConfig:
+
+    def __init__(
+        self,
+        max_num_requests: int,
+        gevent_engine_threadpool_size: int = None,
+        frieren_executor_max_workers: int = 1,
+        zero_server_pool_size: int = None,
+    ):
+        self.gevent_engine_threadpool_size = gevent_engine_threadpool_size or 4
+        self.frieren_executor_max_workers = frieren_executor_max_workers
+        self.zero_server_pool_size = zero_server_pool_size or max_num_requests * 4
+
+        self._verify_args()
+
+    def _verify_args(self):
+        if self.gevent_engine_threadpool_size <= 0:
+            raise RuntimeError(
+                "gevent_engine_threadpool_size Must be greater than 0.")
+
+        if self.frieren_executor_max_workers <= 0:
+            raise RuntimeError(
+                "gevent_engine_threadpool_size Must be greater than 0.")
+
+        if self.zero_server_pool_size <= 0:
+            raise RuntimeError(
+                "gevent_engine_threadpool_size Must be greater than 0.")
+
+
 _STR_DTYPE_TO_TORCH_DTYPE = {
     "half": torch.float16,
     "float16": torch.float16,
@@ -685,6 +714,7 @@ class EngineConfig:
     model_config: ModelConfig
     device_config: DeviceConfig
     load_config: LoadConfig
+    max_workers_config: MaxWorkersConfig
     scheduler_config: Optional[SchedulerConfig] = None
     parallel_config: Optional[ParallelConfig] = None
 

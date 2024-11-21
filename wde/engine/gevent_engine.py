@@ -10,13 +10,14 @@ from typing import Dict, Iterator, Optional, Sequence, Union
 from gevent import Greenlet
 from gevent.event import Event
 from gevent.queue import Queue
+from gevent.threadpool import ThreadPoolExecutor
 
-from wde import SamplingParams
 from wde.logger import init_logger
 from wde.tasks.reranker.schema.engine_io import RerankerInputs
 from wde.workflows.core.llm_engine import LLMEngine
 from wde.workflows.core.schema.engine_io import (Inputs, Params, PromptInputs,
                                                  RequestOutput)
+from wde.workflows.decoding import SamplingParams
 
 logger = init_logger(__name__)
 
@@ -74,9 +75,17 @@ class GeventLLMEngine:
 
         assert self.engine.use_async_scheduling
 
+        self.threadpool = ThreadPoolExecutor(
+            self.engine.engine_config.max_workers_config.
+            gevent_engine_threadpool_size)
+
         self.background_loop = None
         self._new_requests_event = Event()
         self._request_streams: Dict[str, GeventStream] = {}
+
+    @property
+    def engine_config(self):
+        return self.engine.engine_config
 
     @property
     def info(self):
@@ -135,6 +144,30 @@ class GeventLLMEngine:
         stream = GeventStream(request_id)
         self._request_streams[request_id] = stream
         self._new_requests_event.set()
+        return stream
+
+    def add_request_threadpool(
+        self,
+        request_id: str,
+        inputs: PromptInputs,
+        params: Params,
+        arrival_time: Optional[float] = None,
+    ):
+        self.ensure_start_execute_loop()
+        stream = GeventStream(request_id)
+
+        def _add_request(request):
+            self._request_streams[request_id] = stream
+            self._new_requests_event.set()
+            self.engine.add_request_raw(request.value)
+
+        f = self.threadpool.submit(self.engine.preprocessing,
+                                   request_id=request_id,
+                                   inputs=inputs,
+                                   params=params,
+                                   arrival_time=arrival_time)
+
+        f.add_done_callback(_add_request)
         return stream
 
     def encode(
