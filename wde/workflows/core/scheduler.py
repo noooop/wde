@@ -1,9 +1,9 @@
 from abc import ABC, abstractmethod
 from collections import deque
-from typing import Deque, Iterable, List, Set, Union
+from typing import Deque, Iterable, List, Optional, Set, Union
 
 from wde.logger import init_logger
-from wde.workflows.core.config import SchedulerConfig
+from wde.workflows.core.config import EngineConfig
 from wde.workflows.core.processor.input_processor import RequestProcessor
 from wde.workflows.core.schema.engine_io import (Request, RequestOutput,
                                                  SchedulerOutput)
@@ -16,10 +16,12 @@ class Scheduler(ABC):
 
     def __init__(
         self,
-        scheduler_config: SchedulerConfig,
-        request_processor: RequestProcessor,
+        engine_config: Optional[EngineConfig],
+        request_processor: Optional[RequestProcessor],
     ) -> None:
-        self.scheduler_config = scheduler_config
+        self.engine_config = engine_config
+        self.scheduler_config = getattr(engine_config, "scheduler_config",
+                                        None)
         self.request_processor = request_processor
 
         self.waiting: Deque[Request] = deque()

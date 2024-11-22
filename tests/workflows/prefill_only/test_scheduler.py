@@ -1,5 +1,8 @@
+from dataclasses import dataclass, field
+
 import pytest
 
+from wde.workflows.core.config import SYSConfig
 from wde.workflows.core.processor.input_processor import (Request,
                                                           RequestProcessor)
 from wde.workflows.core.schema.engine_io import (RequestOutput, TextOnlyInputs,
@@ -18,12 +21,17 @@ class RequestProcessor4Test(RequestProcessor):
         schedulable_request = TextSchedulableRequest(
             request_id=request.request_id,
             inputs=TextOnlyInputs(prompt_token_ids=[0] * self.num_new_tokens),
-        )
-        schedulable_request.metrics.arrival_ts = request.arrival_time
+            arrival_time=request.arrival_time)
         return schedulable_request
 
     def from_engine(cls, engine):
         pass
+
+
+@dataclass
+class EngineConfig4Test:
+    scheduler_config: SchedulerConfig
+    sys_config: SYSConfig = field(default_factory=SYSConfig)
 
 
 @pytest.mark.parametrize("num_new_tokens", [9, 99, 199])
@@ -33,11 +41,14 @@ def test_limited_by_max_num_requests(n_request: int, num_new_tokens: int,
                                      max_num_requests: int):
     max_model_len = num_new_tokens + 1
 
-    scheduler = PrefillOnlyScheduler(
+    engine_config = EngineConfig4Test(
         scheduler_config=SchedulerConfig(max_num_batched_tokens=max_model_len *
                                          max_num_requests,
                                          max_model_len=max_model_len,
-                                         max_num_requests=max_num_requests),
+                                         max_num_requests=max_num_requests))
+
+    scheduler = PrefillOnlyScheduler(
+        engine_config=engine_config,
         request_processor=RequestProcessor4Test(num_new_tokens=num_new_tokens))
 
     for i in range(1, n_request + 1):
@@ -65,12 +76,14 @@ def test_limited_by_max_num_requests(n_request: int, num_new_tokens: int,
 @pytest.mark.parametrize("max_num_requests", [2, 3, 5, 7])
 def test_limited_by_token_budget(n_request: int, num_new_tokens: int,
                                  max_num_requests: int):
-    scheduler = PrefillOnlyScheduler(scheduler_config=SchedulerConfig(
+    engine_config = EngineConfig4Test(scheduler_config=SchedulerConfig(
         max_model_len=num_new_tokens + 1,
         max_num_requests=max_num_requests,
-        max_num_batched_tokens=(num_new_tokens + 1) * (max_num_requests - 1)),
-                                     request_processor=RequestProcessor4Test(
-                                         num_new_tokens=num_new_tokens))
+        max_num_batched_tokens=(num_new_tokens + 1) * (max_num_requests - 1)))
+
+    scheduler = PrefillOnlyScheduler(
+        engine_config=engine_config,
+        request_processor=RequestProcessor4Test(num_new_tokens=num_new_tokens))
 
     for i in range(1, n_request + 1):
         scheduler.add_request(Request(request_id=str(i), arrival_time=0.))
@@ -105,11 +118,14 @@ def test_ignored_requests(n_request: int, num_new_tokens: int,
                           max_num_requests: int):
     max_model_len = num_new_tokens // 2
 
-    scheduler = PrefillOnlyScheduler(
+    engine_config = EngineConfig4Test(
         scheduler_config=SchedulerConfig(max_num_batched_tokens=max_model_len *
                                          max_num_requests,
                                          max_model_len=max_model_len,
-                                         max_num_requests=max_num_requests),
+                                         max_num_requests=max_num_requests))
+
+    scheduler = PrefillOnlyScheduler(
+        engine_config=engine_config,
         request_processor=RequestProcessor4Test(num_new_tokens=num_new_tokens))
 
     for i in range(1, n_request + 1):

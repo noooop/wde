@@ -3,19 +3,14 @@ from typing import List, Optional, Union
 
 from wde.logger import init_logger
 from wde.workflows.core.config import (DeviceConfig, EngineConfig, LoadConfig,
-                                       MaxWorkersConfig, ModelConfig)
+                                       ModelConfig, SYSConfig)
 
 logger = init_logger(__name__)
 
 
-def nullable_str(val: str):
-    if not val or val == "None":
-        return None
-    return val
-
-
 @dataclass
 class EngineArgs:
+    # model_config
     model: str
     served_model_name: Optional[Union[List[str]]] = None
     tokenizer: Optional[str] = None
@@ -41,12 +36,17 @@ class EngineArgs:
     disable_sliding_window: bool = False
     max_model_len: Optional[int] = None
 
+    # device_config
     device: str = 'auto'
 
+    # scheduler_config
     max_num_requests: int = 16
+
+    # sys_config
     gevent_engine_threadpool_size: int = None
     frieren_executor_max_workers: int = 1
     zero_server_pool_size: int = None
+    record_metrics: bool = False
 
     def create_engine_config(self):
         device_config = DeviceConfig(device=self.device)
@@ -74,16 +74,17 @@ class EngineArgs:
             ignore_patterns=self.ignore_patterns,
         )
 
-        max_workers_config = MaxWorkersConfig(
+        sys_config = SYSConfig(
             max_num_requests=self.max_num_requests,
             gevent_engine_threadpool_size=self.gevent_engine_threadpool_size,
             frieren_executor_max_workers=self.frieren_executor_max_workers,
-            zero_server_pool_size=self.zero_server_pool_size)
+            zero_server_pool_size=self.zero_server_pool_size,
+            record_metrics=self.record_metrics)
 
         return EngineConfig(model_config=model_config,
                             device_config=device_config,
                             load_config=load_config,
-                            max_workers_config=max_workers_config)
+                            sys_config=sys_config)
 
     def to_dict(self):
         return dict(

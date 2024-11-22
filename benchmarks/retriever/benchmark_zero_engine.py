@@ -23,7 +23,7 @@ def benchmark(args):
         "max_num_requests": args.max_num_requests,
         "scheduling": args.scheduling,
         "waiting": args.waiting,
-        "return_metrics": True
+        "record_metrics": args.record_metrics
     }
 
     server = start_zero_engine(engine_args)
@@ -63,32 +63,40 @@ def benchmark(args):
 
         end = time.perf_counter()
         elapsed_time = end - start
-        waiting_time = np.mean([m.waiting_time for m in metrics_list])
-        scheduling_time = np.mean([m.scheduling_time for m in metrics_list])
-        num_requests = np.mean([m.num_requests for m in metrics_list])
-        num_batched_tokens = np.mean(
-            [m.num_batched_tokens for m in metrics_list])
 
-        scheduling2inference = np.mean(
-            [m.scheduling2inference for m in metrics_list])
-        inference_time = np.mean([m.inference_time for m in metrics_list])
-        latency = np.mean([m.latency for m in metrics_list])
         e2e = np.mean([m.e2e for m in metrics_list])
 
-        overhead = e2e - latency - waiting_time
+        if not args.record_metrics:
+            print(f"n_works {n_works}, Throughput: "
+                  f"{len(requests) / elapsed_time:.4f} requests/s, "
+                  f"E2E {e2e * 1000:0.4f} ms.")
+        else:
+            waiting_time = np.mean([m.waiting_time for m in metrics_list])
+            scheduling_time = np.mean(
+                [m.scheduling_time for m in metrics_list])
+            num_requests = np.mean([m.num_requests for m in metrics_list])
+            num_batched_tokens = np.mean(
+                [m.num_batched_tokens for m in metrics_list])
 
-        print(
-            f"n_works {n_works}, Throughput: "
-            f"{len(requests) / elapsed_time:.4f} requests/s, "
-            f"Scheduling time {scheduling_time * 1000:0.4f} ms, "
-            f"Num requests {num_requests:.2f}, ",
-            f"Num batched tokens {num_batched_tokens:.2f}, ",
-            f"Scheduling2inference {scheduling2inference * 1000:0.4f} ms, "
-            f"Inference time {inference_time * 1000:0.4f} ms, "
-            f"Waiting time {waiting_time * 1000:0.4f} ms, "
-            f"Latency {latency * 1000:0.4f} ms, "
-            f"E2E {e2e * 1000:0.4f} ms, "
-            f"Overhead {overhead * 1000:0.4f} ms.")
+            scheduling2inference = np.mean(
+                [m.scheduling2inference for m in metrics_list])
+            inference_time = np.mean([m.inference_time for m in metrics_list])
+            latency = np.mean([m.latency for m in metrics_list])
+
+            overhead = e2e - latency - waiting_time
+
+            print(
+                f"n_works {n_works}, Throughput: "
+                f"{len(requests) / elapsed_time:.4f} requests/s, "
+                f"Scheduling time {scheduling_time * 1000:0.4f} ms, "
+                f"Num requests {num_requests:.2f}, ",
+                f"Num batched tokens {num_batched_tokens:.2f}, ",
+                f"Scheduling2inference {scheduling2inference * 1000:0.4f} ms, "
+                f"Inference time {inference_time * 1000:0.4f} ms, "
+                f"Waiting time {waiting_time * 1000:0.4f} ms, "
+                f"Latency {latency * 1000:0.4f} ms, "
+                f"E2E {e2e * 1000:0.4f} ms, "
+                f"Overhead {overhead * 1000:0.4f} ms.")
 
     server.terminate()
 
@@ -108,6 +116,7 @@ if __name__ == '__main__':
 
     args.n_works_list = [1, 2, 4, 8, 16, 32, 64, 128]
     args.waiting = None
+    args.record_metrics = True
 
     for max_num_requests in [8, 16]:
         print("max_num_requests:", max_num_requests)

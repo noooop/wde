@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import List, Optional, Union
+from typing import Optional
 
 from wde.logger import init_logger
 from wde.workflows.core.arg_utils import EngineArgs
@@ -19,28 +19,24 @@ def nullable_str(val: str):
 
 @dataclass
 class DecodingEngineArgs(EngineArgs):
+    # model_config
     kv_cache_dtype: str = 'auto'
-    max_model_len: Optional[int] = None
+    max_logprobs: int = 20  # Default value for OpenAI Chat Completions API
 
+    # cache_config
     block_size: int = 16
     enable_prefix_caching: bool = False
-    disable_sliding_window: bool = False
-
     swap_space: int = 4  # GiB
     cpu_offload_gb: int = 0  # GiB
     gpu_memory_utilization: float = 0.90
+    num_gpu_blocks_override: Optional[int] = None
+
+    # scheduler_config
     max_num_batched_tokens: Optional[int] = None
     max_num_requests: int = 256
-    max_logprobs: int = 20  # Default value for OpenAI Chat Completions API
-
     max_num_on_the_fly: Optional[int] = None
     scheduling: str = "async"
     preemption_mode: Optional[str] = None
-
-    device: str = 'auto'
-    num_gpu_blocks_override: Optional[int] = None
-    model_loader_extra_config: Optional[dict] = None
-    ignore_patterns: Optional[Union[str, List[str]]] = None
 
     def __post_init__(self):
         if self.tokenizer is None:
@@ -91,11 +87,10 @@ class DecodingEngineArgs(EngineArgs):
             max_num_on_the_fly=self.max_num_on_the_fly,
             scheduling=self.scheduling)
 
-        return DecodingEngineConfig(
-            model_config=model_config,
-            cache_config=cache_config,
-            scheduler_config=scheduler_config,
-            device_config=engine_config.device_config,
-            load_config=engine_config.load_config,
-            max_workers_config=engine_config.max_workers_config,
-            parallel_config=None)
+        return DecodingEngineConfig(model_config=model_config,
+                                    cache_config=cache_config,
+                                    scheduler_config=scheduler_config,
+                                    device_config=engine_config.device_config,
+                                    load_config=engine_config.load_config,
+                                    sys_config=engine_config.sys_config,
+                                    parallel_config=None)

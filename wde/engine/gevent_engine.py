@@ -76,8 +76,7 @@ class GeventLLMEngine:
         assert self.engine.use_async_scheduling
 
         self.threadpool = ThreadPoolExecutor(
-            self.engine.engine_config.max_workers_config.
-            gevent_engine_threadpool_size)
+            self.engine.engine_config.sys_config.gevent_engine_threadpool_size)
 
         self.background_loop = None
         self._new_requests_event = Event()

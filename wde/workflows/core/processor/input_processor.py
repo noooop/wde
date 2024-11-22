@@ -95,8 +95,14 @@ class RequestProcessor(ABC):
 
 class TextRequestProcessor(RequestProcessor):
 
-    def __init__(self, tokenizer: Tokenizer):
+    def __init__(self, tokenizer: Tokenizer, record_metrics=False):
         self.tokenizer = tokenizer
+        self.record_metrics = record_metrics
+
+    @classmethod
+    def from_engine(cls, engine):
+        return cls(engine.tokenizer,
+                   engine.engine_config.sys_config.record_metrics)
 
     def __call__(self, request: Request) -> TextSchedulableRequest:
         assert isinstance(request, TextRequest)
@@ -112,15 +118,17 @@ class TextRequestProcessor(RequestProcessor):
         else:
             prompt_token_ids = inputs["prompt_token_ids"]
 
+        if self.record_metrics:
+            metrics = RequestMetrics(arrival_ts=request.arrival_time)
+        else:
+            metrics = None
+
         schedulable_request = TextSchedulableRequest(
             request_id=request.request_id,
             inputs=TextOnlyInputs(prompt_token_ids=prompt_token_ids,
                                   prompt=inputs.get("prompt")),
             params=request.params,
-            metrics=RequestMetrics(arrival_ts=request.arrival_time))
+            arrival_time=request.arrival_time,
+            metrics=metrics)
 
         return schedulable_request
-
-    @classmethod
-    def from_engine(cls, engine):
-        return cls(engine.tokenizer)

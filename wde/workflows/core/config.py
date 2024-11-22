@@ -491,18 +491,18 @@ class ParallelConfig:
     pass
 
 
-class MaxWorkersConfig:
+class SYSConfig:
 
-    def __init__(
-        self,
-        max_num_requests: int,
-        gevent_engine_threadpool_size: int = None,
-        frieren_executor_max_workers: int = 1,
-        zero_server_pool_size: int = None,
-    ):
+    def __init__(self,
+                 max_num_requests: int = 1,
+                 gevent_engine_threadpool_size: int = None,
+                 frieren_executor_max_workers: int = 1,
+                 zero_server_pool_size: int = None,
+                 record_metrics: bool = False):
         self.gevent_engine_threadpool_size = gevent_engine_threadpool_size or 4
         self.frieren_executor_max_workers = frieren_executor_max_workers
         self.zero_server_pool_size = zero_server_pool_size or max_num_requests * 4
+        self.record_metrics = record_metrics
 
         self._verify_args()
 
@@ -714,7 +714,7 @@ class EngineConfig:
     model_config: ModelConfig
     device_config: DeviceConfig
     load_config: LoadConfig
-    max_workers_config: MaxWorkersConfig
+    sys_config: SYSConfig
     scheduler_config: Optional[SchedulerConfig] = None
     parallel_config: Optional[ParallelConfig] = None
 

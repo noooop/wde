@@ -1,7 +1,8 @@
 from dataclasses import dataclass
 from typing import List, Optional, Sequence, Union
 
-from wde.workflows.core.schema.engine_io import Inputs, Request, RequestOutput
+from wde.workflows.core.schema.engine_io import (Inputs, Params, Request,
+                                                 RequestOutput)
 
 
 @dataclass
@@ -16,6 +17,7 @@ RerankerInputs = Union[Sequence, Pairs]
 @dataclass
 class RerankerRequest(Request):
     inputs: Pairs
+    params: Optional[Params] = None
 
 
 @dataclass

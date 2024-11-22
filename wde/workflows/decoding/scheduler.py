@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from typing import Deque, Dict, List, Optional, Set, Tuple
 
 from wde.logger import init_logger
+from wde.workflows.core.config import EngineConfig
 from wde.workflows.core.processor.input_processor import RequestProcessor
 from wde.workflows.core.scheduler import Scheduler
 from wde.workflows.core.schema.engine_io import RequestOutput
@@ -15,7 +16,6 @@ from wde.workflows.decoding.backends.sequence import (Sequence, SequenceData,
                                                       SequenceGroup,
                                                       SequenceGroupMetadata,
                                                       SequenceStatus)
-from wde.workflows.decoding.config import CacheConfig, DecodingSchedulerConfig
 from wde.workflows.decoding.schema.engine_io import (
     DecodingSchedulableRequest, DecodingSchedulerOutput)
 
@@ -137,18 +137,16 @@ class DecodingScheduler(Scheduler):
 
     def __init__(
         self,
-        scheduler_config: DecodingSchedulerConfig,
-        cache_config: CacheConfig,
+        engine_config: EngineConfig,
         request_processor: RequestProcessor,
     ) -> None:
-        super().__init__(scheduler_config, request_processor)
-
-        self.cache_config = cache_config
+        super().__init__(engine_config, request_processor)
+        self.cache_config = engine_config.cache_config
 
         BlockSpaceManagerImpl = SelfAttnBlockSpaceManager
 
-        num_gpu_blocks = cache_config.num_gpu_blocks
-        num_cpu_blocks = cache_config.num_cpu_blocks
+        num_gpu_blocks = self.cache_config.num_gpu_blocks
+        num_cpu_blocks = self.cache_config.num_cpu_blocks
 
         self.block_manager = BlockSpaceManagerImpl(
             block_size=self.cache_config.block_size,
@@ -159,13 +157,13 @@ class DecodingScheduler(Scheduler):
 
         self.running: Deque[DecodingSchedulableRequest] = deque()
         self.swapped: Deque[DecodingSchedulableRequest] = deque()
-        self.preemption_mode = scheduler_config.preemption_mode
+        self.preemption_mode = self.scheduler_config.preemption_mode
         self.num_cumulative_preemption: int = 0
+        self.record_metrics = engine_config.sys_config.record_metrics
 
     @classmethod
     def from_engine(cls, engine):
-        return cls(engine.engine_config.scheduler_config,
-                   engine.engine_config.cache_config, engine.request_processor)
+        return cls(engine.engine_config, engine.request_processor)
 
     def _schedule_swapped(
         self,
@@ -183,7 +181,8 @@ class DecodingScheduler(Scheduler):
 
         while swapped_queue:
             request = swapped_queue[0]
-            scheduled_ts = time.perf_counter()
+            if self.record_metrics:
+                scheduled_ts = time.perf_counter()
 
             if request.request_id in self.aborted_requests:
                 self.actual_abort_request(request.request_id)
@@ -218,7 +217,9 @@ class DecodingScheduler(Scheduler):
                                                num_new_seqs=num_new_seqs)):
                 break
 
-            request.set_scheduled_ts(scheduled_ts)
+            if self.record_metrics:
+                request.set_scheduled_ts(scheduled_ts)
+
             swapped_queue.popleft()
 
             self._swap_in(seq_group, blocks_to_swap_in)
@@ -254,7 +255,9 @@ class DecodingScheduler(Scheduler):
         waiting_queue = self.waiting
         while waiting_queue:
             request = waiting_queue[0]
-            scheduled_ts = time.perf_counter()
+
+            if self.record_metrics:
+                scheduled_ts = time.perf_counter()
 
             if request.request_id in self.aborted_requests:
                 self.actual_abort_request(request.request_id)
@@ -314,7 +317,8 @@ class DecodingScheduler(Scheduler):
             waiting_queue.popleft()
             self._allocate_and_set_running(seq_group)
 
-            request.set_scheduled_ts(scheduled_ts)
+            if self.record_metrics:
+                request.set_scheduled_ts(scheduled_ts)
 
             request.token_chunk_size = num_new_tokens
             scheduled_requests.append(request)
@@ -347,8 +351,7 @@ class DecodingScheduler(Scheduler):
             return SchedulerRunningOutputs.create_empty()
 
         running_queue = deque(
-            sorted(running_queue,
-                   key=lambda request: request.metrics.arrival_ts))
+            sorted(running_queue, key=lambda request: request.arrival_time))
 
         blocks_to_swap_out: List[Tuple[int, int]] = []
         blocks_to_copy: List[Tuple[int, int]] = []
@@ -360,7 +363,8 @@ class DecodingScheduler(Scheduler):
 
         while running_queue:
             request = running_queue[0]
-            scheduled_ts = time.perf_counter()
+            if self.record_metrics:
+                scheduled_ts = time.perf_counter()
 
             seq_group = request.seq_group
 
@@ -372,7 +376,9 @@ class DecodingScheduler(Scheduler):
                 break
 
             running_queue.popleft()
-            request.set_scheduled_ts(scheduled_ts)
+
+            if self.record_metrics:
+                request.set_scheduled_ts(scheduled_ts)
 
             while not self._can_append_slots(seq_group):
                 budget.subtract_num_batched_tokens(seq_group.request_id,
@@ -497,7 +503,8 @@ class DecodingScheduler(Scheduler):
         )
 
     def schedule(self) -> Optional[DecodingSchedulerOutput]:
-        scheduling_begin_ts = time.perf_counter()
+        if self.record_metrics:
+            scheduling_begin_ts = time.perf_counter()
 
         scheduler_outputs = self._schedule()
         now = time.time()
@@ -550,15 +557,15 @@ class DecodingScheduler(Scheduler):
                 scheduled_seq_group.token_chunk_size)
 
         scheduler_outputs.seq_group_metadata_list = seq_group_metadata_list
-
-        scheduling_end_ts = time.perf_counter()
-        scheduling_time = scheduling_end_ts - scheduling_begin_ts
-        num_requests = len(scheduler_outputs.scheduled_requests)
-        num_batched_tokens = scheduler_outputs.num_batched_tokens
-        for request in scheduler_outputs.scheduled_requests:
-            request.metrics.scheduling_time = scheduling_time
-            request.metrics.num_requests = num_requests
-            request.metrics.num_batched_tokens = num_batched_tokens
+        if self.record_metrics:
+            scheduling_end_ts = time.perf_counter()
+            scheduling_time = scheduling_end_ts - scheduling_begin_ts
+            num_requests = len(scheduler_outputs.scheduled_requests)
+            num_batched_tokens = scheduler_outputs.num_batched_tokens
+            for request in scheduler_outputs.scheduled_requests:
+                request.metrics.scheduling_time = scheduling_time
+                request.metrics.num_requests = num_requests
+                request.metrics.num_batched_tokens = num_batched_tokens
 
         return scheduler_outputs
 

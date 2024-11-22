@@ -13,10 +13,21 @@ from wde.workflows.core.worker import WorkerBase
 
 class FrierenExecutor:
 
-    def __init__(self, worker: WorkerBase, max_workers=1):
+    def __init__(self,
+                 worker: WorkerBase,
+                 max_workers=1,
+                 record_metrics=False):
         self.stream_pool = Queue()
         self.worker = worker
         self.max_workers = max_workers
+        self.record_metrics = record_metrics
+
+    @classmethod
+    def from_engine_config(cls, engine_config, worker: WorkerBase):
+        return cls(
+            worker=worker,
+            max_workers=engine_config.sys_config.frieren_executor_max_workers,
+            record_metrics=engine_config.sys_config.record_metrics)
 
     def get_stream(self):
         if self.stream_pool.empty():
@@ -29,7 +40,8 @@ class FrierenExecutor:
         return self.stream_pool.put(stream)
 
     def execute_model(self, execute_input: ExecuteInput) -> ExecuteOutput:
-        inference_begin_ts = time.perf_counter()
+        if self.record_metrics:
+            inference_begin_ts = time.perf_counter()
 
         stream = self.get_stream()
         with torch.cuda.stream(stream):
@@ -40,10 +52,10 @@ class FrierenExecutor:
         stream.synchronize()
         self.put_stream(stream)
 
-        inference_end_ts = time.perf_counter()
-
-        execute_output.inference_begin_ts = inference_begin_ts
-        execute_output.inference_end_ts = inference_end_ts
+        if self.record_metrics:
+            inference_end_ts = time.perf_counter()
+            execute_output.inference_begin_ts = inference_begin_ts
+            execute_output.inference_end_ts = inference_end_ts
         return execute_output
 
     def simple_async_execute_loop(self, executor_in: Queue,
@@ -67,7 +79,8 @@ class FrierenExecutor:
         def _put(stream, scheduler_output, execute_output):
             stream.synchronize()
             self.put_stream(stream)
-            execute_output.inference_end_ts = time.perf_counter()
+            if self.record_metrics:
+                execute_output.inference_end_ts = time.perf_counter()
             executor_out.put((scheduler_output, execute_output))
 
         try:
@@ -76,7 +89,8 @@ class FrierenExecutor:
                 if o is None:
                     break
 
-                inference_begin_ts = time.perf_counter()
+                if self.record_metrics:
+                    inference_begin_ts = time.perf_counter()
 
                 stream = self.get_stream()
 
@@ -87,7 +101,9 @@ class FrierenExecutor:
                     execute_output = self.worker(execute_input)
                     self.worker.non_blocking_d2h(execute_output)
 
-                execute_output.inference_begin_ts = inference_begin_ts
+                if self.record_metrics:
+                    execute_output.inference_begin_ts = inference_begin_ts
+
                 thread.submit(_put, stream, scheduler_output, execute_output)
         except Exception as e:
             executor_out.put(e)
@@ -98,6 +114,7 @@ class FrierenExecutor:
         from wde.workflows.core.schema.engine_io import SchedulerOutput
         worker = self.worker
         thread = ThreadPoolExecutor(self.max_workers)
+        record_metrics = self.record_metrics
 
         @dataclass
         class Task:
@@ -105,7 +122,7 @@ class FrierenExecutor:
             execute_input: ExecuteInput
             execute_output: Optional[ExecuteOutput]
             stream: torch.cuda.Stream()
-            inference_begin_ts: float
+            inference_begin_ts: Optional[float] = None
 
             @classmethod
             def get(cls, block=True, timeout=None):
@@ -115,18 +132,24 @@ class FrierenExecutor:
 
                 scheduler_output, execute_input = o
 
+                if record_metrics:
+                    inference_begin_ts = time.perf_counter()
+                else:
+                    inference_begin_ts = None
+
                 task = cls(scheduler_output=scheduler_output,
                            execute_input=execute_input,
                            execute_output=None,
                            stream=self.get_stream(),
-                           inference_begin_ts=time.perf_counter())
+                           inference_begin_ts=inference_begin_ts)
                 return task
 
         def _put(task):
             task.stream.synchronize()
             self.put_stream(task.stream)
-            task.execute_output.inference_begin_ts = task.inference_begin_ts
-            task.execute_output.inference_end_ts = time.perf_counter()
+            if record_metrics:
+                task.execute_output.inference_begin_ts = task.inference_begin_ts
+                task.execute_output.inference_end_ts = time.perf_counter()
             executor_out.put((task.scheduler_output, task.execute_output))
 
         def _prefetch():

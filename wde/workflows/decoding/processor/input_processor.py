@@ -42,7 +42,7 @@ class DecodingModelSequenceProcessor:
         """Creates a SequenceGroup with SamplingParams."""
 
         sampling_params = request.params
-        arrival_time = request.metrics.arrival_ts
+        arrival_time = request.arrival_time
 
         block_size = self.block_size
         eos_token_id = self.eos_token_id
@@ -76,11 +76,16 @@ class DecodingModelSequenceProcessor:
 
 class DecodingModelRequestProcessor(TextRequestProcessor):
 
-    def __init__(self, model_config: ModelConfig, cache_config: CacheConfig,
-                 tokenizer: Tokenizer, seq_counter: Counter):
+    def __init__(self,
+                 model_config: ModelConfig,
+                 cache_config: CacheConfig,
+                 tokenizer: Tokenizer,
+                 seq_counter: Counter,
+                 record_metrics=False):
         super().__init__(tokenizer)
         self.sequence_processor = DecodingModelSequenceProcessor(
             model_config, cache_config, tokenizer, seq_counter)
+        self.record_metrics = record_metrics
 
     @classmethod
     def from_engine(cls, engine):
@@ -94,7 +99,13 @@ class DecodingModelRequestProcessor(TextRequestProcessor):
         schedulable_request = TextRequestProcessor.__call__(self, request)
 
         seq_group = self.sequence_processor(schedulable_request)
-        return DecodingSchedulableRequest(
-            request_id=request.request_id,
-            seq_group=seq_group,
-            metrics=RequestMetrics(arrival_ts=request.arrival_time))
+
+        if self.record_metrics:
+            metrics = RequestMetrics(arrival_ts=request.arrival_time)
+        else:
+            metrics = None
+
+        return DecodingSchedulableRequest(request_id=request.request_id,
+                                          seq_group=seq_group,
+                                          arrival_time=request.arrival_time,
+                                          metrics=metrics)

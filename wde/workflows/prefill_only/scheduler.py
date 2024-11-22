@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from typing import Optional, Set, cast
 
 from wde.logger import init_logger
+from wde.workflows.core.config import EngineConfig
 from wde.workflows.core.processor.input_processor import RequestProcessor
 from wde.workflows.core.scheduler import Scheduler
 from wde.workflows.prefill_only.config import PrefillOnlySchedulerConfig
@@ -47,33 +48,37 @@ class PrefillOnlyScheduler(Scheduler):
 
     def __init__(
         self,
-        scheduler_config: PrefillOnlySchedulerConfig,
+        engine_config: EngineConfig,
         request_processor: RequestProcessor,
     ) -> None:
-        super().__init__(scheduler_config, request_processor)
+        super().__init__(engine_config, request_processor)
+        self.record_metrics = engine_config.sys_config.record_metrics
 
     @classmethod
     def from_engine(cls, engine):
-        return cls(engine.engine_config.scheduler_config,
-                   engine.request_processor)
+        return cls(engine.engine_config, engine.request_processor)
 
     def schedule(self) -> Optional[PrefillOnlySchedulerOutput]:
         if not self.waiting:
             return None
 
-        scheduling_begin_ts = time.perf_counter()
+        scheduler_config = cast(PrefillOnlySchedulerConfig,
+                                self.scheduler_config)
+
+        if self.record_metrics:
+            scheduling_begin_ts = time.perf_counter()
 
         budget = PrefillOnlySchedulingBudget(
-            token_budget=self.scheduler_config.max_num_batched_tokens,
-            max_num_requests=self.scheduler_config.max_num_requests,
+            token_budget=scheduler_config.max_num_batched_tokens,
+            max_num_requests=scheduler_config.max_num_requests,
         )
 
-        waiting = self.scheduler_config.waiting
+        waiting = scheduler_config.waiting
         waiting_queue = self.waiting
 
         if waiting is not None:
-            if self.scheduler_config.max_num_requests / 2 < len(
-                    waiting_queue) < self.scheduler_config.max_num_requests:
+            if scheduler_config.max_num_requests / 2 < len(
+                    waiting_queue) < scheduler_config.max_num_requests:
                 time.sleep(waiting)
 
         scheduled_requests = []
@@ -83,7 +88,10 @@ class PrefillOnlyScheduler(Scheduler):
                 break
 
             request = waiting_queue[0]
-            scheduled_ts = time.perf_counter()
+            if self.record_metrics:
+                scheduled_ts = time.perf_counter()
+            else:
+                scheduled_ts = None
 
             if request.request_id in self.aborted_requests:
                 self.actual_abort_request(request.request_id)
@@ -95,15 +103,11 @@ class PrefillOnlyScheduler(Scheduler):
                 waiting_queue[0] = request
 
             request = cast(SchedulableRequest, request)
-
-            request.metrics.scheduled_ts = scheduled_ts
-            request.metrics.waiting_time = request.metrics.scheduled_ts - request.metrics.arrival_ts
-            if request.metrics.first_scheduled_ts is None:
-                request.metrics.first_scheduled_ts = scheduled_ts
+            request.set_scheduled_ts(scheduled_ts)
 
             num_new_tokens = request.num_new_tokens
 
-            if num_new_tokens > self.scheduler_config.max_model_len:
+            if num_new_tokens > scheduler_config.max_model_len:
                 self.requests.remove(request.request_id)
                 waiting_queue.popleft()
                 ignored_requests.append(request)
@@ -117,14 +121,15 @@ class PrefillOnlyScheduler(Scheduler):
 
             scheduled_requests.append(request)
 
-        scheduling_end_ts = time.perf_counter()
-        scheduling_time = scheduling_end_ts - scheduling_begin_ts
-        num_requests = budget.num_curr_request
-        num_batched_tokens = budget.num_batched_tokens
-        for request in scheduled_requests:
-            request.metrics.scheduling_time = scheduling_time
-            request.metrics.num_requests = num_requests
-            request.metrics.num_batched_tokens = num_batched_tokens
+        if self.record_metrics:
+            scheduling_end_ts = time.perf_counter()
+            scheduling_time = scheduling_end_ts - scheduling_begin_ts
+            num_requests = budget.num_curr_request
+            num_batched_tokens = budget.num_batched_tokens
+            for request in scheduled_requests:
+                request.metrics.scheduling_time = scheduling_time
+                request.metrics.num_requests = num_requests
+                request.metrics.num_batched_tokens = num_batched_tokens
 
         return PrefillOnlySchedulerOutput(
             scheduled_requests=scheduled_requests,

@@ -133,19 +133,21 @@ class LLMEngine:
         self.scheduler.abort_request(request_id)
 
     def _record_inference_time(self, scheduler_output, executor_output):
-        inference_time = executor_output.inference_end_ts - executor_output.inference_begin_ts
-        for request in scheduler_output.scheduled_requests:
-            request.metrics.inference_begin_ts = executor_output.inference_begin_ts
-            request.metrics.inference_end_ts = executor_output.inference_end_ts
-            request.metrics.inference_time = inference_time
-            request.metrics.scheduling2inference = executor_output.inference_begin_ts - request.metrics.scheduled_ts
+        if self.engine_config.sys_config.record_metrics:
+            inference_time = executor_output.inference_end_ts - executor_output.inference_begin_ts
+            for request in scheduler_output.scheduled_requests:
+                request.metrics.inference_begin_ts = executor_output.inference_begin_ts
+                request.metrics.inference_end_ts = executor_output.inference_end_ts
+                request.metrics.inference_time = inference_time
+                request.metrics.scheduling2inference = executor_output.inference_begin_ts - request.metrics.scheduled_ts
 
     def _record_latency(self, request_outputs):
-        finish_ts = time.perf_counter()
-        for request in request_outputs:
-            request.metrics.finish_ts = finish_ts
-            request.metrics.latency = finish_ts - request.metrics.scheduled_ts
-            request.metrics.latency_so_far = finish_ts - request.metrics.first_scheduled_ts
+        if self.engine_config.sys_config.record_metrics:
+            finish_ts = time.perf_counter()
+            for request in request_outputs:
+                request.metrics.finish_ts = finish_ts
+                request.metrics.latency = finish_ts - request.metrics.scheduled_ts
+                request.metrics.latency_so_far = finish_ts - request.metrics.first_scheduled_ts
 
     def sync_step(self) -> List[RequestOutput]:
         scheduler_output = self.scheduler.schedule()
@@ -201,14 +203,13 @@ class LLMEngine:
             raise maybe_except
 
         scheduler_output, executor_output = maybe_except
+        self._record_inference_time(scheduler_output, executor_output)
 
         self.num_on_the_fly -= 1
 
         # Theoretically, this put is not needed
         # practically, task can be inqueue before doing post-processing
         self._put_as_many_as_possible()
-
-        self._record_inference_time(scheduler_output, executor_output)
 
         request_outputs = self.output_processor(scheduler_output,
                                                 executor_output)
@@ -238,4 +239,4 @@ class LLMEngine:
             executor.shutdown_execute_loop()
 
     def shutdown_execute_loop(self):
-        self.engine.executor.shutdown_execute_loop()
+        self.executor.shutdown_execute_loop()

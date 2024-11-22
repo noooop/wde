@@ -24,7 +24,6 @@ logger = init_logger(__name__)
 class ZeroEngine(Z_MethodZeroServer):
 
     def __init__(self, name, engine_args, **kwargs):
-        self.return_metrics = engine_args.pop("return_metrics", None)
         self.default_options = engine_args.pop("default_options", {})
         self.engine_args = engine_args
         self.engine = GeventLLMEngine(**self.engine_args)
@@ -36,7 +35,7 @@ class ZeroEngine(Z_MethodZeroServer):
             protocol=self.engine.engine.workflow.protocol,
             port=None,
             do_register=True,
-            pool_size=self.engine.engine.engine_config.max_workers_config.
+            pool_size=self.engine.engine.engine_config.sys_config.
             zero_server_pool_size,
             **kwargs)
 
@@ -59,10 +58,10 @@ class ZeroEngine(Z_MethodZeroServer):
             pass
 
     def get_metrics(self, output):
-        if self.return_metrics:
-            metrics = output.metrics.__dict__
+        if output.metrics is None:
+            metrics = {}
         else:
-            metrics = None
+            metrics = output.metrics.__dict__
         return metrics
 
     def z_encode(self, req):

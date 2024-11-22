@@ -12,26 +12,21 @@ from wde.workflows.core.config import filter_unexpected_fields
 logger = init_logger(__name__)
 
 
-def nullable_str(val: str):
-    if not val or val == "None":
-        return None
-    return val
-
-
 @filter_unexpected_fields
 @dataclass
 class DecodeOnlyOutputLastHiddenStatesEngineArgs(EngineArgs):
-    kv_cache_dtype: str = 'auto'
+    # model_config
+    output_last_hidden_states: bool = False
+    enable_bidirectional: bool = False
 
+    # scheduler_config
     max_num_requests: int = 8
     max_num_on_the_fly: Optional[int] = None
     scheduling: str = "async"
     waiting: Optional[float] = None
     max_num_batched_tokens: Optional[int] = None
 
-    output_last_hidden_states: bool = False
-    enable_bidirectional: bool = False
-
+    # parallel_config
     data_parallel_size: int = 0
 
     def __post_init__(self):
@@ -84,5 +79,5 @@ class DecodeOnlyOutputLastHiddenStatesEngineArgs(EngineArgs):
             scheduler_config=scheduler_config,
             device_config=engine_config.device_config,
             load_config=engine_config.load_config,
-            max_workers_config=engine_config.max_workers_config,
+            sys_config=engine_config.sys_config,
             parallel_config=parallel_config)

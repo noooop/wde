@@ -28,7 +28,8 @@ def benchmark(args):
         enable_prefix_caching=args.enable_prefix_caching,
         max_num_batched_tokens=args.max_num_batched_tokens,
         max_num_requests=args.max_num_requests,
-        scheduling=args.scheduling)
+        scheduling=args.scheduling,
+        record_metrics=args.record_metrics)
 
     engine = LLMEngine.from_engine_args(engine_args)
 
@@ -59,26 +60,33 @@ def benchmark(args):
     end = time.perf_counter()
 
     elapsed_time = end - start
-    scheduling_time = np.mean([m.scheduling_time for m in metrics_list])
-    num_requests = np.mean([m.num_requests for m in metrics_list])
-    num_batched_tokens = np.mean([m.num_batched_tokens for m in metrics_list])
-
-    scheduling2inference = np.mean(
-        [m.scheduling2inference for m in metrics_list])
-    inference_time = np.mean([m.inference_time for m in metrics_list])
-    latency = np.mean([m.latency for m in metrics_list])
     avg_latency = elapsed_time / n_step
 
-    print(
-        f"Batchsize {args.max_num_requests}, Throughput: "
-        f"{len(requests) / elapsed_time:.4f} requests/s, "
-        f"Scheduling time {scheduling_time * 1000:0.4f} ms, "
-        f"Num requests {num_requests:.2f}, ",
-        f"Num batched tokens {num_batched_tokens:.2f}, ",
-        f"Scheduling2inference {scheduling2inference * 1000:0.4f} ms, "
-        f"Inference time {inference_time * 1000:0.4f} ms, "
-        f"Avg Latency {avg_latency * 1000:0.4f} ms, "
-        f"Latency {latency * 1000:0.4f} ms, n_step {n_step}")
+    if not args.record_metrics:
+        print(f"Batchsize {args.max_num_requests}, Throughput: "
+              f"{len(requests) / elapsed_time:.4f} requests/s, "
+              f"Avg Latency {avg_latency * 1000:0.4f} ms, n_step {n_step}")
+    else:
+
+        scheduling_time = np.mean([m.scheduling_time for m in metrics_list])
+        num_requests = np.mean([m.num_requests for m in metrics_list])
+        num_batched_tokens = np.mean(
+            [m.num_batched_tokens for m in metrics_list])
+
+        scheduling2inference = np.mean(
+            [m.scheduling2inference for m in metrics_list])
+        inference_time = np.mean([m.inference_time for m in metrics_list])
+        latency = np.mean([m.latency for m in metrics_list])
+        print(
+            f"Batchsize {args.max_num_requests}, Throughput: "
+            f"{len(requests) / elapsed_time:.4f} requests/s, "
+            f"Scheduling time {scheduling_time * 1000:0.4f} ms, "
+            f"Num requests {num_requests:.2f}, ",
+            f"Num batched tokens {num_batched_tokens:.2f}, ",
+            f"Scheduling2inference {scheduling2inference * 1000:0.4f} ms, "
+            f"Inference time {inference_time * 1000:0.4f} ms, "
+            f"Avg Latency {avg_latency * 1000:0.4f} ms, "
+            f"Latency {latency * 1000:0.4f} ms, n_step {n_step}")
 
 
 if __name__ == '__main__':
@@ -102,6 +110,7 @@ if __name__ == '__main__':
     args.quantization_param_path = None
     args.enable_prefix_caching = False
     args.gpu_memory_utilization = 0.9
+    args.record_metrics = False
 
     from concurrent.futures import ProcessPoolExecutor
 

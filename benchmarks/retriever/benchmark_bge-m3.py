@@ -58,7 +58,8 @@ def benchmark_wde(args):
                              max_model_len=args.max_model_len,
                              device=args.device,
                              max_num_requests=1,
-                             scheduling=args.scheduling)
+                             scheduling=args.scheduling,
+                             record_metrics=args.record_metrics)
 
     engine = LLMEngine.from_engine_args(engine_args)
 
@@ -82,27 +83,35 @@ def benchmark_wde(args):
         end = time.perf_counter()
 
         elapsed_time = end - start
-        scheduling_time = np.mean([m.scheduling_time for m in metrics_list])
-        num_requests = np.mean([m.num_requests for m in metrics_list])
-        num_batched_tokens = np.mean(
-            [m.num_batched_tokens for m in metrics_list])
-
-        scheduling2inference = np.mean(
-            [m.scheduling2inference for m in metrics_list])
-        inference_time = np.mean([m.inference_time for m in metrics_list])
-        latency = np.mean([m.latency for m in metrics_list])
         avg_latency = elapsed_time / n_step
 
-        print(
-            f"Batchsize {batchsize}, Throughput: "
-            f"{len(requests) / elapsed_time:.4f} requests/s, "
-            f"Scheduling time {scheduling_time * 1000:0.4f} ms, "
-            f"Num requests {num_requests:.2f}, ",
-            f"Num batched tokens {num_batched_tokens:.2f}, ",
-            f"Scheduling2inference {scheduling2inference * 1000:0.4f} ms, "
-            f"Inference time {inference_time * 1000:0.4f} ms, "
-            f"Avg Latency {avg_latency * 1000:0.4f} ms, "
-            f"Latency {latency * 1000:0.4f} ms, n_step {n_step}")
+        if metrics_list[0] is None:
+            print(
+                f"Batchsize {batchsize}, Throughput: "
+                f"{len(requests) / elapsed_time:.4f} requests/s, "
+                f"Avg Latency {avg_latency * 1000:0.4f} ms, , n_step {n_step}")
+        else:
+            scheduling_time = np.mean(
+                [m.scheduling_time for m in metrics_list])
+            num_requests = np.mean([m.num_requests for m in metrics_list])
+            num_batched_tokens = np.mean(
+                [m.num_batched_tokens for m in metrics_list])
+
+            scheduling2inference = np.mean(
+                [m.scheduling2inference for m in metrics_list])
+            inference_time = np.mean([m.inference_time for m in metrics_list])
+            latency = np.mean([m.latency for m in metrics_list])
+
+            print(
+                f"Batchsize {batchsize}, Throughput: "
+                f"{len(requests) / elapsed_time:.4f} requests/s, "
+                f"Scheduling time {scheduling_time * 1000:0.4f} ms, "
+                f"Num requests {num_requests:.2f}, ",
+                f"Num batched tokens {num_batched_tokens:.2f}, ",
+                f"Scheduling2inference {scheduling2inference * 1000:0.4f} ms, "
+                f"Inference time {inference_time * 1000:0.4f} ms, "
+                f"Avg Latency {avg_latency * 1000:0.4f} ms, "
+                f"Latency {latency * 1000:0.4f} ms, n_step {n_step}")
 
         engine.executor.shutdown_execute_loop()
         gc.collect()
@@ -125,6 +134,7 @@ if __name__ == '__main__':
     args.dtype = "half"
     args.device = "cuda"
     args.batchsize = [1, 2, 4, 8, 16, 32, 64]
+    args.record_metrics = True
 
     from concurrent.futures import ProcessPoolExecutor
 
