@@ -208,17 +208,18 @@ class ZeroEngine(Z_MethodZeroServer):
                 self.zero_send(req, rep)
 
 
-def start_zero_engine(engine_args):
+def start_zero_engine(engine_args, bind_random_port=False):
     from wde.microservices.standalone.server import Server
     assert "model" in engine_args
 
     from wde.client import ZeroManagerClient
 
-    server = Server()
+    server = Server(bind_random_port)
     server.setup()
     server.run(waiting=False)
 
-    manager_client = ZeroManagerClient(envs.ROOT_MANAGER_NAME)
+    manager_client = ZeroManagerClient(envs.ROOT_MANAGER_NAME,
+                                       nameserver_port=server.nameserver_port)
     manager_client.wait_service_available(envs.ROOT_MANAGER_NAME)
 
     model_name = engine_args["model"]
@@ -226,6 +227,7 @@ def start_zero_engine(engine_args):
     manager_client.start(name=model_name,
                          engine_kwargs={
                              "server_class": const.INFERENCE_ENGINE_CLASS,
-                             "engine_args": engine_args
+                             "engine_args": engine_args,
+                             "nameserver_port": server.nameserver_port
                          })
     return server

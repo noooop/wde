@@ -4,25 +4,37 @@ from wde.microservices.framework.zero.server import ZeroServerProcess
 
 class Server:
 
-    def __init__(self):
+    def __init__(self, bind_random_port=False):
         self.manager = None
         self.nameserver = None
+        self.bind_random_port = bind_random_port
+        self.nameserver_port = None
 
     def setup(self):
-        self.nameserver = ZeroServerProcess(const.NAMESERVER_CLASS)
-        self.manager = ZeroServerProcess(const.MANAGER_CLASS,
-                                         server_kwargs={
-                                             "name": envs.ROOT_MANAGER_NAME,
-                                             "server_class":
-                                             const.MANAGER_CLASS
-                                         })
+        if self.bind_random_port:
+            server_kwargs = {"port": "random"}
+        else:
+            server_kwargs = {}
+
+        self.nameserver = ZeroServerProcess(const.NAMESERVER_CLASS,
+                                            server_kwargs)
 
     def run(self, waiting=True):
         self.nameserver.start()
-        self.nameserver.wait_port_available()
+        self.nameserver_port = self.nameserver.wait_port_available()
 
         if self.nameserver.status != "running":
             return
+
+        self.manager = ZeroServerProcess(const.MANAGER_CLASS,
+                                         server_kwargs={
+                                             "name":
+                                             envs.ROOT_MANAGER_NAME,
+                                             "server_class":
+                                             const.MANAGER_CLASS,
+                                             "nameserver_port":
+                                             self.nameserver_port
+                                         })
 
         self.manager.start()
 

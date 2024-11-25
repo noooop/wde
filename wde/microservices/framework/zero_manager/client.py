@@ -14,9 +14,9 @@ CLIENT_VALIDATION = True
 class ZeroManagerClient(ZeroClient):
     protocol = "manager"
 
-    def __init__(self, name):
+    def __init__(self, name, nameserver_port=None):
         self.name = name
-        ZeroClient.__init__(self, self.protocol)
+        ZeroClient.__init__(self, self.protocol, nameserver_port)
 
     def start(self, name, engine_kwargs=None):
         data = {"name": name, "engine_kwargs": engine_kwargs or {}}
