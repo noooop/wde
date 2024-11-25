@@ -15,3 +15,4 @@
 # Decode only (chat) models
 - Qwen
 - chatglm
+- llama

@@ -8,4 +8,5 @@ DECODE_ONLY_MODELS = {
     (PREFIX + ".qwen2:Qwen2ForCausalLM",
      "wde.tasks.retriever.modelzoo.gte_qwen.workflow:Qwen2Workflow"),
     "ChatGLMModel": (PREFIX + ".chatglm:ChatGLMForCausalLM", WORKFLOW),
+    "LlamaForCausalLM": (PREFIX + ".llama:LlamaForCausalLM", WORKFLOW),
 }
