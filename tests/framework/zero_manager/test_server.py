@@ -22,10 +22,9 @@ def test_server():
     manager = ZeroServerProcess(
         "wde.microservices.framework.zero_manager.server:ZeroManager",
         server_kwargs={
-            "name":
-            MANAGER_NAME,
+            "name": MANAGER_NAME,
             "server_class":
-            "zerollama.core.framework.zero_manager.server:ZeroManager"
+            "wde.core.framework.zero_manager.server:ZeroManager"
         })
 
     nameserver.start()

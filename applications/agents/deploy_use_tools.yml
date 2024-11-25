@@ -1,0 +1,12 @@
+chat:
+  models:
+    -
+      model: "NousResearch/Hermes-3-Llama-3.1-8B"
+      engine_args:
+        gpu_memory_utilization: 0.9
+        max_num_batched_tokens: 256
+        max_model_len: 20000
+        default_options:
+          max_tokens: 1024
+
+entrypoints: ["ollama_compatible", "openai_compatible"]

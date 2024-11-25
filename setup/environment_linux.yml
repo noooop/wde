@@ -23,4 +23,6 @@ dependencies:
       - vllm==v0.6.4.post1
       - cachetools
       - asyncache
+      - openai
+      - ollama
       - https://github.com/noooop/wde/archive/refs/heads/main.zip

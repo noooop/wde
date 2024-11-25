@@ -12,3 +12,6 @@ modelscope
 vllm==v0.6.4.post1
 cachetools
 asyncache
+
+openai
+ollama

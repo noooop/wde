@@ -1,0 +1,11 @@
+chat:
+  models:
+    -
+      model: "Qwen/Qwen2-7B-Instruct"
+      engine_args:
+        gpu_memory_utilization: 0.9
+        max_num_batched_tokens: 256
+        default_options:
+          max_tokens: 1024
+
+entrypoints: ["ollama_compatible", "openai_compatible"]
