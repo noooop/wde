@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, fields
-from typing import (Any, Dict, Generic, List, Optional, Set, Tuple, Type,
-                    TypeVar)
+from dataclasses import dataclass
+from typing import Any, Dict, Generic, List, Optional, Tuple, Type, TypeVar
 
 import torch
 
@@ -101,36 +100,13 @@ class DecodeOnlyAttentionMetadata(AttentionMetadata):
         attention."""
         pass
 
-    def asdict_zerocopy(self,
-                        skip_fields: Optional[Set[str]] = None
-                        ) -> Dict[str, Any]:
-        """Similar to dataclasses.asdict, but avoids deepcopying."""
-        if skip_fields is None:
-            skip_fields = set()
-        # Note that if we add dataclasses as fields, they will need
-        # similar handling.
-        return {
-            field.name: getattr(self, field.name)
-            for field in fields(self) if field.name not in skip_fields
-        }
-
 
 T = TypeVar("T", bound=DecodeOnlyAttentionMetadata)
 
 
 class DecodeOnlyAttentionMetadataBuilder(AttentionMetadataBuilder, ABC,
                                          Generic[T]):
-    """Abstract class for attention metadata builders."""
-
-    @abstractmethod
-    def __init__(self, input_builder) -> None:
-        raise NotImplementedError
-
-    @abstractmethod
-    def build(self, seq_lens: List[int], query_lens: List[int],
-              cuda_graph_pad_size: int, batch_size: int) -> T:
-        """Build attention metadata with on-device tensors."""
-        raise NotImplementedError
+    pass
 
 
 class DecodeOnlyAttentionImpl(AttentionImpl, ABC, Generic[T]):

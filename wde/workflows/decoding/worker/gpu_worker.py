@@ -12,13 +12,12 @@ from wde.workflows.core.config import DeviceConfig, LoadConfig
 from wde.workflows.core.schema.execute_io import ExecuteInput, ExecuteOutput
 from wde.workflows.decoding.backends.attention import \
     DecodeOnlyAttentionBackend
-from wde.workflows.decoding.backends.core.cache_engine import CacheEngine
+from wde.workflows.decoding.backends.kvcache.cache_engine import CacheEngine
 from wde.workflows.decoding.config import (CacheConfig, DecodingEngineConfig,
                                            DecodingModelConfig,
                                            DecodingSchedulerConfig)
 from wde.workflows.decoding.runner.model_runner import GPUModelRunner
-from wde.workflows.decoding.schema.execute_io import (DecodingExecuteInput,
-                                                      SamplerOutput)
+from wde.workflows.decoding.schema.execute_io import SamplerOutput
 
 logger = init_logger(__name__)
 
@@ -142,6 +141,7 @@ class Worker:
                              cache_block_size)
         num_gpu_blocks = max(num_gpu_blocks, 0)
         num_cpu_blocks = max(num_cpu_blocks, 0)
+
         gc.collect()
         torch.cuda.empty_cache()
         return num_gpu_blocks, num_cpu_blocks
@@ -194,11 +194,8 @@ class Worker:
     @torch.inference_mode
     def __call__(
         self,
-        execute_input: Optional[DecodingExecuteInput] = None
+        execute_input: Optional[ExecuteInput] = None
     ) -> Optional[SamplerOutput]:
-
-        if execute_input.worker_input.num_requests == 0:
-            return
 
         output = self.model_runner.execute_model(
             execute_input.model_input,
@@ -207,19 +204,6 @@ class Worker:
         return output
 
     def non_blocking_h2d(self, execute_input: ExecuteInput):
-        # worker_input
-        worker_input = execute_input.worker_input
-        if (worker_input.blocks_to_swap_in is not None
-                and worker_input.blocks_to_swap_in.numel() > 0):
-            self.cache_engine.swap_in(worker_input.blocks_to_swap_in)
-        if (worker_input.blocks_to_swap_out is not None
-                and worker_input.blocks_to_swap_out.numel() > 0):
-            self.cache_engine.swap_out(worker_input.blocks_to_swap_out)
-        if (worker_input.blocks_to_copy is not None
-                and worker_input.blocks_to_copy.numel() > 0):
-            self.cache_engine.copy(worker_input.blocks_to_copy)
-
-        # model_input
         model_input = execute_input.model_input
         model_input.to("cuda", non_blocking=True)
 

@@ -3,7 +3,7 @@ from wde.workflows.core.workflow import Workflow
 
 
 class DecodeOnlyDecodingWorkflow(Workflow):
-    Tokenizer: str = "wde.workflows.decoding.processor.tokenizer:Tokenizer"
+    Tokenizer: str = "wde.workflows.decoding.backends.sampling.detokenizer:Tokenizer"
     EngineArgs: str = "wde.workflows.decoding.arg_utils:DecodingEngineArgs"
     InputProcessor: str = ("wde.workflows.core.processor."
                            "input_processor:TextInputProcessor")
@@ -15,7 +15,7 @@ class DecodeOnlyDecodingWorkflow(Workflow):
         "DecodingModelOutputProcessor")
     ModelInputBuilder: str = (
         "wde.workflows.decoding.processor.model_input_builder:"
-        "DecodingModelPreProcessor")
+        "DecodingModelInputBuilder")
     Worker: str = "wde.workflows.decoding.worker.gpu_worker:Worker"
     Executor: str = "wde.workflows.decoding.executor.gpu_executor"
     Scheduler: str = "wde.workflows.decoding.scheduler:DecodingScheduler"

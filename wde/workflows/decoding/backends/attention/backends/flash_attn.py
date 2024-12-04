@@ -3,11 +3,9 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple, Type
 
 import torch
-from vllm import _custom_ops as ops
 
-from wde.workflows.decoding.backends.attention.backends.utils import (
-    compute_slot_mapping, compute_slot_mapping_start_idx,
-    is_block_tables_empty)
+from wde.workflows.decoding.backends.attention.backends.utils import \
+    compute_slot_mapping
 
 try:
     from vllm.vllm_flash_attn import (flash_attn_varlen_func,
@@ -16,11 +14,13 @@ except ImportError:
     from vllm_flash_attn import (flash_attn_varlen_func,
                                  flash_attn_with_kvcache)
 
+from vllm import _custom_ops as ops
 from vllm.utils import is_pin_memory_available, make_tensor_with_pad
 
 from wde.workflows.decoding.backends.attention.backends.abstract import (
     AttentionType, DecodeOnlyAttentionBackend, DecodeOnlyAttentionImpl,
     DecodeOnlyAttentionMetadata, DecodeOnlyAttentionMetadataBuilder)
+from wde.workflows.decoding.schema.engine_io import DecodingSchedulableRequest
 
 pin_memory = is_pin_memory_available()
 
@@ -133,11 +133,6 @@ class DecodeOnlyFlashAttentionMetadata(DecodeOnlyAttentionMetadata):
     # captured.
     block_tables: Optional[torch.Tensor]
 
-    # Whether or not if cuda graph is enabled.
-    # Cuda-graph is currently enabled for decoding only.
-    # TODO(woosuk): Move `use_cuda_graph` out since it's unrelated to attention.
-    use_cuda_graph: bool
-
     _cached_prefill_metadata: Optional[
         "DecodeOnlyFlashAttentionMetadata"] = None
     _cached_decode_metadata: Optional[
@@ -172,7 +167,6 @@ class DecodeOnlyFlashAttentionMetadata(DecodeOnlyAttentionMetadata):
             seq_start_loc=self.seq_start_loc[:self.num_prefills + 1],
             context_lens_tensor=self.context_lens_tensor[:self.num_prefills],
             block_tables=self.block_tables[:self.num_prefills],
-            use_cuda_graph=False,
         )
         return self._cached_prefill_metadata
 
@@ -200,7 +194,6 @@ class DecodeOnlyFlashAttentionMetadata(DecodeOnlyAttentionMetadata):
             seq_start_loc=None,
             context_lens_tensor=None,
             block_tables=self.block_tables[self.num_prefills:],
-            use_cuda_graph=self.use_cuda_graph,
         )
         return self._cached_decode_metadata
 
@@ -217,120 +210,36 @@ class DecodeOnlyFlashAttentionMetadata(DecodeOnlyAttentionMetadata):
 class DecodeOnlyFlashAttentionMetadataBuilder(
         DecodeOnlyAttentionMetadataBuilder[DecodeOnlyFlashAttentionMetadata]):
 
-    def __init__(self, input_builder):
-        self.slot_mapping: List[int] = []
-        self.prefill_seq_lens: List[int] = []
-        self.context_lens: List[int] = []
-        self.block_tables: List[List[int]] = []
-        self.curr_seq_lens: List[int] = []
-        self.num_prefills = 0
-        self.num_prefill_tokens = 0
-        self.num_decode_tokens = 0
-        self.has_prefix_cache_hit = False
+    def __init__(self, block_size):
+        self.block_size = block_size
 
-        self.input_builder = input_builder
-        self.sliding_window = input_builder.sliding_window
-        self.block_size = input_builder.block_size
+    def __call__(self, scheduled_requests: List[DecodingSchedulableRequest]):
+        seq_lens = [request.seq_len for request in scheduled_requests]
 
-    def _add_seq_group(self, inter_data, chunked_prefill_enabled: bool,
-                       prefix_cache_hit: bool):
-        """Add a sequence group to the metadata. Specifically update/append
-        1. context length.
-        2. block table.
-        3. slot mapping.
-        """
-        is_prompt = inter_data.is_prompt
-        block_tables = inter_data.block_tables
+        block_tables = make_tensor_with_pad(
+            [request.physical_block_ids for request in scheduled_requests],
+            pad=0,
+            dtype=torch.int,
+            device="cpu",
+            pin_memory=pin_memory)
 
-        for (seq_id, token_len, seq_len, curr_seq_len, query_len, context_len,
-             curr_sliding_window_block) in zip(
-                 inter_data.seq_ids, [len(t) for t in inter_data.input_tokens],
-                 inter_data.orig_seq_lens, inter_data.seq_lens,
-                 inter_data.query_lens, inter_data.context_lens,
-                 inter_data.curr_sliding_window_blocks):
-            self.context_lens.append(context_len)
+        context_lens_tensor = torch.tensor(
+            [request.context_len for request in scheduled_requests],
+            dtype=torch.int,
+            device="cpu",
+            pin_memory=pin_memory)
 
-            if is_prompt:
-                self.num_prefills += 1
-                self.num_prefill_tokens += token_len
-                self.prefill_seq_lens.append(seq_len)
-            else:
-                assert query_len == 1, (
-                    "seq_len: {}, context_len: {}, query_len: {}".format(
-                        seq_len, context_len, query_len))
-                self.num_decode_tokens += query_len
-                self.curr_seq_lens.append(curr_seq_len)
-
-            # Compute block table.
-            # TODO(sang): Combine chunked prefill and prefix caching by
-            # only allowing multiple of block_size chunk size.
-            # NOTE: This only works for oooooooxxx style attention.
-            block_table = []
-            if prefix_cache_hit:
-                # NOTE(woosuk): For flash-attn, the block table should
-                # include the entries for the incoming prefill tokens.
-                block_table = block_tables[seq_id]
-            elif ((chunked_prefill_enabled or not is_prompt)
-                  and block_tables is not None):
-                block_table = block_tables[seq_id][-curr_sliding_window_block:]
-            self.block_tables.append(block_table)
-
-            # Compute slot mapping.
-            is_profile_run = is_block_tables_empty(block_tables)
-            start_idx = compute_slot_mapping_start_idx(is_prompt, query_len,
-                                                       context_len,
-                                                       self.sliding_window)
-            compute_slot_mapping(is_profile_run, self.slot_mapping, seq_id,
-                                 seq_len, context_len, start_idx,
-                                 self.block_size, inter_data.block_tables)
-
-    def build(self, seq_lens: List[int], query_lens: List[int],
-              cuda_graph_pad_size: int, batch_size: int):
-        """Build attention metadata with on-device tensors.
-
-        Args:
-            seq_lens: The maybe padded sequence lengths of the input sequences.
-            query_lens: The query lengths of the input sequences.
-            cuda_graph_pad_size: The padding size for cuda graph.
-                                 -1 if cuda graph is not used.
-            batch_size: The maybe padded batch size.
-        """
-        prefix_cache_hit = any([
-            inter_data.prefix_cache_hit
-            for inter_data in self.input_builder.inter_data_list
-        ])
-        for inter_data in self.input_builder.inter_data_list:
-            self._add_seq_group(inter_data,
-                                self.input_builder.chunked_prefill_enabled,
-                                prefix_cache_hit)
-
-        use_captured_graph = False
-
-        max_query_len = max(query_lens)
-        max_prefill_seq_len = max(self.prefill_seq_lens, default=0)
-        max_decode_seq_len = max(self.curr_seq_lens, default=0)
-        num_decode_tokens = self.num_decode_tokens
-
-        assert max_query_len > 0, ("query_lens: {}".format(query_lens))
-
-        block_tables = make_tensor_with_pad(self.block_tables,
-                                            pad=0,
-                                            dtype=torch.int,
-                                            device="cpu",
-                                            pin_memory=pin_memory)
-
-        context_lens_tensor = torch.tensor(self.context_lens,
-                                           dtype=torch.int,
-                                           device="cpu",
-                                           pin_memory=pin_memory)
         seq_lens_tensor = torch.tensor(seq_lens,
                                        dtype=torch.int,
                                        device="cpu",
                                        pin_memory=pin_memory)
-        query_lens_tensor = torch.tensor(query_lens,
-                                         dtype=torch.long,
-                                         device="cpu",
-                                         pin_memory=pin_memory)
+
+        query_lens_tensor = torch.tensor(
+            [request.query_len for request in scheduled_requests],
+            dtype=torch.long,
+            device="cpu",
+            pin_memory=pin_memory)
+
         query_start_loc = torch.zeros(query_lens_tensor.shape[0] + 1,
                                       dtype=torch.int32,
                                       device="cpu",
@@ -348,15 +257,48 @@ class DecodeOnlyFlashAttentionMetadataBuilder(
                      dtype=query_start_loc.dtype,
                      out=query_start_loc[1:])
 
-        slot_mapping_tensor = torch.tensor(self.slot_mapping,
+        slot_mapping = []
+        for request in scheduled_requests:
+            # Compute slot mapping.
+            is_profile_run = block_tables.nelement() == 0
+            start_idx = 0
+
+            compute_slot_mapping(is_profile_run, slot_mapping, request.seq_len,
+                                 request.context_len, start_idx,
+                                 self.block_size, request.physical_block_ids)
+
+        slot_mapping_tensor = torch.tensor(slot_mapping,
                                            dtype=torch.long,
                                            device="cpu",
                                            pin_memory=pin_memory)
 
+        max_query_len = max([
+            request.query_len for request in scheduled_requests
+            if request.is_prefill
+        ])
+        max_prefill_seq_len = max([
+            request.seq_len
+            for request in scheduled_requests if request.is_prefill
+        ],
+                                  default=0)
+
+        num_prefills = sum(1 for request in scheduled_requests
+                           if request.is_prefill)
+        num_prefill_tokens = sum(
+            [request.token_chunk_size for request in scheduled_requests])
+
+        max_decode_seq_len = max([
+            request.seq_len
+            for request in scheduled_requests if not request.is_prefill
+        ],
+                                 default=0)
+        num_decode_tokens = sum(1 for request in scheduled_requests
+                                if not request.is_prefill)
+
         return DecodeOnlyFlashAttentionMetadata(
-            num_prefills=self.num_prefills,
+            num_prefills=num_prefills,
             slot_mapping=slot_mapping_tensor,
-            num_prefill_tokens=self.num_prefill_tokens,
+            num_prefill_tokens=num_prefill_tokens,
             num_decode_tokens=num_decode_tokens,
             seq_lens=seq_lens,
             seq_lens_tensor=seq_lens_tensor,
@@ -367,11 +309,7 @@ class DecodeOnlyFlashAttentionMetadataBuilder(
             seq_start_loc=seq_start_loc,
             context_lens_tensor=context_lens_tensor,
             block_tables=block_tables,
-            use_cuda_graph=use_captured_graph,
         )
-
-    def __call__(self, *args, **kwargs):
-        pass
 
 
 class DecodeOnlyFlashAttentionImpl(DecodeOnlyAttentionImpl):

@@ -48,7 +48,6 @@ from wde.backends.vocab_embedding import (DEFAULT_VOCAB_PADDING_SIZE,
                                           VocabParallelEmbedding)
 from wde.workflows.core.config import CacheConfig
 from wde.workflows.core.schema.execute_io import IntermediateTensors
-from wde.workflows.decoding.backends.sampling_metadata import SamplingMetadata
 
 
 class LlamaMLP(nn.Module):
@@ -413,12 +412,6 @@ class LlamaForCausalLM(nn.Module):
         model_output = self.model(input_ids, positions, kv_caches,
                                   attn_metadata, intermediate_tensors)
         return model_output
-
-    def compute_logits(self, hidden_states: torch.Tensor,
-                       sampling_metadata: SamplingMetadata) -> torch.Tensor:
-        logits = self.logits_processor(self.lm_head, hidden_states,
-                                       sampling_metadata)
-        return logits
 
     def make_empty_intermediate_tensors(
             self, batch_size: int, dtype: torch.dtype,

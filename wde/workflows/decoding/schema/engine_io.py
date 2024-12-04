@@ -1,79 +1,30 @@
 from dataclasses import dataclass
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Sequence, Union
 
 from wde.workflows.core.schema.engine_io import (RequestMetrics, RequestOutput,
-                                                 SchedulableRequest,
                                                  SchedulerOutput)
-from wde.workflows.decoding.backends.sequence import (PromptLogprobs,
-                                                      SampleLogprobs,
-                                                      SequenceGroup,
-                                                      SequenceGroupMetadata,
-                                                      SequenceStatus)
 
-
-@dataclass
-class DecodingSchedulableRequest(SchedulableRequest):
-    seq_group: Optional[SequenceGroup] = None
-    token_chunk_size: int = 0
-    busy = False
-
-    def set_scheduled_ts(self, scheduled_ts):
-        self.metrics.scheduled_ts = scheduled_ts
-        self.metrics.waiting_time = self.metrics.scheduled_ts - self.metrics.arrival_ts
-        if self.metrics.first_scheduled_ts is None:
-            self.metrics.first_scheduled_ts = scheduled_ts
-
-    @property
-    def num_new_tokens(self):
-        return self.token_chunk_size
+from .execute_io import PromptLogprobs, SampleLogprobs
+from .request import DecodingSchedulableRequest, RequestStatus
 
 
 @dataclass
 class DecodingSchedulerOutput(SchedulerOutput):
     scheduled_requests: List[DecodingSchedulableRequest]
-
-    num_prefill_groups: int
-    num_batched_tokens: int
-
-    blocks_to_swap_in: List[Tuple[int, int]]
-    blocks_to_swap_out: List[Tuple[int, int]]
-    blocks_to_copy: List[Tuple[int, int]]
-
     ignored_requests: List[DecodingSchedulableRequest]
 
-    running_queue_size: int
-    preempted: int
-
-    seq_group_metadata_list: Optional[List[SequenceGroupMetadata]] = None
+    num_batched_tokens: int
+    num_requests: int
 
     def is_empty(self) -> bool:
-        # NOTE: We do not consider the ignored sequence groups.
-        return (not self.scheduled_requests and not self.blocks_to_swap_in
-                and not self.blocks_to_swap_out and not self.blocks_to_copy)
+        return not self.scheduled_requests
 
 
 @dataclass
 class CompletionOutput:
-    """The output data of one completion output of a request.
-
-    Args:
-        index: The index of the output in the request.
-        text: The generated output text.
-        token_ids: The token IDs of the generated output text.
-        cumulative_logprob: The cumulative log probability of the generated
-            output text.
-        logprobs: The log probabilities of the top probability words at each
-            position if the logprobs are requested.
-        finish_reason: The reason why the sequence is finished.
-        stop_reason: The stop string or token id that caused the completion
-            to stop, None if the completion finished for some other reason
-            including encountering the EOS token.
-        lora_request: The LoRA request that was used to generate the output.
-    """
-
     index: int
     text: str
-    token_ids: Tuple[int, ...]
+    token_ids: Sequence[int]
     cumulative_logprob: Optional[float]
     logprobs: Optional[SampleLogprobs]
     finish_reason: Optional[str] = None
@@ -98,7 +49,7 @@ class DecodingRequestOutput(RequestOutput):
         self,
         request_id: str,
         prompt: Optional[str],
-        prompt_token_ids: List[int],
+        prompt_token_ids: Optional[List[int]],
         prompt_logprobs: Optional[PromptLogprobs],
         outputs: List[CompletionOutput],
         finished: bool,
@@ -113,48 +64,32 @@ class DecodingRequestOutput(RequestOutput):
         self.metrics = metrics
 
     @classmethod
-    def from_seq_group(
+    def from_request(
             cls,
             request: DecodingSchedulableRequest) -> "DecodingRequestOutput":
-        seq_group = request.seq_group
 
-        if seq_group.sampling_params is None:
-            raise ValueError(
-                "Sampling parameters are missing for a CompletionRequest.")
-        seqs = seq_group.get_seqs()
-        if len(seqs) == 1:
-            top_n_seqs = seqs
-        else:
-            n = seq_group.sampling_params.n
-            sorting_key = lambda seq: seq.get_cumulative_logprob()
-            sorted_seqs = sorted(seqs, key=sorting_key, reverse=True)
-            top_n_seqs = sorted_seqs[:n]
+        sampling_params = request.sampling_params
 
-        include_logprobs = seq_group.sampling_params.logprobs is not None
-        text_buffer_length = seq_group.sampling_params.output_text_buffer_length
-        outputs = [
-            CompletionOutput(
-                seqs.index(seq),
-                seq.get_output_text_to_return(text_buffer_length),
-                seq.get_output_token_ids(),
-                seq.get_cumulative_logprob() if include_logprobs else None,
-                seq.output_logprobs if include_logprobs else None,
-                SequenceStatus.get_finished_reason(seq.status),
-                seq.stop_reason) for seq in top_n_seqs
-        ]
+        include_logprobs = sampling_params.logprobs is not None
 
-        prompt = seq_group.prompt
-        prompt_token_ids = seq_group.prompt_token_ids
-        prompt_logprobs = seq_group.prompt_logprobs
-        finished = seq_group.is_finished()
+        text_buffer_length = sampling_params.output_text_buffer_length
+
+        output = CompletionOutput(
+            index=0,
+            text=request.get_output_text_to_return(text_buffer_length),
+            token_ids=request.get_output_token_ids(),
+            cumulative_logprob=request.cumulative_logprob
+            if include_logprobs else None,
+            logprobs=request.output_logprobs if include_logprobs else None,
+            finish_reason=RequestStatus.get_finished_reason(request.status),
+            stop_reason=request.stop_reason)
+
+        outputs = [output]
+
+        prompt = request.prompt
+        prompt_token_ids = request.prompt_token_ids
+        prompt_logprobs = request.prompt_logprobs
+        finished = request.finished
+
         return cls(request.request_id, prompt, prompt_token_ids,
                    prompt_logprobs, outputs, finished, request.metrics)
-
-    def __repr__(self) -> str:
-        return (f"RequestOutput(request_id={self.request_id}, "
-                f"prompt={self.prompt!r}, "
-                f"prompt_token_ids={self.prompt_token_ids}, "
-                f"prompt_logprobs={self.prompt_logprobs}, "
-                f"outputs={self.outputs}, "
-                f"finished={self.finished}, "
-                f"metrics={self.metrics}, ")

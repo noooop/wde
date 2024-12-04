@@ -12,16 +12,18 @@ from wde.logger import init_logger
 from wde.workflows.core.config import DeviceConfig, LoadConfig
 from wde.workflows.decoding.backends.attention import \
     DecodeOnlyAttentionBackend
-from wde.workflows.decoding.backends.logits_processor import LogitsProcessor
-from wde.workflows.decoding.backends.sampler import Sampler
-from wde.workflows.decoding.backends.sampling_metadata import SamplingMetadata
-from wde.workflows.decoding.backends.sampling_params import SamplingParams
-from wde.workflows.decoding.backends.sequence import (SequenceData,
-                                                      SequenceGroupMetadata)
+from wde.workflows.decoding.backends.sampling.logits_processor import \
+    LogitsProcessor
+from wde.workflows.decoding.backends.sampling.sampler import Sampler
+from wde.workflows.decoding.backends.sampling.sampling_metadata import \
+    SamplingMetadata
+from wde.workflows.decoding.backends.sampling.sampling_params import \
+    SamplingParams
 from wde.workflows.decoding.config import (CacheConfig, DecodingModelConfig,
                                            DecodingSchedulerConfig)
-from wde.workflows.decoding.schema.execute_io import (
-    DecodingModelInputForGPUWithSamplingMetadata, SamplerOutput)
+from wde.workflows.decoding.schema.execute_io import (DecodingModelInput,
+                                                      SamplerOutput)
+from wde.workflows.decoding.schema.request import DecodingSchedulableRequest
 
 logger = init_logger(__name__)
 
@@ -65,7 +67,7 @@ class GPUModelRunner:
                                                 initialize_model)
 
         logger.info("Starting to load model %s...", self.model_config.model)
-        with DeviceMemoryProfiler() as m:
+        with DeviceMemoryProfiler():
             loader = get_model_loader(self.load_config)
             self.model = initialize_model(model_config=self.model_config,
                                           load_config=self.load_config,
@@ -111,31 +113,27 @@ class GPUModelRunner:
         max_num_batched_tokens = self.scheduler_config.max_num_batched_tokens
         max_num_requests = self.scheduler_config.max_num_requests
 
-        seqs: List[SequenceGroupMetadata] = []
+        requests: List[DecodingSchedulableRequest] = []
         batch_size = 0
-        for group_id in range(max_num_requests):
-            seq_len = (max_num_batched_tokens // max_num_requests +
-                       (group_id < max_num_batched_tokens % max_num_requests))
+        for requese_id in range(max_num_requests):
+            seq_len = (
+                max_num_batched_tokens // max_num_requests +
+                (requese_id < max_num_batched_tokens % max_num_requests))
             batch_size += seq_len
 
-            seq_data = SequenceData.from_token_counts((0, seq_len))
-
-            # Having more tokens is over-conservative but otherwise fine
-            assert len(seq_data.prompt_token_ids) >= seq_len, (
-                f"Expected at least {seq_len} dummy tokens for profiling, "
-                f"but got: {len(seq_data.prompt_token_ids)}")
-
-            seq = SequenceGroupMetadata(request_id=str(group_id),
-                                        is_prompt=True,
-                                        seq_data={group_id: seq_data},
-                                        sampling_params=sampling_params,
-                                        block_tables=None)
-            seqs.append(seq)
+            request = DecodingSchedulableRequest(
+                request_id=str(requese_id),
+                arrival_time=0.,
+                prompt_token_ids=[0] * seq_len,
+                sampling_params=sampling_params,
+                vblock=None,
+                token_chunk_size=seq_len)
+            requests.append(request)
 
         # Run the model with the dummy inputs.
         num_layers = self.model_config.get_num_layers()
         kv_caches = [None] * num_layers
-        model_input = self.prepare_model_input(seqs)
+        model_input = self.prepare_model_input(requests)
         model_input.to("cuda")
         self.execute_model(model_input, kv_caches)
         torch.cuda.synchronize()
@@ -165,9 +163,10 @@ class GPUModelRunner:
     @torch.inference_mode()
     def execute_model(
         self,
-        model_input: DecodingModelInputForGPUWithSamplingMetadata,
+        model_input: DecodingModelInput,
         kv_caches: List[torch.Tensor],
     ) -> SamplerOutput:
+
         hidden_states = self.model(input_ids=model_input.input_tokens,
                                    positions=model_input.input_positions,
                                    kv_caches=kv_caches,

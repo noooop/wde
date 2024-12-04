@@ -1,5 +1,5 @@
 import warnings
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, cast
 
 import torch
 import torch.nn.functional as F
@@ -7,6 +7,7 @@ import torch.nn.functional as F
 from tests.tasks.utils import HfRunner, cleanup
 from wde import LLM
 from wde.workflows.decoding import SamplingParams
+from wde.workflows.decoding.schema.engine_io import DecodingRequestOutput
 
 
 def check_logprobs_close(
@@ -169,11 +170,9 @@ class WDERunner:
         )
 
     def generate_w_logprobs(self, prompts, sampling_params: SamplingParams):
-
-        self.model.engine.executor.worker.model_runner.sampler.include_gpu_probs_tensor = True
-
         req_outputs = self.model.generate(prompts,
                                           sampling_params=sampling_params)
+        req_outputs = cast(List[DecodingRequestOutput], req_outputs)
 
         toks_str_logsprobs_prompt_logprobs = (
             self._final_steps_generate_w_logprobs(req_outputs))
@@ -183,7 +182,8 @@ class WDERunner:
                 toks_str_logsprobs_prompt_logprobs)
 
     @staticmethod
-    def _final_steps_generate_w_logprobs(req_outputs, ):
+    def _final_steps_generate_w_logprobs(
+            req_outputs: List[DecodingRequestOutput]):
         outputs = []
         for req_output in req_outputs:
             assert len(req_output.outputs) > 0
