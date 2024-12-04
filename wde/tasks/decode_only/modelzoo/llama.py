@@ -27,25 +27,25 @@ import torch
 from torch import nn
 from transformers import LlamaConfig
 
-from wde.backends.activation import SiluAndMul
-from wde.backends.attention import (Attention, AttentionBackend,
-                                    AttentionMetadata)
-from wde.backends.distributed import (get_pp_group,
-                                      get_tensor_model_parallel_rank,
-                                      get_tensor_model_parallel_world_size)
-from wde.backends.layernorm import RMSNorm
-from wde.backends.linear import (MergedColumnParallelLinear, QKVParallelLinear,
-                                 RowParallelLinear)
-from wde.backends.loader.weight_utils import (default_weight_loader,
-                                              kv_cache_scales_loader,
-                                              maybe_remap_kv_scale_name)
-from wde.backends.models.utils import (PPMissingLayer, is_pp_missing_parameter,
-                                       make_layers)
-from wde.backends.quantization import QuantizationConfig
-from wde.backends.rotary_embedding import get_rope
-from wde.backends.vocab_embedding import (DEFAULT_VOCAB_PADDING_SIZE,
-                                          ParallelLMHead,
-                                          VocabParallelEmbedding)
+from wde.workflows.core.backends.activation import SiluAndMul
+from wde.workflows.core.backends.attention import (Attention, AttentionBackend,
+                                                   AttentionMetadata)
+from wde.workflows.core.backends.distributed import (
+    get_pp_group, get_tensor_model_parallel_rank,
+    get_tensor_model_parallel_world_size)
+from wde.workflows.core.backends.layernorm import RMSNorm
+from wde.workflows.core.backends.linear import (MergedColumnParallelLinear,
+                                                QKVParallelLinear,
+                                                RowParallelLinear)
+from wde.workflows.core.backends.loader.weight_utils import (
+    default_weight_loader, kv_cache_scales_loader, maybe_remap_kv_scale_name)
+from wde.workflows.core.backends.models.utils import (PPMissingLayer,
+                                                      is_pp_missing_parameter,
+                                                      make_layers)
+from wde.workflows.core.backends.quantization import QuantizationConfig
+from wde.workflows.core.backends.rotary_embedding import get_rope
+from wde.workflows.core.backends.vocab_embedding import (
+    DEFAULT_VOCAB_PADDING_SIZE, ParallelLMHead, VocabParallelEmbedding)
 from wde.workflows.core.config import CacheConfig
 from wde.workflows.core.schema.execute_io import IntermediateTensors
 

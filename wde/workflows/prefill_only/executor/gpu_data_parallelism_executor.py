@@ -5,8 +5,8 @@ from typing import List, Optional
 
 import torch
 
-from wde.backends.attention import AttentionBackend
 from wde.logger import init_logger
+from wde.workflows.core.backends.attention import AttentionBackend
 from wde.workflows.core.config import EngineConfig
 from wde.workflows.core.executor.gpu_executor import FrierenExecutor
 from wde.workflows.core.llm_engine import LLMEngine

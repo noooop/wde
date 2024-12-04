@@ -7,10 +7,10 @@ import torch
 from transformers import PretrainedConfig
 from vllm.platforms import current_platform
 
-from wde.backends.models.transformers_utils.config import (get_config,
-                                                           get_hf_text_config)
-from wde.backends.quantization import QUANTIZATION_METHODS
 from wde.logger import init_logger
+from wde.workflows.core.backends.models.transformers_utils.config import (
+    get_config, get_hf_text_config)
+from wde.workflows.core.backends.quantization import QUANTIZATION_METHODS
 
 logger = init_logger(__name__)
 

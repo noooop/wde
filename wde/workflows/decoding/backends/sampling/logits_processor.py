@@ -3,7 +3,7 @@ from typing import Optional
 import torch
 import torch.nn as nn
 
-from wde.backends.vocab_embedding import VocabParallelEmbedding
+from wde.workflows.core.backends.vocab_embedding import VocabParallelEmbedding
 
 from .sampling_metadata import SamplingMetadata
 

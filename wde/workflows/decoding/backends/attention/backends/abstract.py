@@ -4,10 +4,9 @@ from typing import Any, Dict, Generic, List, Optional, Tuple, Type, TypeVar
 
 import torch
 
-from wde.backends.attention.abstract import (AttentionBackend, AttentionImpl,
-                                             AttentionMetadata,
-                                             AttentionMetadataBuilder,
-                                             AttentionType)
+from wde.workflows.core.backends.attention.abstract import (
+    AttentionBackend, AttentionImpl, AttentionMetadata,
+    AttentionMetadataBuilder, AttentionType)
 
 
 class DecodeOnlyAttentionBackend(AttentionBackend, ABC):

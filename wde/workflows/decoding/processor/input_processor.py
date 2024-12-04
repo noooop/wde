@@ -22,7 +22,7 @@ class DecodingModelRequestProcessor(TextRequestProcessor):
 
     def _load_generation_config_dict(
             self, model_config: ModelConfig) -> Dict[str, Any]:
-        from wde.backends.models.transformers_utils.config import \
+        from wde.workflows.core.backends.models.transformers_utils.config import \
             try_get_generation_config
         config = try_get_generation_config(
             model_config.model,

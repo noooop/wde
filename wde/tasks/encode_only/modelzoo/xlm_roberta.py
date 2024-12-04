@@ -23,17 +23,18 @@ from torch import nn
 from transformers import XLMRobertaConfig
 from transformers.utils import logging
 
-from wde.backends.activation import get_act_fn
-from wde.backends.attention import (Attention, AttentionBackend,
-                                    AttentionMetadata)
-from wde.backends.linear import (ColumnParallelLinear, QKVParallelLinear,
-                                 RowParallelLinear)
-from wde.backends.loader.weight_utils import (default_weight_loader,
-                                              maybe_remap_kv_scale_name)
-from wde.backends.models.utils import is_pp_missing_parameter
-from wde.backends.quantization import QuantizationConfig
 from wde.tasks.encode_only.schema.execute_io import EncodeOnlyExecuteOutput
 from wde.tasks.reranker.schema.execute_io import RerankerExecuteOutput
+from wde.workflows.core.backends.activation import get_act_fn
+from wde.workflows.core.backends.attention import (Attention, AttentionBackend,
+                                                   AttentionMetadata)
+from wde.workflows.core.backends.linear import (ColumnParallelLinear,
+                                                QKVParallelLinear,
+                                                RowParallelLinear)
+from wde.workflows.core.backends.loader.weight_utils import (
+    default_weight_loader, maybe_remap_kv_scale_name)
+from wde.workflows.core.backends.models.utils import is_pp_missing_parameter
+from wde.workflows.core.backends.quantization import QuantizationConfig
 from wde.workflows.core.schema.execute_io import IntermediateTensors
 
 logger = logging.get_logger(__name__)

@@ -3,8 +3,8 @@ from typing import Optional
 
 import torch
 
-from wde.backends.attention import AttentionType
 from wde.logger import init_logger
+from wde.workflows.core.backends.attention import AttentionType
 from wde.workflows.core.llm_engine import LLMEngine
 
 logger = init_logger(__name__)

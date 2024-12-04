@@ -3,8 +3,8 @@ import os
 import torch
 from vllm.platforms import current_platform
 
-from wde.backends.attention import AttentionBackend
-from wde.backends.utils import set_random_seed
+from wde.workflows.core.backends.attention import AttentionBackend
+from wde.workflows.core.backends.utils import set_random_seed
 from wde.workflows.core.config import (DeviceConfig, EngineConfig, LoadConfig,
                                        ModelConfig)
 from wde.workflows.core.schema.execute_io import ExecuteOutput

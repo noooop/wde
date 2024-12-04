@@ -1,8 +1,9 @@
 import pytest
 from vllm.utils import DeviceMemoryProfiler
 
-from wde.backends.loader.loader import get_model_loader, initialize_model
 from wde.tasks.encode_only.arg_utils import EncodeOnlyEngineArgs as EngineArgs
+from wde.workflows.core.backends.loader.loader import (get_model_loader,
+                                                       initialize_model)
 from wde.workflows.core.config import DeviceConfig, LoadConfig, ModelConfig
 from wde.workflows.prefill_only.backends.attention.backends.abstract import \
     PrefillOnlyAttentionBackend

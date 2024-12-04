@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 import torch
 
-from wde.backends.attention import AttentionMetadata
+from wde.workflows.core.backends.attention import AttentionMetadata
 from wde.workflows.core.schema.execute_io import ExecuteInput, ModelInput
 
 

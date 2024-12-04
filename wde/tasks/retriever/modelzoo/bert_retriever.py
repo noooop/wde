@@ -9,11 +9,12 @@ from typing import List, Optional
 import torch
 from torch import nn
 
-from wde.backends.attention import AttentionBackend, AttentionMetadata
-from wde.backends.quantization import QuantizationConfig
 from wde.tasks.encode_only.modelzoo.bert import (BertConfig, BertModel,
                                                  LoadWeightsMixin)
 from wde.tasks.retriever.schema.execute_io import RetrieverExecuteOutput
+from wde.workflows.core.backends.attention import (AttentionBackend,
+                                                   AttentionMetadata)
+from wde.workflows.core.backends.quantization import QuantizationConfig
 from wde.workflows.core.schema.execute_io import IntermediateTensors
 
 

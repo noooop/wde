@@ -6,8 +6,8 @@ from typing import List, Optional, Tuple
 import torch
 from vllm.platforms import current_platform
 
-from wde.backends.utils import set_random_seed
 from wde.logger import init_logger
+from wde.workflows.core.backends.utils import set_random_seed
 from wde.workflows.core.config import DeviceConfig, LoadConfig
 from wde.workflows.core.schema.execute_io import ExecuteInput, ExecuteOutput
 from wde.workflows.decoding.backends.attention import \

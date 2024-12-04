@@ -5,8 +5,8 @@ import torch
 from vllm.utils import STR_DTYPE_TO_TORCH_DTYPE
 
 from tests.tasks.utils import compare_embeddings
-from wde.backends.attention.abstract import AttentionType
-from wde.backends.attention.layer import Attention
+from wde.workflows.core.backends.attention.abstract import AttentionType
+from wde.workflows.core.backends.attention.layer import Attention
 from wde.workflows.prefill_only.backends.attention.selector import (
     AttentionImpls, AttnBackend, _Backend)
 

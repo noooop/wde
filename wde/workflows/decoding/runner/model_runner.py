@@ -7,8 +7,8 @@ import torch.nn as nn
 from vllm.platforms import current_platform
 from vllm.utils import DeviceMemoryProfiler, is_pin_memory_available
 
-from wde.backends.models.utils import set_cpu_offload_max_bytes
 from wde.logger import init_logger
+from wde.workflows.core.backends.models.utils import set_cpu_offload_max_bytes
 from wde.workflows.core.config import DeviceConfig, LoadConfig
 from wde.workflows.decoding.backends.attention import \
     DecodeOnlyAttentionBackend
@@ -63,8 +63,8 @@ class GPUModelRunner:
         self.sampler = Sampler()
 
     def load_model(self) -> None:
-        from wde.backends.loader.loader import (get_model_loader,
-                                                initialize_model)
+        from wde.workflows.core.backends.loader.loader import (
+            get_model_loader, initialize_model)
 
         logger.info("Starting to load model %s...", self.model_config.model)
         with DeviceMemoryProfiler():

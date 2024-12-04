@@ -2,8 +2,8 @@ import torch
 import torch.nn as nn
 from vllm.utils import DeviceMemoryProfiler, is_pin_memory_available
 
-from wde.backends.attention import AttentionBackend
 from wde.logger import init_logger
+from wde.workflows.core.backends.attention import AttentionBackend
 from wde.workflows.core.config import DeviceConfig, LoadConfig, ModelConfig
 from wde.workflows.core.schema.execute_io import ExecuteOutput
 from wde.workflows.prefill_only.config import SchedulerConfig
@@ -34,8 +34,8 @@ class ModelRunner:
         self.model: nn.Module  # Set after load_model
 
     def load_model(self) -> None:
-        from wde.backends.loader.loader import (get_model_loader,
-                                                initialize_model)
+        from wde.workflows.core.backends.loader.loader import (
+            get_model_loader, initialize_model)
 
         logger.info("Starting to load model %s...", self.model_config.model)
         with DeviceMemoryProfiler() as m:

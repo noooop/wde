@@ -8,19 +8,26 @@ import torch
 from torch import nn
 from torch.nn import LayerNorm
 
-from wde.backends.activation import SiluAndMul
-from wde.backends.attention import (Attention, AttentionBackend,
-                                    AttentionMetadata)
-from wde.backends.distributed import get_tensor_model_parallel_world_size
-from wde.backends.layernorm import RMSNorm
-from wde.backends.linear import (MergedColumnParallelLinear, QKVParallelLinear,
-                                 RowParallelLinear)
-from wde.backends.loader.weight_utils import default_weight_loader
-from wde.backends.models.transformers_utils.configs import ChatGLMConfig
-from wde.backends.quantization.base_config import QuantizationConfig
-from wde.backends.rotary_embedding import get_rope
-from wde.backends.vocab_embedding import ParallelLMHead, VocabParallelEmbedding
 from wde.logger import init_logger
+from wde.workflows.core.backends.activation import SiluAndMul
+from wde.workflows.core.backends.attention import (Attention, AttentionBackend,
+                                                   AttentionMetadata)
+from wde.workflows.core.backends.distributed import \
+    get_tensor_model_parallel_world_size
+from wde.workflows.core.backends.layernorm import RMSNorm
+from wde.workflows.core.backends.linear import (MergedColumnParallelLinear,
+                                                QKVParallelLinear,
+                                                RowParallelLinear)
+from wde.workflows.core.backends.loader.weight_utils import \
+    default_weight_loader
+from wde.workflows.core.backends.models.transformers_utils.configs import \
+    ChatGLMConfig
+from wde.workflows.core.backends.quantization.base_config import \
+    QuantizationConfig
+from wde.workflows.core.backends.rotary_embedding import get_rope
+from wde.workflows.core.backends.vocab_embedding import (ParallelLMHead,
+                                                         VocabParallelEmbedding
+                                                         )
 from wde.workflows.core.config import CacheConfig
 from wde.workflows.core.schema.execute_io import IntermediateTensors
 

@@ -6,7 +6,7 @@ import torch
 from wde.workflows.core.schema.execute_io import ExecuteOutput, ModelInput
 
 if TYPE_CHECKING:
-    from wde.backends.attention import AttentionMetadata
+    from wde.workflows.core.backends.attention import AttentionMetadata
     from wde.workflows.decoding.backends.sampling.sampling_metadata import \
         SamplingMetadata
     from wde.workflows.decoding.backends.sampling.sampling_params import \
