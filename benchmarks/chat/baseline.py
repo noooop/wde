@@ -29,6 +29,7 @@ def benchmark(args):
         max_num_batched_tokens=args.max_num_batched_tokens,
         max_num_requests=args.max_num_requests,
         scheduling=args.scheduling,
+        frieren_executor_max_workers=args.frieren_executor_max_workers,
         record_metrics=args.record_metrics)
 
     engine = LLMEngine.from_engine_args(engine_args)
@@ -110,11 +111,12 @@ if __name__ == '__main__':
     args.quantization_param_path = None
     args.enable_prefix_caching = False
     args.gpu_memory_utilization = 0.9
-    args.record_metrics = False
+    args.frieren_executor_max_workers = 1
+    args.record_metrics = True
 
     from concurrent.futures import ProcessPoolExecutor
 
-    def run(args):
+    def run_wde(args):
         try:
             with ProcessPoolExecutor(1) as executor:
                 f = executor.submit(benchmark, args)
@@ -125,13 +127,25 @@ if __name__ == '__main__':
 
     max_num_batched_tokens_list = [1536, 1024, 768, 512, 384, 256, 128, 64, 32]
 
-    for scheduling in ["sync", "simple_async", "async", "double_buffer"]:
+    for scheduling in ["sync", "simple_async"]:
         print(f"scheduling: {scheduling}")
         args.scheduling = scheduling
-
         print()
         for max_num_batched_tokens in max_num_batched_tokens_list:
             print("max_num_batched_tokens", max_num_batched_tokens)
             args.max_num_requests = max_num_batched_tokens
             args.max_num_batched_tokens = max_num_batched_tokens
-            run(args)
+            run_wde(args)
+
+    for scheduling in ["async"]:
+        for max_workers in [1, 2, 3]:
+            print(f"scheduling: {scheduling}-{max_workers}")
+            args.frieren_executor_max_workers = max_workers
+            args.scheduling = scheduling
+
+            print()
+            for max_num_batched_tokens in max_num_batched_tokens_list:
+                print("max_num_batched_tokens", max_num_batched_tokens)
+                args.max_num_requests = max_num_batched_tokens
+                args.max_num_batched_tokens = max_num_batched_tokens
+                run_wde(args)

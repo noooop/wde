@@ -36,7 +36,7 @@ class Scheduler(ABC):
     def add_request(self, request: Request) -> None:
         if (request.request_id in self.requests
                 or request.request_id in self.aborted_requests):
-            logger.warning("[%s] request_id conflict")
+            logger.warning("[%s] request_id conflict", request.request_id)
             return
 
         self.waiting.append(request)
@@ -88,3 +88,8 @@ class Scheduler(ABC):
                                    for request in request_outputs
                                    if request.finished)
         self.requests -= finished_request_ids
+
+    def clear(self):
+        self.waiting.clear()
+        self.requests.clear()
+        self.aborted_requests.clear()

@@ -13,6 +13,7 @@ class PrefillOnlySchedulerConfig(SchedulerConfig):
 
     def __init__(self,
                  max_model_len: int,
+                 frieren_executor_max_workers: int,
                  max_num_batched_tokens: Optional[int] = None,
                  max_num_requests: Optional[int] = None,
                  max_num_on_the_fly: Optional[int] = None,
@@ -29,9 +30,9 @@ class PrefillOnlySchedulerConfig(SchedulerConfig):
 
         if max_num_on_the_fly is None:
             if scheduling == "double_buffer":
-                self.max_num_on_the_fly = 3
+                self.max_num_on_the_fly = max(frieren_executor_max_workers, 3)
             else:
-                self.max_num_on_the_fly = 2
+                self.max_num_on_the_fly = max(frieren_executor_max_workers, 2)
         else:
             self.max_num_on_the_fly = max_num_on_the_fly
 

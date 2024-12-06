@@ -50,16 +50,18 @@ def benchmark_wde(args):
     _prompt = "if" * args.input_len
     requests = [_prompt for _ in range(args.num_prompts)]
 
-    engine_args = EngineArgs(model=args.model,
-                             tokenizer=args.tokenizer,
-                             seed=args.seed,
-                             trust_remote_code=args.trust_remote_code,
-                             dtype=args.dtype,
-                             max_model_len=args.max_model_len,
-                             device=args.device,
-                             max_num_requests=1,
-                             scheduling=args.scheduling,
-                             record_metrics=args.record_metrics)
+    engine_args = EngineArgs(
+        model=args.model,
+        tokenizer=args.tokenizer,
+        seed=args.seed,
+        trust_remote_code=args.trust_remote_code,
+        dtype=args.dtype,
+        max_model_len=args.max_model_len,
+        device=args.device,
+        max_num_requests=1,
+        scheduling=args.scheduling,
+        frieren_executor_max_workers=args.frieren_executor_max_workers,
+        record_metrics=args.record_metrics)
 
     engine = LLMEngine.from_engine_args(engine_args)
 
@@ -134,6 +136,8 @@ if __name__ == '__main__':
     args.dtype = "half"
     args.device = "cuda"
     args.batchsize = [1, 2, 4, 8, 16, 32, 64]
+    args.frieren_executor_max_workers = 1
+
     args.record_metrics = True
 
     from concurrent.futures import ProcessPoolExecutor
@@ -150,7 +154,14 @@ if __name__ == '__main__':
             f = executor.submit(benchmark_wde, args)
             f.result()
 
-    for scheduling in ["sync", "simple_async", "async", "double_buffer"]:
+    for scheduling in ["sync", "simple_async"]:
         print(f"scheduling: {scheduling}")
         args.scheduling = scheduling
         run_wde(args)
+
+    for scheduling in ["async"]:
+        for max_workers in [1, 2, 3]:
+            print(f"scheduling: {scheduling}-{max_workers}")
+            args.frieren_executor_max_workers = max_workers
+            args.scheduling = scheduling
+            run_wde(args)

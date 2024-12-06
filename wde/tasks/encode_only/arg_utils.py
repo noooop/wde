@@ -32,6 +32,7 @@ class EncodeOnlyEngineArgs(EngineArgs):
         engine_config = super().create_engine_config()
 
         scheduler_config = PrefillOnlySchedulerConfig(
+            frieren_executor_max_workers=self.frieren_executor_max_workers,
             max_num_batched_tokens=self.max_num_batched_tokens,
             max_num_requests=self.max_num_requests,
             max_model_len=engine_config.model_config.max_model_len,

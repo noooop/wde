@@ -20,6 +20,7 @@ class DecodingSchedulerConfig:
     supported_scheduling = ["sync", "simple_async", "async", "double_buffer"]
 
     def __init__(self,
+                 frieren_executor_max_workers: int,
                  max_num_batched_tokens: Optional[int],
                  max_num_requests: int,
                  max_model_len: int,
@@ -37,9 +38,9 @@ class DecodingSchedulerConfig:
 
         if max_num_on_the_fly is None:
             if scheduling == "double_buffer":
-                self.max_num_on_the_fly = 3
+                self.max_num_on_the_fly = max(frieren_executor_max_workers, 3)
             else:
-                self.max_num_on_the_fly = 2
+                self.max_num_on_the_fly = max(frieren_executor_max_workers, 2)
         else:
             self.max_num_on_the_fly = max_num_on_the_fly
 
@@ -87,27 +88,19 @@ class DecodingEngineConfig(EngineConfig):
             "quantization=%s, kv_cache_dtype=%s, "
             "quantization_param_path=%s, device_config=%s, "
             "seed=%d, served_model_name=%s, "
-            "enable_prefix_caching=%s, scheduling=%s)",
-            VLLM_VERSION,
-            self.model_config.model,
-            self.model_config.tokenizer,
+            "enable_prefix_caching=%s, scheduling=%s, max_num_on_the_fly=%d)",
+            VLLM_VERSION, self.model_config.model, self.model_config.tokenizer,
             self.model_config.skip_tokenizer_init,
-            self.model_config.tokenizer_mode,
-            self.model_config.revision,
-            self.model_config.rope_scaling,
-            self.model_config.rope_theta,
+            self.model_config.tokenizer_mode, self.model_config.revision,
+            self.model_config.rope_scaling, self.model_config.rope_theta,
             self.model_config.tokenizer_revision,
-            self.model_config.trust_remote_code,
-            self.model_config.dtype,
-            self.model_config.max_model_len,
-            self.load_config.download_dir,
-            self.load_config.load_format,
-            self.model_config.quantization,
+            self.model_config.trust_remote_code, self.model_config.dtype,
+            self.model_config.max_model_len, self.load_config.download_dir,
+            self.load_config.load_format, self.model_config.quantization,
             self.cache_config.cache_dtype,
             self.model_config.quantization_param_path,
-            self.device_config.device,
-            self.model_config.seed,
+            self.device_config.device, self.model_config.seed,
             self.model_config.served_model_name,
             self.cache_config.enable_prefix_caching,
             self.scheduler_config.scheduling,
-        )
+            self.scheduler_config.max_num_on_the_fly)

@@ -44,7 +44,7 @@ class EngineArgs:
 
     # sys_config
     gevent_engine_threadpool_size: int = None
-    frieren_executor_max_workers: int = 1
+    frieren_executor_max_workers: int = 2
     zero_server_pool_size: int = None
     record_metrics: bool = False
 

@@ -1,5 +1,4 @@
 import random
-import time
 
 
 def benchmark_wde(args):
@@ -25,49 +24,42 @@ def benchmark_wde(args):
         quantization_param_path=args.quantization_param_path,
         device=args.device,
         max_num_requests=1,
-        scheduling=args.scheduling)
+        scheduling=args.scheduling,
+        frieren_executor_max_workers=args.frieren_executor_max_workers,
+    )
 
     engine = LLMEngine.from_engine_args(engine_args)
 
-    def _run():
-        for batchsize in args.batchsize:
-            engine.engine_config.scheduler_config.set_args(
-                max_num_requests=batchsize)
+    for max_num_requests in args.batchsize:
+        engine.engine_config.scheduler_config.set_args(
+            max_num_requests=max_num_requests)
 
-            start = time.perf_counter()
-            for request_id, prompt in enumerate(requests):
-                engine.add_request(str(request_id), prompt)
+        for request_id, prompt in enumerate(requests):
+            engine.add_request(str(request_id), prompt)
 
-            n_step = 0
-            while engine.has_unfinished_requests():
+        for i in range(20):
+            engine.step()
+
+        with torch.profiler.profile(activities=[
+                torch.profiler.ProfilerActivity.CPU,
+                torch.profiler.ProfilerActivity.CUDA,
+        ]) as prof:
+            for i in range(10):
                 engine.step()
-                n_step += 1
-            end = time.perf_counter()
+        prof.export_chrome_trace(f"{scheduling}-"
+                                 f"{args.frieren_executor_max_workers}-"
+                                 f"{max_num_requests}.json")
 
-            elapsed_time = end - start
-            delay = elapsed_time / n_step
-
-            print(f"Batchsize {batchsize}, Throughput: "
-                  f"{len(requests) / elapsed_time:.4f} requests/s, "
-                  f"Delay {delay * 1000:0.2f} ms, n_step {n_step}")
-
-            engine.executor.shutdown_execute_loop()
-
-    with torch.profiler.profile(activities=[
-            torch.profiler.ProfilerActivity.CPU,
-            torch.profiler.ProfilerActivity.CUDA,
-    ]) as prof:
-        _run()
-
-    prof.export_chrome_trace(f"{args.scheduling}_execute_loop.json")
+        engine.scheduler.clear()
+        engine.executor.shutdown_execute_loop()
 
 
 if __name__ == '__main__':
     from easydict import EasyDict as edict
     args = edict()
 
-    args.input_len = 256
-    args.num_prompts = 100
+    args.input_len = 32
+    args.num_prompts = 10000
 
     args.model = 'BAAI/bge-m3'
 
@@ -80,7 +72,8 @@ if __name__ == '__main__':
 
     args.dtype = "half"
     args.device = "cuda"
-    args.batchsize = [4]
+    args.batchsize = [1, 2, 4, 8, 16, 32, 64]
+    args.frieren_executor_max_workers = 1
 
     from concurrent.futures import ProcessPoolExecutor
 
@@ -89,7 +82,14 @@ if __name__ == '__main__':
             f = executor.submit(benchmark_wde, args)
             f.result()
 
-    for scheduling in ["sync", "simple_async", "async", "double_buffer"]:
-        print(scheduling)
+    for scheduling in ["sync", "simple_async"]:
+        print(f"scheduling: {scheduling}")
         args.scheduling = scheduling
         run_wde(args)
+
+    for scheduling in ["async"]:
+        for max_workers in [1, 2, 3]:
+            print(f"scheduling: {scheduling}-{max_workers}")
+            args.frieren_executor_max_workers = max_workers
+            args.scheduling = scheduling
+            run_wde(args)

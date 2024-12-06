@@ -76,10 +76,15 @@ class FrierenExecutor:
         thread = ThreadPoolExecutor(self.max_workers)
 
         # Is there a better way to do it asynchronously?
-        def _put(stream, scheduler_output, execute_output):
+        def _put(stream, scheduler_output, execute_input, inference_begin_ts):
+            with torch.cuda.stream(stream):
+                execute_output = self.worker(execute_input)
+                self.worker.non_blocking_d2h(execute_output)
+
             stream.synchronize()
             self.put_stream(stream)
             if self.record_metrics:
+                execute_output.inference_begin_ts = inference_begin_ts
                 execute_output.inference_end_ts = time.perf_counter()
             executor_out.put((scheduler_output, execute_output))
 
@@ -91,6 +96,8 @@ class FrierenExecutor:
 
                 if self.record_metrics:
                     inference_begin_ts = time.perf_counter()
+                else:
+                    inference_begin_ts = None
 
                 stream = self.get_stream()
 
@@ -98,13 +105,11 @@ class FrierenExecutor:
 
                 with torch.cuda.stream(stream):
                     self.worker.non_blocking_h2d(execute_input)
-                    execute_output = self.worker(execute_input)
-                    self.worker.non_blocking_d2h(execute_output)
 
-                if self.record_metrics:
-                    execute_output.inference_begin_ts = inference_begin_ts
+                stream.synchronize()
 
-                thread.submit(_put, stream, scheduler_output, execute_output)
+                thread.submit(_put, stream, scheduler_output, execute_input,
+                              inference_begin_ts)
         except Exception as e:
             executor_out.put(e)
         thread.shutdown()

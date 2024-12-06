@@ -58,6 +58,7 @@ class DecodeOnlyOutputLastHiddenStatesEngineArgs(EngineArgs):
 
         if model_config.output_last_hidden_states:
             scheduler_config = DecodeOnlyEmbeddingSchedulerConfig(
+                frieren_executor_max_workers=self.frieren_executor_max_workers,
                 max_num_batched_tokens=self.max_num_batched_tokens,
                 max_num_requests=self.max_num_requests,
                 max_model_len=model_config.max_model_len,
