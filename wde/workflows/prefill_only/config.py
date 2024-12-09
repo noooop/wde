@@ -13,7 +13,7 @@ class PrefillOnlySchedulerConfig(SchedulerConfig):
 
     def __init__(self,
                  max_model_len: int,
-                 frieren_executor_max_workers: int,
+                 frieren_executor_max_workers: int = 2,
                  max_num_batched_tokens: Optional[int] = None,
                  max_num_requests: Optional[int] = None,
                  max_num_on_the_fly: Optional[int] = None,

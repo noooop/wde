@@ -2,11 +2,10 @@ import pytest
 from vllm.utils import DeviceMemoryProfiler
 
 from wde.tasks.encode_only.arg_utils import EncodeOnlyEngineArgs as EngineArgs
+from wde.workflows.core.backends.attention import AttentionBackend
 from wde.workflows.core.backends.loader.loader import (get_model_loader,
                                                        initialize_model)
-from wde.workflows.core.config import DeviceConfig, LoadConfig, ModelConfig
-from wde.workflows.prefill_only.backends.attention.backends.abstract import \
-    PrefillOnlyAttentionBackend
+from wde.workflows.core.config import EngineConfig
 from wde.workflows.prefill_only.backends.attention.selector import (
     AttentionImpls, AttentionType, AttnBackend, _Backend)
 
@@ -27,28 +26,22 @@ def test_loader(model: str, dtype: str, attn_type: str):
         engine_args = EngineArgs(model=model)
         engine_config = engine_args.create_engine_config()
 
-        model_memory_usage = load_model(engine_config.model_config,
-                                        engine_config.load_config,
-                                        engine_config.device_config,
+        model_memory_usage = load_model(engine_config=engine_config,
                                         attn_backend=attn_backend)
 
         assert model_memory_usage > 0
 
 
-def load_model(model_config: ModelConfig, load_config: LoadConfig,
-               device_config: DeviceConfig,
-               attn_backend: PrefillOnlyAttentionBackend):
+def load_model(engine_config: EngineConfig, attn_backend: AttentionBackend):
 
     with DeviceMemoryProfiler() as m:
-        loader = get_model_loader(load_config)
-        model = initialize_model(model_config=model_config,
-                                 load_config=load_config,
-                                 device_config=device_config,
+        loader = get_model_loader(engine_config.load_config)
+        model = initialize_model(engine_config=engine_config,
                                  attn_backend=attn_backend)
 
         loader.load_model(model,
-                          model_config=model_config,
-                          device_config=device_config)
+                          model_config=engine_config.model_config,
+                          device_config=engine_config.device_config)
 
     model_memory_usage = m.consumed_memory
     return model_memory_usage

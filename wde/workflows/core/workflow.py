@@ -10,8 +10,10 @@ class Workflow:
     RequestProcessor: str
     OutputProcessor: str
     ModelInputBuilder: str
+
     Executor: str
     Worker: str
+    Runer: str
 
     @classmethod
     def from_engine(cls, engine):

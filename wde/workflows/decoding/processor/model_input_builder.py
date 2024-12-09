@@ -3,13 +3,12 @@ from typing import List
 import torch
 from vllm.utils import flatten_2d_lists, is_pin_memory_available
 
-from wde.workflows.core.config import DeviceConfig
+from wde.workflows.core.backends.attention import AttentionBackend
+from wde.workflows.core.config import EngineConfig
 from wde.workflows.core.processor.model_input_builder import ModelInputBuilder
 from wde.workflows.core.schema.execute_io import ExecuteInput
 from wde.workflows.decoding.backends.sampling.sampling_metadata import \
     SamplingMetadata
-from wde.workflows.decoding.config import (CacheConfig, DecodingModelConfig,
-                                           DecodingSchedulerConfig)
 from wde.workflows.decoding.schema.engine_io import (
     DecodingSchedulableRequest, DecodingSchedulerOutput)
 from wde.workflows.decoding.schema.execute_io import DecodingModelInput
@@ -21,29 +20,23 @@ class DecodingModelInputBuilder(ModelInputBuilder):
 
     def __init__(
         self,
-        device_config: DeviceConfig,
-        model_config: DecodingModelConfig,
-        scheduler_config: DecodingSchedulerConfig,
-        cache_config: CacheConfig,
-        attn_backend,
+        engine_config: EngineConfig,
+        attn_backend: AttentionBackend,
     ):
-        self.device = device_config.device
+        self.engine_config = engine_config
+        self.device = engine_config.device_config.device
+        self.vocab_size = self.engine_config.model_config.hf_config.vocab_size
 
-        self.model_config = model_config
-        self.scheduler_config = scheduler_config
-        self.cache_config = cache_config
         self.attn_backend = attn_backend
         self.attn_metadata_builder = attn_backend.make_metadata_builder(
-            self.cache_config.block_size)
+            self.engine_config.cache_config.block_size)
+
+        self.kv_caches = None
 
     @classmethod
     def from_engine(cls, engine):
-        return cls(
-            engine.engine_config.device_config,
-            engine.engine_config.model_config,
-            engine.engine_config.scheduler_config,
-            engine.engine_config.cache_config,
-            attn_backend=engine.executor.worker.model_runner.attn_backend)
+        return cls(engine_config=engine.engine_config,
+                   attn_backend=engine.attn_backend)
 
     def _prepare_model_tensor_input(
             self, scheduled_requests: List[DecodingSchedulableRequest]):
@@ -94,14 +87,13 @@ class DecodingModelInputBuilder(ModelInputBuilder):
             scheduled_requests)
         attn_metadata = self.attn_metadata_builder(scheduled_requests)
         sampling_metadata = SamplingMetadata.prepare(
-            scheduled_requests,
-            vocab_size=self.model_config.hf_config.vocab_size,
-            dtype=torch.float)
+            scheduled_requests, vocab_size=self.vocab_size, dtype=torch.float)
 
         return DecodingModelInput(input_tokens=input_tokens_tensor,
                                   input_positions=input_positions_tensor,
                                   attn_metadata=attn_metadata,
-                                  sampling_metadata=sampling_metadata)
+                                  sampling_metadata=sampling_metadata,
+                                  kv_caches=self.kv_caches)
 
     def __call__(self,
                  scheduler_output: DecodingSchedulerOutput) -> ExecuteInput:

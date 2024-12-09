@@ -1,71 +1,48 @@
-"""A block manager that manages token blocks."""
-import enum
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 from vllm.core.block.block_table import BlockTable
 from vllm.core.block.cpu_gpu_block_allocator import CpuGpuBlockAllocator
 from vllm.utils import Device
 
+from wde.logger import init_logger
+from wde.workflows.decoding.kv_cache.manager import AllocStatus, KVCacheManager
 from wde.workflows.decoding.schema.request import DecodingSchedulableRequest
+
+logger = init_logger(__name__)
 
 RequestId = str
 
 
-class AllocStatus(enum.Enum):
-    """Result for BlockSpaceManager.can_allocate
+class NaiveKVCacheManager(KVCacheManager):
 
-    1. Ok: seq_group can be allocated now.
-    2. Later: seq_group cannot be allocated.
-      The capacity of allocator is larger than seq_group required.
-    3. Never: seq_group can never be allocated.
-      The seq_group is too large to allocated in GPU.
-    """
-    OK = enum.auto()
-    LATER = enum.auto()
-    NEVER = enum.auto()
+    def __init__(self, *args, watermark: float = 0.01, **kwargs):
+        super().__init__(*args, **kwargs)
 
+        num_gpu_blocks = self.engine_config.cache_config.num_gpu_blocks
+        num_cpu_blocks = self.engine_config.cache_config.num_cpu_blocks
 
-class SelfAttnBlockSpaceManager:
-
-    def __init__(
-        self,
-        block_size: int,
-        num_gpu_blocks: int,
-        num_cpu_blocks: int,
-        watermark: float = 0.01,
-        sliding_window: Optional[int] = None,
-        enable_caching: bool = False,
-    ) -> None:
-        self.block_size = block_size
+        self.block_size = self.engine_config.cache_config.block_size
         self.num_total_gpu_blocks = num_gpu_blocks
         self.num_total_cpu_blocks = num_cpu_blocks
-
-        self.sliding_window = sliding_window
-        # max_block_sliding_window is the max number of blocks that need to be
-        # allocated
-        self.max_block_sliding_window = None
-        if sliding_window is not None:
-            # +1 here because // rounds down
-            num_blocks = sliding_window // block_size + 1
-            # +1 here because the last block may not be full,
-            # and so the sequence stretches one more block at the beginning
-            # For example, if sliding_window is 3 and block_size is 4,
-            # we may need 2 blocks when the second block only holds 1 token.
-            self.max_block_sliding_window = num_blocks + 1
-
-        self.watermark = watermark
-        assert watermark >= 0.0
-
-        self.enable_caching = enable_caching
-
-        self.watermark_blocks = int(watermark * num_gpu_blocks)
 
         self.block_allocator = CpuGpuBlockAllocator.create(
             allocator_type="naive",
             num_gpu_blocks=num_gpu_blocks,
             num_cpu_blocks=num_cpu_blocks,
-            block_size=block_size,
+            block_size=self.block_size,
         )
+
+        self.watermark = watermark
+        assert watermark >= 0.0
+        self.watermark_blocks = int(watermark * num_gpu_blocks)
+
+        sliding_window = self.engine_config.cache_config.sliding_window
+
+        self.sliding_window = sliding_window
+        self.max_block_sliding_window = None
+        if sliding_window is not None:
+            num_blocks = sliding_window // self.block_size + 1
+            self.max_block_sliding_window = num_blocks + 1
 
         self.block_tables: Dict[RequestId, BlockTable] = {}
 
@@ -78,14 +55,9 @@ class SelfAttnBlockSpaceManager:
             num_lookahead_slots=num_lookahead_slots,
         )
 
-        if self.max_block_sliding_window is not None:
-            num_required_blocks = min(num_required_blocks,
-                                      self.max_block_sliding_window)
-
         num_free_gpu_blocks = self.block_allocator.get_num_free_blocks(
             device=Device.GPU)
 
-        # Use watermark to avoid frequent cache eviction.
         if (self.num_total_gpu_blocks - num_required_blocks
                 < self.watermark_blocks):
             return AllocStatus.NEVER
@@ -101,7 +73,6 @@ class SelfAttnBlockSpaceManager:
             max_block_sliding_window=self.max_block_sliding_window,
         )
         if request.get_token_ids():
-            # Add blocks to the block table only if the sequence is non empty.
             block_table.allocate(request.get_token_ids())
 
         self.block_tables[request.request_id] = block_table

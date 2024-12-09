@@ -1,4 +1,5 @@
 import atexit
+import os
 from queue import Queue
 from threading import Thread
 from typing import List, Optional
@@ -6,11 +7,11 @@ from typing import List, Optional
 import torch
 
 from wde.logger import init_logger
+from wde.utils import lazy_import
 from wde.workflows.core.backends.attention import AttentionBackend
 from wde.workflows.core.config import EngineConfig
 from wde.workflows.core.executor.gpu_executor import FrierenExecutor
 from wde.workflows.core.llm_engine import LLMEngine
-from wde.workflows.core.worker import create_worker
 from wde.workflows.core.workflow import Workflow
 
 logger = init_logger(__name__)
@@ -48,14 +49,15 @@ class GPUDataParallelismExecutor:
         if rank >= device_count:
             logger.warning(f"rank {rank} exceeds device_count {device_count}.")
 
-        worker_kwargs = dict(
+        worker = lazy_import(self.workflow.Worker)(
             engine_config=self.engine_config,
-            attn_backend=self.attn_backend,
-            envs={'CUDA_VISIBLE_DEVICES': str(rank % device_count)})
-        worker_kwargs.update(module=self.workflow.Worker)
-        worker = create_worker(**worker_kwargs)
+            workflow=self.workflow,
+            attn_backend=self.attn_backend)
         worker.init_device()
         worker.load_model()
+
+        os.environ['CUDA_VISIBLE_DEVICES'] = str(rank % device_count)
+
         executor = FrierenExecutor.from_engine_config(
             engine_config=self.engine_config,
             worker=worker,

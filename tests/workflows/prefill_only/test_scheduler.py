@@ -45,7 +45,8 @@ def test_limited_by_max_num_requests(n_request: int, num_new_tokens: int,
         scheduler_config=SchedulerConfig(max_num_batched_tokens=max_model_len *
                                          max_num_requests,
                                          max_model_len=max_model_len,
-                                         max_num_requests=max_num_requests))
+                                         max_num_requests=max_num_requests,
+                                         frieren_executor_max_workers=2))
 
     scheduler = PrefillOnlyScheduler(
         engine_config=engine_config,

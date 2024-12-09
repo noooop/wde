@@ -3,6 +3,7 @@ from queue import Empty, Queue
 from typing import Dict, Iterable, List, Optional, Type, Union
 
 from wde.logger import init_logger
+from wde.utils import lazy_import
 from wde.workflows.core.arg_utils import EngineArgs
 from wde.workflows.core.config import EngineConfig
 from wde.workflows.core.schema.engine_io import (Inputs, Params, RequestOutput,
@@ -10,13 +11,6 @@ from wde.workflows.core.schema.engine_io import (Inputs, Params, RequestOutput,
 from wde.workflows.core.workflow import Workflow
 
 logger = init_logger(__name__)
-
-
-def lazy_import(module):
-    module_name, class_name = module.split(":")
-    import importlib
-    module = importlib.import_module(module_name)
-    return getattr(module, class_name)
 
 
 class LLMEngine:
@@ -36,8 +30,9 @@ class LLMEngine:
         self.model_inputs_builder = lazy_import(
             self.workflow.ModelInputBuilder).from_engine(self)
 
-        if hasattr(self.executor, "initialize_kv_caches"):
-            self.executor.initialize_kv_caches(self)
+        if hasattr(self.workflow, "KVCacheManager"):
+            self.kv_cache_manager = lazy_import(
+                self.workflow.KVCacheManager).from_engine(self)
 
         self.input_processor = lazy_import(
             self.workflow.InputProcessor).from_engine(self)

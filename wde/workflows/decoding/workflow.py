@@ -16,11 +16,17 @@ class DecodeOnlyDecodingWorkflow(Workflow):
     ModelInputBuilder: str = (
         "wde.workflows.decoding.processor.model_input_builder:"
         "DecodingModelInputBuilder")
-    Worker: str = "wde.workflows.decoding.worker.gpu_worker:Worker"
-    Executor: str = "wde.workflows.decoding.executor.gpu_executor"
+
     Scheduler: str = "wde.workflows.decoding.scheduler:DecodingScheduler"
     AttnBackend: str = ("wde.workflows.decoding.backends.attention.selector:"
                         "DecodingAttnBackend")
+
+    Executor: str = "wde.workflows.core.executor.gpu_executor"
+    Worker: str = "wde.workflows.core.worker.gpu_worker:GPUWorker"
+    Runer: str = "wde.workflows.decoding.runner.gpu_runner:GPUDecodingRunner"
+
+    KVCacheManager: str = "wde.workflows.decoding.kv_cache.naive_manager:NaiveKVCacheManager"
+
     attn_type: str = "DECODER"
     protocol: str = PROTOCOL
 

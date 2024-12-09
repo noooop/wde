@@ -9,13 +9,16 @@ class PrefillOnlyWorkflow(Workflow):
     ModelInputBuilder: str = (
         "wde.workflows.prefill_only.processor."
         "model_input_builder:PrefillOnlyModelInputBuilder")
-    Worker: str = "wde.workflows.prefill_only.worker.gpu_worker:Worker"
-    Executor: str = "wde.workflows.prefill_only.executor.gpu_executor"
+
     Scheduler: str = ("wde.workflows.prefill_only.scheduler:"
                       "PrefillOnlyScheduler")
     AttnBackend: str = ("wde.workflows.prefill_only.backends."
                         "attention.selector:AttnBackend")
     Tokenizer: str = "wde.workflows.prefill_only.processor.tokenizer:Tokenizer"
+
+    Executor: str = "wde.workflows.core.executor.gpu_executor"
+    Worker: str = "wde.workflows.core.worker.gpu_worker:GPUWorker"
+    Runer: str = "wde.workflows.prefill_only.runner.gpu_runner:PrefillOnlyGPURunner"
 
     @classmethod
     def from_engine(cls, engine):

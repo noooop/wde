@@ -27,8 +27,8 @@ from wde.workflows.core.backends.loader.weight_utils import (
     safetensors_weights_iterator)
 from wde.workflows.core.backends.quantization import QuantizationConfig
 from wde.workflows.core.backends.utils import set_weight_attrs
-from wde.workflows.core.config import (CacheConfig, DeviceConfig, LoadConfig,
-                                       LoadFormat, ModelConfig,
+from wde.workflows.core.config import (CacheConfig, DeviceConfig, EngineConfig,
+                                       LoadConfig, LoadFormat, ModelConfig,
                                        SchedulerConfig)
 
 
@@ -101,21 +101,19 @@ def _get_quantization_config(
 
 
 def initialize_model(
-    model_config: ModelConfig,
-    load_config: LoadConfig,
-    device_config: DeviceConfig,
+    engine_config: EngineConfig,
     attn_backend: AttentionBackend,
-    cache_config: Optional[CacheConfig] = None,
 ) -> nn.Module:
-    """Initialize a model with the given configurations."""
-
-    target_device = torch.device(device_config.device)
-    with set_default_torch_dtype(model_config.dtype):
+    cache_config = engine_config.engine_config if hasattr(
+        engine_config, "engine_config") else None
+    target_device = torch.device(engine_config.device_config.device)
+    with set_default_torch_dtype(engine_config.model_config.dtype):
         with target_device:
-            model_class = get_model_architecture(model_config)[0]
-            quant_config = _get_quantization_config(model_config, load_config)
+            model_class = get_model_architecture(engine_config.model_config)[0]
+            quant_config = _get_quantization_config(engine_config.model_config,
+                                                    engine_config.load_config)
 
-            return model_class(config=model_config.hf_config,
+            return model_class(config=engine_config.model_config.hf_config,
                                cache_config=cache_config,
                                quant_config=quant_config,
                                attn_backend=attn_backend)

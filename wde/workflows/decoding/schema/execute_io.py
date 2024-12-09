@@ -21,6 +21,7 @@ class DecodingModelInput(ModelInput):
     query_lens: Optional[List[int]] = None
     attn_metadata: Optional["AttentionMetadata"] = None
     sampling_metadata: Optional["SamplingMetadata"] = None
+    kv_caches: Optional[List[torch.Tensor]] = None
 
     def to(self, device, non_blocking=True):
         for k in self.__dict__:

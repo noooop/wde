@@ -8,8 +8,7 @@ from wde.workflows.core.config import EngineConfig
 from wde.workflows.core.processor.input_processor import RequestProcessor
 from wde.workflows.core.scheduler import Scheduler
 from wde.workflows.core.schema.engine_io import RequestOutput
-from wde.workflows.decoding.backends.kvcache.block_manager import (
-    AllocStatus, SelfAttnBlockSpaceManager)
+from wde.workflows.decoding.kv_cache.manager import AllocStatus, KVCacheManager
 from wde.workflows.decoding.schema.engine_io import (
     DecodingSchedulableRequest, DecodingSchedulerOutput)
 from wde.workflows.decoding.schema.request import RequestStatus
@@ -108,34 +107,19 @@ class SchedulerPrefillOutputs:
 class DecodingScheduler(Scheduler):
     support_scheduling = ["sync_scheduling", "async_scheduling"]
 
-    def __init__(
-        self,
-        engine_config: EngineConfig,
-        request_processor: RequestProcessor,
-    ) -> None:
+    def __init__(self, engine_config: EngineConfig,
+                 request_processor: RequestProcessor,
+                 kv_cache_manager: KVCacheManager) -> None:
         super().__init__(engine_config, request_processor)
-        self.cache_config = engine_config.cache_config
-
-        BlockSpaceManagerImpl = SelfAttnBlockSpaceManager
-
-        num_gpu_blocks = self.cache_config.num_gpu_blocks
-        num_cpu_blocks = self.cache_config.num_cpu_blocks
-
-        self.block_manager = BlockSpaceManagerImpl(
-            block_size=self.cache_config.block_size,
-            num_gpu_blocks=num_gpu_blocks,
-            num_cpu_blocks=num_cpu_blocks,
-            sliding_window=self.cache_config.sliding_window,
-            enable_caching=self.cache_config.enable_prefix_caching)
-
         self.running: Deque[DecodingSchedulableRequest] = deque()
-
+        self.kv_cache_manager = kv_cache_manager
         self.record_metrics = engine_config.sys_config.record_metrics
         self.num_cumulative_preemption = 0
 
     @classmethod
     def from_engine(cls, engine):
-        return cls(engine.engine_config, engine.request_processor)
+        return cls(engine.engine_config, engine.request_processor,
+                   engine.kv_cache_manager)
 
     def _schedule_prefills(
         self,
@@ -180,13 +164,13 @@ class DecodingScheduler(Scheduler):
                 continue
 
             # 4. Check if kv cache can be allocated
-            can_allocate = self.block_manager.can_allocate(request)
+            can_allocate = self.kv_cache_manager.can_allocate(request)
             if can_allocate == AllocStatus.LATER:
                 break
             elif can_allocate == AllocStatus.NEVER:
                 logger.warning(
                     "Input prompt (%d tokens) is too long"
-                    " and exceeds the capacity of block_manager",
+                    " and exceeds the capacity of kv_cache_manager",
                     num_new_tokens)
                 request.status = RequestStatus.FINISHED_IGNORED
                 ignored_requests.append(request)
@@ -363,7 +347,7 @@ class DecodingScheduler(Scheduler):
         for request in self.running:
             if request.finished:
                 self.requests.remove(request.request_id)
-                self.block_manager.free(request)
+                self.kv_cache_manager.free(request)
             else:
                 remaining.append(request)
                 if request.request_id in request_ids:
@@ -373,7 +357,7 @@ class DecodingScheduler(Scheduler):
 
     def _allocate_and_set_running(self,
                                   request: DecodingSchedulableRequest) -> None:
-        self.block_manager.allocate(request)
+        self.kv_cache_manager.allocate(request)
         request.status = RequestStatus.RUNNING
 
     def _split_running_queue(self):
@@ -399,7 +383,7 @@ class DecodingScheduler(Scheduler):
         return running_queue, busy_requests
 
     def _can_append_slots(self, request: DecodingSchedulableRequest) -> bool:
-        return self.block_manager.can_append_slots(
+        return self.kv_cache_manager.can_append_slots(
             request=request,
             num_lookahead_slots=0,
         )
@@ -409,7 +393,7 @@ class DecodingScheduler(Scheduler):
         request: DecodingSchedulableRequest,
         blocks_to_copy: List[Tuple[int, int]],
     ) -> None:
-        cows = self.block_manager.append_slots(request, 0)
+        cows = self.kv_cache_manager.append_slots(request, 0)
         assert not cows
         blocks_to_copy.extend(cows)
 
@@ -429,5 +413,5 @@ class DecodingScheduler(Scheduler):
 
         request.status = RequestStatus.WAITING
 
-        self.block_manager.free(request)
+        self.kv_cache_manager.free(request)
         request.reset_state_for_recompute()
