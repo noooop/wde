@@ -1,4 +1,3 @@
-import random
 import time
 
 import pytest
@@ -17,20 +16,6 @@ def wde_runner():
 @pytest.fixture(scope="session")
 def hf_runner():
     return HfDecodingRunner
-
-
-@pytest.fixture(scope="session")
-def example_prompts():
-    prompts = [
-        "JDK is developed by",
-        "Birds can",
-        "Hello, my name is",
-        "The president of the United States is",
-        "The capital of France is",
-        "The future of AI is",
-    ] * 11
-    random.shuffle(prompts)
-    return prompts
 
 
 @pytest.mark.parametrize("model", MODELS)

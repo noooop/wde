@@ -383,19 +383,14 @@ class DecodingScheduler(Scheduler):
         return running_queue, busy_requests
 
     def _can_append_slots(self, request: DecodingSchedulableRequest) -> bool:
-        return self.kv_cache_manager.can_append_slots(
-            request=request,
-            num_lookahead_slots=0,
-        )
+        return self.kv_cache_manager.can_append_slots(request=request)
 
     def _append_slots(
         self,
         request: DecodingSchedulableRequest,
         blocks_to_copy: List[Tuple[int, int]],
     ) -> None:
-        cows = self.kv_cache_manager.append_slots(request, 0)
-        assert not cows
-        blocks_to_copy.extend(cows)
+        self.kv_cache_manager.append_slots(request)
 
     def _preempt(
         self,

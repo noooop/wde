@@ -1,4 +1,3 @@
-import random
 from typing import List, TypeVar
 
 import pytest
@@ -34,18 +33,6 @@ class Qwen2HfRunner(HfRunner):
 @pytest.fixture(scope="session")
 def hf_runner():
     return Qwen2HfRunner
-
-
-@pytest.fixture(scope="session")
-def example_prompts():
-    prompts = [
-        "Hello, my name is",
-        "The president of the United States is",
-        "The capital of France is",
-        "The future of AI is",
-    ] * 11
-    random.shuffle(prompts)
-    return prompts
 
 
 MODELS = ["Qwen/Qwen2.5-0.5B-Instruct"]

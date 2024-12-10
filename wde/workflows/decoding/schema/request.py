@@ -7,10 +7,9 @@ import torch
 from wde.workflows.core.schema.engine_io import SchedulableRequest
 
 if TYPE_CHECKING:
-    from vllm.core.block.block_table import BlockTable
-
     from wde.workflows.decoding.backends.sampling.sampling_params import \
         SamplingParams
+    from wde.workflows.decoding.kv_cache.virtual_table import VirtualBlockTable
     from wde.workflows.decoding.schema.execute_io import (Logprob,
                                                           PromptLogprobs,
                                                           SampleLogprobs)
@@ -73,7 +72,7 @@ class DecodingSchedulableRequest(SchedulableRequest):
     stop_reason: Union[int, str, None] = None
     is_prefill: bool = True
     busy: bool = False
-    vblock: Optional["BlockTable"] = None
+    vblock: Optional["VirtualBlockTable"] = None
 
     # intermediate variable
     # for model input

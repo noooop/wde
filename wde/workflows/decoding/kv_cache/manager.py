@@ -34,22 +34,18 @@ class KVCacheManager:
 
     # logical KVCacheManager api
 
-    def can_allocate(self,
-                     request: DecodingSchedulableRequest,
-                     num_lookahead_slots: int = 0) -> AllocStatus:
+    def can_allocate(self, request: DecodingSchedulableRequest) -> AllocStatus:
         raise NotImplementedError
 
     def allocate(self, request: DecodingSchedulableRequest) -> None:
         raise NotImplementedError
 
-    def can_append_slots(self, request: DecodingSchedulableRequest,
-                         num_lookahead_slots: int) -> bool:
+    def can_append_slots(self, request: DecodingSchedulableRequest) -> bool:
         raise NotImplementedError
 
     def append_slots(
         self,
         request: DecodingSchedulableRequest,
-        num_lookahead_slots: int,
     ) -> List[Tuple[int, int]]:
         raise NotImplementedError
 
