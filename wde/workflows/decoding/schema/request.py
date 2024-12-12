@@ -109,6 +109,9 @@ class DecodingSchedulableRequest(SchedulableRequest):
     def finished(self):
         return RequestStatus.is_finished(self.status)
 
+    def get_len(self):
+        return len(self.prompt_token_ids) + len(self.output_token_ids)
+
     @property
     def num_computed_tokens(self):
         if self.vblock is None:
@@ -117,23 +120,30 @@ class DecodingSchedulableRequest(SchedulableRequest):
         return self.vblock.num_computed_tokens
 
     @property
+    def num_uncomputed_tokens(self) -> int:
+        return self.get_len() - self.num_computed_tokens
+
+    @property
     def num_new_tokens(self):
-        return self.token_chunk_size
+        num_uncomputed_tokens = self.num_uncomputed_tokens
+
+        if num_uncomputed_tokens == 0:
+            return 1
+        else:
+            return num_uncomputed_tokens
+
+    @property
+    def num_prompt_token_ids(self):
+        return len(self.prompt_token_ids)
+
+    @property
+    def is_prefill(self):
+        return self.num_computed_tokens < self.get_len()
 
     def get_output_text_to_return(self, buffer_length: int):
         truncate = buffer_length and not self.finished
         return self.output_text[:-buffer_length] if truncate else (
             self.output_text)
-
-    def get_len(self):
-        return len(self.prompt_token_ids) + len(self.output_token_ids)
-
-    def get_num_uncomputed_tokens(self) -> int:
-        return self.get_len() - self.num_computed_tokens
-
-    @property
-    def is_prefill(self):
-        return self.num_computed_tokens < self.get_len()
 
     def append_token_id(
         self,
@@ -162,15 +172,6 @@ class DecodingSchedulableRequest(SchedulableRequest):
         if not self.output_token_ids:
             return self.prompt_token_ids[-1]
         return self.output_token_ids[-1]
-
-    def len_prompt_token_ids(self):
-        return len(self.prompt_token_ids)
-
-    def get_num_new_tokens(self):
-        if self.is_prefill:
-            return self.get_num_uncomputed_tokens()
-        else:
-            return 1
 
     def update_num_computed_tokens(self):
         assert self.vblock.num_token_ids == self.vblock.num_computed_tokens + self.token_chunk_size

@@ -62,7 +62,7 @@ class DecodingModelInputBuilder(ModelInputBuilder):
         request.context_len = request.num_computed_tokens
         request.seq_len = min(token_len,
                               request.context_len + token_chunk_size)
-        request.query_len = token_chunk_size if request.is_prefill_cached else 1
+        request.query_len = token_chunk_size
 
         if request.is_prefill_cached:
             request.input_tokens = request.get_token_ids(

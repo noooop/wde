@@ -152,7 +152,7 @@ class DecodingScheduler(Scheduler):
             request = cast(DecodingSchedulableRequest, request)
 
             # 3. Check if the input exceeds the maximum length
-            num_new_tokens = request.get_num_new_tokens()
+            num_new_tokens = request.num_prompt_token_ids
             prompt_limit = self.scheduler_config.max_model_len
             if num_new_tokens > prompt_limit:
                 logger.warning(
@@ -219,7 +219,7 @@ class DecodingScheduler(Scheduler):
             if self.record_metrics:
                 scheduled_ts = time.perf_counter()
 
-            num_new_tokens = request.get_num_new_tokens()
+            num_new_tokens = request.num_new_tokens
             assert num_new_tokens > 0
 
             # 1. chunked prefill
