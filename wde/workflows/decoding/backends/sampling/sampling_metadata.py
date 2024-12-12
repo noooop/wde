@@ -100,7 +100,7 @@ class SamplingMetadata:
 
         for i, request in enumerate(scheduled_requests):
             do_sample = request.do_sample
-            is_prefill = request.is_prefill
+            is_prefill = request.is_prefill_cached
             sampling_params = request.sampling_params
 
             if request.generator is None and request.sampling_params.seed is not None:
@@ -218,7 +218,7 @@ class SamplingMetadata:
                                      or abs(r - 1.0) >= _SAMPLING_EPS):
                 do_penalties = True
 
-            is_prefill = request.is_prefill
+            is_prefill = request.is_prefill_cached
 
             if is_prefill and sampling_params.prompt_logprobs is not None:
                 # For tokens in the prompt that we only need to get
@@ -248,7 +248,7 @@ class SamplingMetadata:
             for request in scheduled_requests:
                 sampling_params = request.sampling_params
 
-                if (request.is_prefill
+                if (request.is_prefill_cached
                         and sampling_params.prompt_logprobs is not None):
                     prefill_len = len(request.prompt_logprobs_indices)
                     prompt_tokens.extend(

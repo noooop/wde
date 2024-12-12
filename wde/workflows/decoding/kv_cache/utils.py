@@ -1,17 +1,13 @@
-import numpy as np
+def chunk_list(lst, chunk_size: int):
+    for i in range(0, len(lst), chunk_size):
+        yield lst[i:i + chunk_size]
 
 
-class RefCounter:
+def get_num_required_blocks(num_token_ids: int,
+                            block_size: int,
+                            num_lookahead_slots: int = 0) -> int:
 
-    def __init__(self, num_total_blocks):
-        self.num_total_blocks = num_total_blocks
-        self._counter = np.zeros(self.num_total_blocks, dtype=np.int64)
+    def cdiv(a: int, b: int) -> int:
+        return -(a // -b)
 
-    def incr(self, block_id):
-        assert block_id < self.num_total_blocks
-        self._counter[block_id] += 1
-
-    def decr(self, block_id):
-        self._counter[block_id] -= 1
-
-        return self._counter[block_id]
+    return cdiv(num_token_ids + num_lookahead_slots, block_size)

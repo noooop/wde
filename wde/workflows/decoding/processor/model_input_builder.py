@@ -45,6 +45,7 @@ class DecodingModelInputBuilder(ModelInputBuilder):
                                            dtype=torch.long,
                                            device="cpu",
                                            pin_memory=pin_memory)
+
         input_positions_tensor = torch.tensor(flatten_2d_lists(
             [request.input_positions for request in scheduled_requests]),
                                               dtype=torch.long,
@@ -54,14 +55,16 @@ class DecodingModelInputBuilder(ModelInputBuilder):
 
     def _prepare_intermediate_results(self,
                                       request: DecodingSchedulableRequest):
+
         token_len = request.get_len()
         token_chunk_size = request.token_chunk_size
-        request.context_len = request.get_num_computed_tokens()
-        request.is_prefill = request.context_len < token_len
+        request.is_prefill_cached = request.is_prefill
+        request.context_len = request.num_computed_tokens
         request.seq_len = min(token_len,
                               request.context_len + token_chunk_size)
-        request.query_len = token_chunk_size if request.is_prefill else 1
-        if request.is_prefill:
+        request.query_len = token_chunk_size if request.is_prefill_cached else 1
+
+        if request.is_prefill_cached:
             request.input_tokens = request.get_token_ids(
             )[request.context_len:request.seq_len]
         else:

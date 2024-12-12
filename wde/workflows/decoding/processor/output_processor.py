@@ -47,7 +47,7 @@ class DecodingModelOutputProcessor(OutputProcessor):
         logprobs = execute_output.logprobs
 
         for request in scheduled_requests:
-            request.update_num_computed_tokens(request.token_chunk_size)
+            request.update_num_computed_tokens()
 
             if not request.do_sample:
                 continue

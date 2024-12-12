@@ -1,14 +1,4 @@
-from dataclasses import dataclass
-from typing import Optional
-
 BlockId = int
-
-
-@dataclass
-class Block:
-    prev_block: Optional["Block"]
-    block_size: int
-    block_id: BlockId
 
 
 class NoFreeBlocksError(ValueError):
@@ -25,8 +15,46 @@ class BlockAllocator:
     def num_free_blocks(self) -> int:
         raise NotImplementedError
 
-    def allocate_block(self, prev_block: Optional[Block]):
+    def create_vblock(self):
         raise NotImplementedError
 
-    def free(self, block: Block) -> None:
+    def allocate_block(self):
+        raise NotImplementedError
+
+    def free(self, physical_block_id: BlockId) -> None:
+        raise NotImplementedError
+
+
+class VirtualBlockTable:
+
+    @property
+    def num_token_ids(self):
+        raise NotImplementedError
+
+    @property
+    def num_computed_tokens(self):
+        raise NotImplementedError
+
+    @property
+    def num_empty_slots(self):
+        raise NotImplementedError
+
+    @property
+    def max_num_token_ids(self):
+        raise NotImplementedError
+
+    def allocate(self, token_ids):
+        raise NotImplementedError
+
+    def free(self):
+        raise NotImplementedError
+
+    def free_last_block(self):
+        raise NotImplementedError
+
+    @property
+    def physical_block_ids(self):
+        raise NotImplementedError
+
+    def update_num_computed_tokens(self):
         raise NotImplementedError

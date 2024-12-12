@@ -9,7 +9,7 @@ from wde.workflows.core.schema.engine_io import SchedulableRequest
 if TYPE_CHECKING:
     from wde.workflows.decoding.backends.sampling.sampling_params import \
         SamplingParams
-    from wde.workflows.decoding.kv_cache.virtual_table import VirtualBlockTable
+    from wde.workflows.decoding.kv_cache.interfaces import VirtualBlockTable
     from wde.workflows.decoding.schema.execute_io import (Logprob,
                                                           PromptLogprobs,
                                                           SampleLogprobs)
@@ -60,7 +60,6 @@ class DecodingSchedulableRequest(SchedulableRequest):
     output_token_ids: List[int] = field(default_factory=list)
     output_text: str = ""
 
-    num_computed_tokens: int = 0
     cached_all_token_ids: List[int] = field(default_factory=list)
 
     prompt_logprobs: Optional["PromptLogprobs"] = None
@@ -70,7 +69,6 @@ class DecodingSchedulableRequest(SchedulableRequest):
     # status
     status: RequestStatus = RequestStatus.WAITING
     stop_reason: Union[int, str, None] = None
-    is_prefill: bool = True
     busy: bool = False
     vblock: Optional["VirtualBlockTable"] = None
 
@@ -80,6 +78,7 @@ class DecodingSchedulableRequest(SchedulableRequest):
     input_positions: List[int] = field(default_factory=list)
 
     # for attention metadata
+    is_prefill_cached: bool = True
     token_chunk_size: int = 0
     seq_len: int = 0
     query_len: int = 0
@@ -97,10 +96,6 @@ class DecodingSchedulableRequest(SchedulableRequest):
     read_offset: int = 0
     tokens: Optional[List[str]] = None
 
-    @property
-    def finished(self):
-        return RequestStatus.is_finished(self.status)
-
     def __post_init__(self):
         self.cached_all_token_ids = self.prompt_token_ids + self.output_token_ids
 
@@ -109,6 +104,17 @@ class DecodingSchedulableRequest(SchedulableRequest):
         self.metrics.waiting_time = self.metrics.scheduled_ts - self.metrics.arrival_ts
         if self.metrics.first_scheduled_ts is None:
             self.metrics.first_scheduled_ts = scheduled_ts
+
+    @property
+    def finished(self):
+        return RequestStatus.is_finished(self.status)
+
+    @property
+    def num_computed_tokens(self):
+        if self.vblock is None:
+            return 0
+
+        return self.vblock.num_computed_tokens
 
     @property
     def num_new_tokens(self):
@@ -122,18 +128,12 @@ class DecodingSchedulableRequest(SchedulableRequest):
     def get_len(self):
         return len(self.prompt_token_ids) + len(self.output_token_ids)
 
-    def update_num_computed_tokens(self, num_new_computed_tokens: int):
-        self.num_computed_tokens += num_new_computed_tokens
-        assert self.num_computed_tokens <= self.get_len(), (
-            self.num_computed_tokens, self.get_len())
-        if self.get_num_uncomputed_tokens() == 0:
-            self.is_prefill = False
-
     def get_num_uncomputed_tokens(self) -> int:
-        return self.get_len() - self.get_num_computed_tokens()
+        return self.get_len() - self.num_computed_tokens
 
-    def get_num_computed_tokens(self) -> int:
-        return self.num_computed_tokens
+    @property
+    def is_prefill(self):
+        return self.num_computed_tokens < self.get_len()
 
     def append_token_id(
         self,
@@ -172,7 +172,6 @@ class DecodingSchedulableRequest(SchedulableRequest):
         else:
             return 1
 
-    def reset_state_for_recompute(self):
-        self.status = RequestStatus.WAITING
-        self.num_computed_tokens = 0
-        self.vblock = None
+    def update_num_computed_tokens(self):
+        assert self.vblock.num_token_ids == self.vblock.num_computed_tokens + self.token_chunk_size
+        self.vblock.update_num_computed_tokens()

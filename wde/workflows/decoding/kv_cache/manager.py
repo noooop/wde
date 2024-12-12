@@ -1,6 +1,3 @@
-import enum
-from typing import List, Tuple
-
 from wde.logger import init_logger
 from wde.workflows.decoding.kv_cache.physical_manager import \
     PhysicalGPUKVCacheManager
@@ -11,12 +8,6 @@ logger = init_logger(__name__)
 _GB = float(2**30)
 
 RequestId = str
-
-
-class AllocStatus(enum.Enum):
-    OK = enum.auto()
-    LATER = enum.auto()
-    NEVER = enum.auto()
 
 
 class KVCacheManager:
@@ -33,23 +24,20 @@ class KVCacheManager:
                    physical_kv_cache_manager=physical_gpu_kv_cache_manager)
 
     # logical KVCacheManager api
+    def create_vblock(self, request: DecodingSchedulableRequest):
+        raise NotImplementedError
 
-    def can_allocate(self, request: DecodingSchedulableRequest) -> AllocStatus:
+    def can_allocate(self, request: DecodingSchedulableRequest,
+                     budget_bound_token_chunk_size: int) -> int:
         raise NotImplementedError
 
     def allocate(self, request: DecodingSchedulableRequest) -> None:
         raise NotImplementedError
 
-    def can_append_slots(self, request: DecodingSchedulableRequest) -> bool:
-        raise NotImplementedError
-
-    def append_slots(
-        self,
-        request: DecodingSchedulableRequest,
-    ) -> List[Tuple[int, int]]:
-        raise NotImplementedError
-
     def free(self, request: DecodingSchedulableRequest) -> None:
+        raise NotImplementedError
+
+    def free_last_block(self, request: DecodingSchedulableRequest):
         raise NotImplementedError
 
 

@@ -274,26 +274,26 @@ class DecodeOnlyFlashAttentionMetadataBuilder(
 
         max_query_len = max([
             request.query_len for request in scheduled_requests
-            if request.is_prefill
+            if request.is_prefill_cached
         ])
         max_prefill_seq_len = max([
             request.seq_len
-            for request in scheduled_requests if request.is_prefill
+            for request in scheduled_requests if request.is_prefill_cached
         ],
                                   default=0)
 
         num_prefills = sum(1 for request in scheduled_requests
-                           if request.is_prefill)
+                           if request.is_prefill_cached)
         num_prefill_tokens = sum(
             [request.token_chunk_size for request in scheduled_requests])
 
         max_decode_seq_len = max([
             request.seq_len
-            for request in scheduled_requests if not request.is_prefill
+            for request in scheduled_requests if not request.is_prefill_cached
         ],
                                  default=0)
         num_decode_tokens = sum(1 for request in scheduled_requests
-                                if not request.is_prefill)
+                                if not request.is_prefill_cached)
 
         return DecodeOnlyFlashAttentionMetadata(
             num_prefills=num_prefills,
