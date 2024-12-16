@@ -6,21 +6,24 @@ from wde.workflows.decoding.kv_cache.interfaces import (BlockAllocator,
                                                         BlockId,
                                                         NoFreeBlocksError,
                                                         VirtualBlockTable)
-from wde.workflows.decoding.kv_cache.manager import KVCacheManager
 from wde.workflows.decoding.kv_cache.utils import get_num_required_blocks
 from wde.workflows.decoding.schema.request import DecodingSchedulableRequest
 
 logger = init_logger(__name__)
 
 
-class NaiveKVCacheManager(KVCacheManager):
+class NaiveKVCacheManager:
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, engine_config):
+        self.engine_config = engine_config
         num_gpu_blocks = self.engine_config.cache_config.num_gpu_blocks
         self._block_size = self.engine_config.cache_config.block_size
         self.block_allocator = NaiveBlockAllocator(num_blocks=num_gpu_blocks,
                                                    block_size=self._block_size)
+
+    @classmethod
+    def from_engine(cls, engine):
+        return cls(engine_config=engine.engine_config)
 
     def create_vblock(self, request: DecodingSchedulableRequest):
         request.vblock = self.block_allocator.create_vblock()

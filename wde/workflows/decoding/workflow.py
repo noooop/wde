@@ -1,5 +1,6 @@
 from wde.tasks.chat.schema.api import PROTOCOL
 from wde.workflows.core.workflow import Workflow
+from wde.workflows.decoding.scheduler import get_scheduler
 
 
 class DecodeOnlyDecodingWorkflow(Workflow):
@@ -17,7 +18,7 @@ class DecodeOnlyDecodingWorkflow(Workflow):
         "wde.workflows.decoding.processor.model_input_builder:"
         "DecodingModelInputBuilder")
 
-    Scheduler: str = "wde.workflows.decoding.scheduler:DecodingScheduler"
+    Scheduler: str
     AttnBackend: str = ("wde.workflows.decoding.backends.attention.selector:"
                         "DecodingAttnBackend")
 
@@ -25,7 +26,7 @@ class DecodeOnlyDecodingWorkflow(Workflow):
     Worker: str = "wde.workflows.core.worker.gpu_worker:GPUWorker"
     Runer: str = "wde.workflows.decoding.runner.gpu_runner:GPUDecodingRunner"
 
-    KVCacheManager: str = "wde.workflows.decoding.kv_cache.naive_manager:NaiveKVCacheManager"
+    KVCacheManager: str = "wde.workflows.decoding.kv_cache.physical_manager:PhysicalGPUKVCacheManager"
 
     attn_type: str = "DECODER"
     protocol: str = PROTOCOL
@@ -40,5 +41,7 @@ class DecodeOnlyDecodingWorkflow(Workflow):
                 "simple_async", "async", "double_buffer"
         ]:
             workflow.Executor += ":GPUAsyncExecutor"
+
+        workflow.Scheduler = get_scheduler(engine.engine_config)
 
         return workflow

@@ -4,8 +4,8 @@ from wde.workflows.core.processor.output_processor import OutputProcessor
 from wde.workflows.decoding.backends.sampling.sampler import (
     get_sample, get_sampler_output)
 from wde.workflows.decoding.backends.sampling.stop_checker import StopChecker
-from wde.workflows.decoding.scheduler import DecodingSchedulerOutput
-from wde.workflows.decoding.schema.engine_io import DecodingRequestOutput
+from wde.workflows.decoding.schema.engine_io import (DecodingRequestOutput,
+                                                     DecodingSchedulerOutput)
 from wde.workflows.decoding.schema.execute_io import Sample, SamplerOutput
 from wde.workflows.decoding.schema.request import DecodingSchedulableRequest
 
