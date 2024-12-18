@@ -23,15 +23,10 @@ def hf_runner():
 @pytest.mark.parametrize("max_tokens", [5])
 @pytest.mark.parametrize("scheduling",
                          ["sync", "simple_async", "async", "double_buffer"])
-def test_models(
-    hf_runner,
-    wde_runner,
-    example_prompts,
-    model: str,
-    dtype: str,
-    max_tokens: int,
-    scheduling: str,
-) -> None:
+@pytest.mark.parametrize("enable_prefix_caching", [False, True])
+def test_models(hf_runner, wde_runner, example_prompts, model: str, dtype: str,
+                max_tokens: int, scheduling: str,
+                enable_prefix_caching: bool) -> None:
 
     NUM_LOG_PROBS = 4
 
@@ -39,7 +34,10 @@ def test_models(
         hf_outputs = hf_model.generate_greedy_logprobs(example_prompts,
                                                        max_tokens,
                                                        NUM_LOG_PROBS)
-    with wde_runner(model, dtype=dtype, scheduling=scheduling) as wde_model:
+    with wde_runner(model,
+                    dtype=dtype,
+                    scheduling=scheduling,
+                    enable_prefix_caching=enable_prefix_caching) as wde_model:
         outputs = wde_model.generate_greedy_logprobs(example_prompts,
                                                      max_tokens, NUM_LOG_PROBS)
 

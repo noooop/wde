@@ -54,6 +54,8 @@ class DecodingRequestOutput(RequestOutput):
         outputs: List[CompletionOutput],
         finished: bool,
         metrics: Optional[RequestMetrics] = None,
+        num_cached_tokens: Optional[int] = None,
+        num_preempted: Optional[int] = None,
     ) -> None:
         self.request_id = request_id
         self.prompt = prompt
@@ -62,6 +64,8 @@ class DecodingRequestOutput(RequestOutput):
         self.outputs = outputs
         self.finished = finished
         self.metrics = metrics
+        self.num_cached_tokens = num_cached_tokens
+        self.num_preempted = num_preempted
 
     @classmethod
     def from_request(
@@ -91,5 +95,11 @@ class DecodingRequestOutput(RequestOutput):
         prompt_logprobs = request.prompt_logprobs
         finished = request.finished
 
+        # The last output token is definitely not computed
+        num_cached_tokens = request.get_len(
+        ) - 1 - request.num_actual_computed_tokens
+        num_preempted = request.num_preempted
+
         return cls(request.request_id, prompt, prompt_token_ids,
-                   prompt_logprobs, outputs, finished, request.metrics)
+                   prompt_logprobs, outputs, finished, request.metrics,
+                   num_cached_tokens, num_preempted)

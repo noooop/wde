@@ -71,6 +71,8 @@ class DecodingSchedulableRequest(SchedulableRequest):
     stop_reason: Union[int, str, None] = None
     busy: bool = False
     vblock: Optional["VirtualBlockTable"] = None
+    num_actual_computed_tokens = 0
+    num_preempted = 0
 
     # intermediate variable
     # for model input
@@ -174,5 +176,5 @@ class DecodingSchedulableRequest(SchedulableRequest):
         return self.output_token_ids[-1]
 
     def update_num_computed_tokens(self):
-        assert self.vblock.num_token_ids == self.vblock.num_computed_tokens + self.token_chunk_size
         self.vblock.update_num_computed_tokens()
+        self.num_actual_computed_tokens += self.token_chunk_size

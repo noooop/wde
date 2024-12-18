@@ -58,6 +58,7 @@ class NaiveKVCacheManager:
 
     def free_last_block(self, request: DecodingSchedulableRequest):
         request.vblock.free_last_block()
+        request.num_preempted += 1
 
 
 class NaiveVirtualBlockTable(VirtualBlockTable):
