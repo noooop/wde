@@ -17,7 +17,7 @@ class DecodingModelConfig(ModelConfig):
 
 
 class DecodingSchedulerConfig:
-    supported_scheduling = ["sync", "simple_async", "async", "double_buffer"]
+    supported_scheduling = ["sync", "simple_async", "async"]
 
     def __init__(self,
                  frieren_executor_max_workers: int,
@@ -37,10 +37,7 @@ class DecodingSchedulerConfig:
             self.max_num_batched_tokens)
 
         if max_num_on_the_fly is None:
-            if scheduling == "double_buffer":
-                self.max_num_on_the_fly = max(frieren_executor_max_workers, 3)
-            else:
-                self.max_num_on_the_fly = max(frieren_executor_max_workers, 2)
+            self.max_num_on_the_fly = max(frieren_executor_max_workers, 2)
         else:
             self.max_num_on_the_fly = max_num_on_the_fly
 

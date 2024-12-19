@@ -63,9 +63,7 @@ class GPUDataParallelismExecutor:
             worker=worker,
         )
 
-        if self.engine_config.scheduler_config.scheduling == "double_buffer":
-            execute_loop = executor.double_buffer_execute_loop
-        elif self.engine_config.scheduler_config.scheduling == "simple_async":
+        if self.engine_config.scheduler_config.scheduling == "simple_async":
             execute_loop = executor.simple_async_execute_loop
         else:
             execute_loop = executor.async_execute_loop

@@ -28,13 +28,13 @@ class PrefillOnlyWorkflow(Workflow):
             if engine.engine_config.scheduler_config.scheduling in ["sync"]:
                 workflow.Executor += ":GPUExecutor"
             elif engine.engine_config.scheduler_config.scheduling in [
-                    "simple_async", "async", "double_buffer"
+                    "simple_async", "async"
             ]:
                 workflow.Executor += ":GPUAsyncExecutor"
         else:
             assert engine.engine_config.parallel_config.data_parallel_size > 0
             assert engine.engine_config.scheduler_config.scheduling in [
-                "async", "double_buffer"
+                "async"
             ]
 
             engine.engine_config.scheduler_config.max_num_on_the_fly *= (

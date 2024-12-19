@@ -49,19 +49,20 @@ def benchmark(args):
         )
         engine.add_request(str(request_id), inputs, sampling_params)
 
-    out = []
-    while engine.has_unfinished_requests():
-        request_outputs = engine.step()
-        out.append((time.perf_counter(), request_outputs))
-    end = time.perf_counter()
-
+    n_step = 0
     timestamp = {}
-    for t, rs in out:
-        for r in rs:
-            request_id = r.request_id
+    while engine.has_unfinished_requests():
+        n_step += 1
+        request_outputs = engine.step()
+        ts = time.perf_counter()
+
+        for request in request_outputs:
+            request_id = request.request_id
             if request_id not in timestamp:
                 timestamp[request_id] = []
-            timestamp[request_id].append(t)
+            timestamp[request_id].append(ts)
+
+    end = time.perf_counter()
 
     tpot = []
     for v in timestamp.values():
@@ -76,7 +77,7 @@ def benchmark(args):
 
     print(f"Throughput: {len(requests) / elapsed_time:.4f} requests/s, "
           f"{total_num_tokens / elapsed_time:.4f} tokens/s, "
-          f"Delay {tpot*1000:0.2f} ms")
+          f"Delay {tpot*1000:0.2f} ms, n_step {n_step}")
 
 
 if __name__ == '__main__':
@@ -88,8 +89,8 @@ if __name__ == '__main__':
     args.num_prompts = 1000
 
     args.seed = 0
-    args.model = "Qwen/Qwen2.5-3B-Instruct"
-    args.quantization = None
+    args.model = "Qwen/Qwen2.5-7B-Instruct"
+    args.quantization = "fp8"
     args.dtype = 'auto'
     args.kv_cache_dtype = "auto"
     args.device = "cuda"
@@ -103,7 +104,7 @@ if __name__ == '__main__':
     args.tensor_parallel_size = 1
 
     args.n = 1
-    args.enforce_eager = False
+
     args.enable_prefix_caching = False
     args.gpu_memory_utilization = 0.9
 
@@ -118,10 +119,15 @@ if __name__ == '__main__':
             import traceback
             traceback.print_exc()
 
-    max_num_batched_tokens_list = [1536, 1024, 768, 512, 384, 256, 128, 64, 32]
+    for enforce_eager in [False, True]:
+        args.enforce_eager = enforce_eager
 
-    for max_num_batched_tokens in max_num_batched_tokens_list:
-        print("max_num_batched_tokens", max_num_batched_tokens)
-        args.max_num_seqs = max_num_batched_tokens
-        args.max_num_batched_tokens = max_num_batched_tokens
-        run(args)
+        max_num_batched_tokens_list = [
+            1536, 1024, 768, 512, 384, 256, 128, 64, 32
+        ]
+
+        for max_num_batched_tokens in max_num_batched_tokens_list:
+            print("max_num_batched_tokens", max_num_batched_tokens)
+            args.max_num_seqs = max_num_batched_tokens
+            args.max_num_batched_tokens = max_num_batched_tokens
+            run(args)

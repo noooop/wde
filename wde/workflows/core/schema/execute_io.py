@@ -7,7 +7,12 @@ import torch
 
 @dataclass
 class ModelInput:
-    pass
+
+    def to(self, device, non_blocking=False):
+        pass
+
+    def deferred_to(self, device, non_blocking=False):
+        pass
 
 
 @dataclass
@@ -19,6 +24,8 @@ class WorkerInput:
 class ExecuteInput:
     worker_input: Optional[WorkerInput]
     model_input: Optional[ModelInput]
+    main_stream: Optional[torch.cuda.Stream] = None
+    deferred_stream: Optional[torch.cuda.Stream] = None
 
 
 @dataclass
@@ -32,6 +39,9 @@ class ExecuteOutput:
                 continue
             self.__dict__[k] = self.__dict__[k].to(device=target_device,
                                                    non_blocking=non_blocking)
+
+    def deferred_to(self, target_device, non_blocking=False):
+        pass
 
 
 class IntermediateTensors(

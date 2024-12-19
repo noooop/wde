@@ -40,7 +40,7 @@ MODELS = ["google-bert/bert-base-uncased"]
 @pytest.mark.parametrize("model", MODELS)
 @pytest.mark.parametrize("dtype", ["half"])
 @pytest.mark.parametrize("max_num_requests", [2, 3, 5, 7])
-@pytest.mark.parametrize("scheduling", ["async", "double_buffer"])
+@pytest.mark.parametrize("scheduling", ["async"])
 @torch.inference_mode
 def test_models(
     hf_runner,

@@ -38,7 +38,7 @@ class DecodeOnlyDecodingWorkflow(Workflow):
         if engine.engine_config.scheduler_config.scheduling in ["sync"]:
             workflow.Executor += ":GPUExecutor"
         elif engine.engine_config.scheduler_config.scheduling in [
-                "simple_async", "async", "double_buffer"
+                "simple_async", "async"
         ]:
             workflow.Executor += ":GPUAsyncExecutor"
 

@@ -45,7 +45,7 @@ MODELS = ["BAAI/bge-reranker-v2-m3"]
 @pytest.mark.parametrize("model", MODELS)
 @pytest.mark.parametrize("dtype", ["half"])
 @pytest.mark.parametrize("max_num_requests", [2, 3, 5, 7])
-@pytest.mark.parametrize("scheduling", ["sync", "async", "double_buffer"])
+@pytest.mark.parametrize("scheduling", ["sync", "async"])
 @torch.inference_mode
 def test_models(
     hf_runner,

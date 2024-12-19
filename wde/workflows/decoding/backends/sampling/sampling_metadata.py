@@ -364,7 +364,7 @@ class SamplingMetadata:
         )
         return sampling_tensors
 
-    def to(self, device, non_blocking=True):
+    def deferred_to(self, device, non_blocking=True):
         for k in self.__dict__:
             if not hasattr(self.__dict__[k], "to"):
                 continue

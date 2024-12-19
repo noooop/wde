@@ -31,6 +31,14 @@ class DecodingModelInput(ModelInput):
                                                    non_blocking=non_blocking)
         return self
 
+    def deferred_to(self, device, non_blocking=False):
+        for k in self.__dict__:
+            if not hasattr(self.__dict__[k], "deferred_to"):
+                continue
+            self.__dict__[k] = self.__dict__[k].deferred_to(
+                device=device, non_blocking=non_blocking)
+        return self
+
 
 SampleResultType = List[Tuple[List[int], List[int]]]
 MultinomialSamplesType = Dict["SamplingType", torch.Tensor]

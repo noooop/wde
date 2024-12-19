@@ -7,6 +7,7 @@ from vllm.utils import (STR_DTYPE_TO_TORCH_DTYPE, get_dtype_size,
 
 from wde.logger import init_logger
 from wde.workflows.core.backends.utils import set_random_seed
+from wde.workflows.core.schema.execute_io import ExecuteInput
 from wde.workflows.decoding.backends.sampling.sampling_params import \
     SamplingParams
 from wde.workflows.decoding.schema.request import DecodingSchedulableRequest
@@ -143,9 +144,7 @@ class PhysicalGPUKVCacheManager:
 
         runtime_memory = peak_memory - model_memory_usage
 
-        if self.engine_config.scheduler_config.scheduling in [
-                "async", "double_buffer"
-        ]:
+        if self.engine_config.scheduler_config.scheduling in ["async"]:
             pass
             # peak_memory += runtime_memory
             # runtime_memory *= 2
@@ -210,8 +209,11 @@ class PhysicalGPUKVCacheManager:
         kv_caches = [None] * num_layers
         model_input = self.model_inputs_builder.prepare_model_input(requests)
         model_input.to("cuda")
+        model_input.deferred_to("cuda")
         model_input.kv_caches = kv_caches
-        self.worker.runner.execute_model(model_input)
+
+        self.worker.runner.execute_model(
+            ExecuteInput(worker_input=None, model_input=model_input))
         torch.cuda.synchronize()
         return
 

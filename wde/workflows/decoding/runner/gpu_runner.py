@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, cast
 
 import torch
 
@@ -6,6 +6,7 @@ from wde.logger import init_logger
 from wde.workflows.core.backends.attention import AttentionBackend
 from wde.workflows.core.config import EngineConfig
 from wde.workflows.core.runner.gpu_runner import GPURunner
+from wde.workflows.core.schema.execute_io import ExecuteInput
 from wde.workflows.decoding.backends.sampling.logits_processor import \
     LogitsProcessor
 from wde.workflows.decoding.backends.sampling.sampler import Sampler
@@ -50,20 +51,39 @@ class GPUDecodingRunner(GPURunner):
     @torch.inference_mode()
     def execute_model(
         self,
-        model_input: DecodingModelInput,
+        execute_input: ExecuteInput,
     ) -> SamplerOutput:
 
-        hidden_states = self.model(input_ids=model_input.input_tokens,
-                                   positions=model_input.input_positions,
-                                   kv_caches=model_input.kv_caches,
-                                   attn_metadata=model_input.attn_metadata)
+        model_input = cast(DecodingModelInput, execute_input.model_input)
 
-        logits = self.compute_logits(hidden_states,
-                                     model_input.sampling_metadata)
+        default_stream = torch.cuda.default_stream()
+        main_stream = execute_input.main_stream
+        deferred_stream = execute_input.deferred_stream
 
-        output = self.sample(
-            logits=logits,
-            sampling_metadata=model_input.sampling_metadata,
-        )
+        # profile_run
+        if main_stream is None:
+            main_stream = default_stream
+        if deferred_stream is None:
+            deferred_stream = default_stream
+
+        with torch.cuda.stream(main_stream):
+            hidden_states = self.model(input_ids=model_input.input_tokens,
+                                       positions=model_input.input_positions,
+                                       kv_caches=model_input.kv_caches,
+                                       attn_metadata=model_input.attn_metadata)
+
+        with torch.cuda.stream(execute_input.deferred_stream):
+            model_input = model_input.deferred_to("cuda", non_blocking=True)
+
+        deferred_stream.synchronize()
+
+        with torch.cuda.stream(main_stream):
+            logits = self.compute_logits(hidden_states,
+                                         model_input.sampling_metadata)
+
+            output = self.sample(
+                logits=logits,
+                sampling_metadata=model_input.sampling_metadata,
+            )
 
         return output

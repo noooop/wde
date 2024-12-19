@@ -37,6 +37,14 @@ class WorkerBase(ABC):
     def non_blocking_d2h(self, execute_output: ExecuteOutput):
         raise NotImplementedError
 
+    @abstractmethod
+    def deferred_h2d(self, execute_input: ExecuteInput):
+        raise NotImplementedError
+
+    @abstractmethod
+    def deferred_d2h(self, execute_output: ExecuteOutput):
+        raise NotImplementedError
+
 
 class GPUWorker(WorkerBase):
 
@@ -76,7 +84,7 @@ class GPUWorker(WorkerBase):
     @torch.inference_mode
     def __call__(self, execute_input: ExecuteInput) -> ExecuteOutput:
         try:
-            output = self.runner.execute_model(execute_input.model_input)
+            output = self.runner.execute_model(execute_input)
         except Exception:
             traceback.print_exc()
         return output
@@ -87,6 +95,13 @@ class GPUWorker(WorkerBase):
 
     def non_blocking_d2h(self, execute_output: ExecuteOutput):
         return execute_output.to("cpu", non_blocking=True)
+
+    def deferred_h2d(self, execute_input: ExecuteInput):
+        model_input = execute_input.model_input
+        return model_input.deferred_to("cuda", non_blocking=True)
+
+    def deferred_d2h(self, execute_output: ExecuteOutput):
+        return execute_output.deferred_to("cpu", non_blocking=True)
 
 
 def _check_if_gpu_supports_dtype(torch_dtype: torch.dtype):

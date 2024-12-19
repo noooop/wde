@@ -5,7 +5,7 @@ from vllm.utils import DeviceMemoryProfiler
 from wde.logger import init_logger
 from wde.workflows.core.backends.attention import AttentionBackend
 from wde.workflows.core.config import EngineConfig
-from wde.workflows.core.schema.execute_io import ExecuteOutput, ModelInput
+from wde.workflows.core.schema.execute_io import ExecuteInput, ExecuteOutput
 
 logger = init_logger(__name__)
 
@@ -44,6 +44,6 @@ class GPURunner:
     @torch.inference_mode()
     def execute_model(
         self,
-        model_input: ModelInput,
+        execute_input: ExecuteInput,
     ) -> ExecuteOutput:
         raise NotImplementedError

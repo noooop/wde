@@ -21,8 +21,7 @@ def hf_runner():
 @pytest.mark.parametrize("model", MODELS)
 @pytest.mark.parametrize("dtype", ["bfloat16"])
 @pytest.mark.parametrize("max_tokens", [5])
-@pytest.mark.parametrize("scheduling",
-                         ["sync", "simple_async", "async", "double_buffer"])
+@pytest.mark.parametrize("scheduling", ["sync", "simple_async", "async"])
 @pytest.mark.parametrize("enable_prefix_caching", [False, True])
 def test_models(hf_runner, wde_runner, example_prompts, model: str, dtype: str,
                 max_tokens: int, scheduling: str,
