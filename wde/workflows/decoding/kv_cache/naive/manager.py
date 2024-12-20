@@ -45,7 +45,9 @@ class NaiveKVCacheManager:
         if num_free_gpu_blocks > num_need_allocated_blocks:
             return budget_bound_token_chunk_size
         else:
-            return num_empty_slots + num_free_gpu_blocks * self._block_size
+            return min(
+                budget_bound_token_chunk_size,
+                num_empty_slots + num_free_gpu_blocks * self._block_size)
 
     def allocate(self, request: DecodingSchedulableRequest) -> None:
         token_ids = request.get_token_ids()

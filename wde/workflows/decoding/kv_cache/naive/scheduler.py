@@ -246,6 +246,7 @@ class NaiveDecodingScheduler(Scheduler):
                             break
                 else:
                     preempted.append(request)
+                    break
             else:
                 # Can schedule this request.
                 request.token_chunk_size = budget_bound_token_chunk_size
