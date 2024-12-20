@@ -1,3 +1,4 @@
+from concurrent.futures import Future
 from typing import Optional, cast
 
 import torch
@@ -72,7 +73,12 @@ class GPUDecodingRunner(GPURunner):
                                        kv_caches=model_input.kv_caches,
                                        attn_metadata=model_input.attn_metadata)
 
+        if isinstance(model_input.sampling_metadata, Future):
+            model_input.sampling_metadata = model_input.sampling_metadata.result(
+            )
+
         with torch.cuda.stream(execute_input.deferred_stream):
+            model_input = model_input.to("cuda", non_blocking=True)
             model_input = model_input.deferred_to("cuda", non_blocking=True)
 
         deferred_stream.synchronize()

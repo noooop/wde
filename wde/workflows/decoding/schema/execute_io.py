@@ -1,11 +1,13 @@
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Union
 
 import torch
 
 from wde.workflows.core.schema.execute_io import ExecuteOutput, ModelInput
 
 if TYPE_CHECKING:
+    from concurrent.futures import Future
+
     from wde.workflows.core.backends.attention import AttentionMetadata
     from wde.workflows.decoding.backends.sampling.sampling_metadata import \
         SamplingMetadata
@@ -20,7 +22,7 @@ class DecodingModelInput(ModelInput):
     seq_lens: Optional[List[int]] = None
     query_lens: Optional[List[int]] = None
     attn_metadata: Optional["AttentionMetadata"] = None
-    sampling_metadata: Optional["SamplingMetadata"] = None
+    sampling_metadata: Optional[Union["SamplingMetadata", "Future"]] = None
     kv_caches: Optional[List[torch.Tensor]] = None
 
     def to(self, device, non_blocking=True):

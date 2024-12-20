@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 from typing import List
 
 import torch
@@ -30,6 +31,8 @@ class DecodingModelInputBuilder(ModelInputBuilder):
         self.attn_backend = attn_backend
         self.attn_metadata_builder = attn_backend.make_metadata_builder(
             self.engine_config.cache_config.block_size)
+        self.threads = ThreadPoolExecutor(
+            max_workers=self.engine_config.scheduler_config.max_num_on_the_fly)
 
         self.kv_caches = None
 
@@ -89,8 +92,11 @@ class DecodingModelInputBuilder(ModelInputBuilder):
         input_tokens_tensor, input_positions_tensor = self._prepare_model_tensor_input(
             scheduled_requests)
         attn_metadata = self.attn_metadata_builder(scheduled_requests)
-        sampling_metadata = SamplingMetadata.prepare(
-            scheduled_requests, vocab_size=self.vocab_size, dtype=torch.float)
+
+        sampling_metadata = self.threads.submit(SamplingMetadata.prepare,
+                                                scheduled_requests,
+                                                vocab_size=self.vocab_size,
+                                                dtype=torch.float)
 
         return DecodingModelInput(input_tokens=input_tokens_tensor,
                                   input_positions=input_positions_tensor,

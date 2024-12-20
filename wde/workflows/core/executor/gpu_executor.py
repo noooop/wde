@@ -167,7 +167,7 @@ class FrierenExecutor:
             executor_out.put(e)
 
     def async_execute_loop(self, executor_in: Queue, executor_out: Queue):
-        thread = ThreadPoolExecutor(self.max_workers)
+        threads = ThreadPoolExecutor(self.max_workers)
 
         # Is there a better way to do it asynchronously?
         def _put(scheduler_output, execute_input, inference_begin_ts):
@@ -211,8 +211,8 @@ class FrierenExecutor:
 
                 execute_input.main_stream.synchronize()
 
-                thread.submit(_put, scheduler_output, execute_input,
-                              inference_begin_ts)
+                threads.submit(_put, scheduler_output, execute_input,
+                               inference_begin_ts)
         except Exception as e:
             executor_out.put(e)
-        thread.shutdown()
+        threads.shutdown()
