@@ -86,6 +86,20 @@ class DecodingModelInputBuilder(ModelInputBuilder):
     def prepare_model_input(
         self, scheduled_requests: List[DecodingSchedulableRequest]
     ) -> DecodingModelInput:
+
+        prefills = []
+        decodes = []
+        for request in scheduled_requests:
+            if request.is_prefill:
+                prefills.append(request)
+            else:
+                decodes.append(request)
+
+        # attn_metadata
+        # | < ----- num_prefill_tokens - ---> | < ------- num_decode_tokens - --------> |
+        # | < -prefill_0-> | ... | < -prefill_N - 1-> | < --decode_0 --> | ... | < --decode_M - 1 --> |
+        scheduled_requests = prefills + decodes
+
         for request in scheduled_requests:
             self._prepare_intermediate_results(request)
 

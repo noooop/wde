@@ -140,7 +140,12 @@ class DecodingSchedulableRequest(SchedulableRequest):
 
     @property
     def is_prefill(self):
-        return self.num_computed_tokens < self.get_len()
+        return self.num_computed_tokens == 0 or self.num_computed_tokens < self.get_len(
+        ) - 1
+
+    @property
+    def is_prompt(self):
+        return self.num_computed_tokens < self.num_prompt_token_ids
 
     def get_output_text_to_return(self, buffer_length: int):
         truncate = buffer_length and not self.finished
