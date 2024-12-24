@@ -30,6 +30,7 @@ class DecodingEngineArgs(EngineArgs):
     cpu_offload_gb: int = 0  # GiB
     gpu_memory_utilization: float = 0.90
     num_gpu_blocks_override: Optional[int] = None
+    watermark: float = 0.01
 
     # scheduler_config
     max_num_batched_tokens: Optional[int] = None
@@ -77,7 +78,7 @@ class DecodingEngineArgs(EngineArgs):
             sliding_window=engine_config.model_config.get_sliding_window(),
             enable_prefix_caching=self.enable_prefix_caching,
             cpu_offload_gb=self.cpu_offload_gb,
-        )
+            watermark=self.watermark)
 
         scheduler_config = DecodingSchedulerConfig(
             frieren_executor_max_workers=self.frieren_executor_max_workers,

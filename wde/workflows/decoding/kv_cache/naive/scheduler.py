@@ -131,6 +131,9 @@ class NaiveDecodingScheduler(Scheduler):
             if budget.full():
                 break
 
+            if self.kv_cache_manager.high_watermark():
+                break
+
             request = waiting_queue[0]
 
             if self.record_metrics:
@@ -219,6 +222,9 @@ class NaiveDecodingScheduler(Scheduler):
 
             num_new_tokens = request.num_new_tokens
             assert num_new_tokens > 0
+
+            if request.is_prefill and self.kv_cache_manager.high_watermark():
+                break
 
             # 1. chunked prefill
             budget_bound_token_chunk_size = min(

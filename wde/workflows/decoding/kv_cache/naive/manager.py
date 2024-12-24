@@ -21,9 +21,19 @@ class NaiveKVCacheManager:
         self.block_allocator = NaiveBlockAllocator(num_blocks=num_gpu_blocks,
                                                    block_size=self._block_size)
 
+        watermark = self.engine_config.cache_config.watermark
+        self.watermark_blocks = int(watermark * num_gpu_blocks)
+
     @classmethod
     def from_engine(cls, engine):
         return cls(engine_config=engine.engine_config)
+
+    def high_watermark(self) -> bool:
+        return self.block_allocator.num_free_blocks < self.watermark_blocks
+
+    @property
+    def num_free_blocks(self):
+        return self.block_allocator.num_free_blocks
 
     def create_vblock(self, request: DecodingSchedulableRequest):
         request.vblock = self.block_allocator.create_vblock()

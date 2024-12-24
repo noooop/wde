@@ -140,6 +140,7 @@ class CacheConfig:
         sliding_window: Optional[int] = None,
         enable_prefix_caching: bool = False,
         cpu_offload_gb: float = 0,
+        watermark: float = 0.01,
     ) -> None:
         self.block_size = block_size
         self.gpu_memory_utilization = gpu_memory_utilization
@@ -149,6 +150,8 @@ class CacheConfig:
         self.sliding_window = sliding_window
         self.enable_prefix_caching = enable_prefix_caching
         self.cpu_offload_gb = cpu_offload_gb
+        self.watermark = watermark
+
         self._verify_args()
         self._verify_cache_dtype()
         self._verify_prefix_caching()
@@ -167,6 +170,11 @@ class CacheConfig:
             raise ValueError(
                 "GPU memory utilization must be less than 1.0. Got "
                 f"{self.gpu_memory_utilization}.")
+
+        if self.watermark < 0. or self.watermark > 1.0:
+            raise ValueError(
+                "watermark must be less than 1.0 and greater than 0. Got "
+                f"{self.watermark}.")
 
     def _verify_cache_dtype(self) -> None:
         if self.cache_dtype == "auto":
