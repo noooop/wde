@@ -54,8 +54,8 @@ def benchmark(args):
     for request_id, prompt_token_ids in enumerate(requests):
         inputs = TokensPrompt(prompt_token_ids=prompt_token_ids)
         sampling_params = SamplingParams(
-            temperature=1.0,
-            top_p=1.0,
+            temperature=0.8,
+            top_p=0.95,
             ignore_eos=True,
             max_tokens=args.output_len,
         )
@@ -78,7 +78,7 @@ def benchmark(args):
             num_cached_tokens[request_id].append(request.num_cached_tokens)
 
     end = time.perf_counter()
-    actual_hit_rate = np.mean([v[-1] for v in num_cached_tokens.values()
+    actual_hit_rate = np.mean([v[1:][-1] for v in num_cached_tokens.values()
                                ]) / args.input_len
 
     elapsed_time = end - start

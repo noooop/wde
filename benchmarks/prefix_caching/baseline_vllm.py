@@ -52,8 +52,8 @@ def benchmark(args):
         inputs = TokensPrompt(prompt_token_ids=prompt_token_ids)
         sampling_params = SamplingParams(
             n=args.n,
-            temperature=1.0,
-            top_p=1.0,
+            temperature=0.8,
+            top_p=0.95,
             ignore_eos=True,
             max_tokens=args.output_len,
         )
@@ -86,7 +86,7 @@ def benchmark(args):
         dd = [v[i] - v[i - 1] for i in range(1, len(v))]
         tpot.extend(dd)
 
-    actual_hit_rate = np.mean([v[-1] for v in num_cached_tokens.values()
+    actual_hit_rate = np.mean([v[1:][-1] for v in num_cached_tokens.values()
                                ]) / args.input_len
     tpot = np.mean(tpot)
     elapsed_time = end - start
