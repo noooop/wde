@@ -1,13 +1,14 @@
 import time
 from collections import deque
-from dataclasses import dataclass, field
-from typing import Deque, List, Optional, Set, cast
+from typing import Deque, List, Optional, cast
 
 from wde.logger import init_logger
 from wde.workflows.core.config import EngineConfig
 from wde.workflows.core.processor.input_processor import RequestProcessor
 from wde.workflows.core.scheduler import Scheduler
 from wde.workflows.core.schema.engine_io import RequestOutput
+from wde.workflows.decoding.kv_cache.naive.scheduler import (
+    DecodingSchedulingBudget, SchedulerPrefillOutputs, SchedulerRunningOutputs)
 from wde.workflows.decoding.kv_cache.prefix_caching.manager import \
     PrefixCachingKVCacheManager
 from wde.workflows.decoding.schema.engine_io import (
@@ -17,106 +18,20 @@ from wde.workflows.decoding.schema.request import RequestStatus
 logger = init_logger(__name__)
 
 
-@dataclass
-class DecodingSchedulingBudget:
-    token_budget: int
-    max_num_requests: int
-    _request_ids_num_batched_tokens: Set[str] = field(default_factory=set)
-    _request_ids_num_curr_seqs: Set[str] = field(default_factory=set)
-    _num_batched_tokens: int = 0
-    _num_curr_requests: int = 0
-
-    def can_schedule(self, *, num_new_tokens: int, num_new_requests: int):
-        assert num_new_tokens != 0
-        assert num_new_requests != 0
-        return (self.num_batched_tokens + num_new_tokens <= self.token_budget
-                and self.num_curr_requests + num_new_requests
-                <= self.max_num_requests)
-
-    def remaining_token_budget(self):
-        return self.token_budget - self.num_batched_tokens
-
-    def add_num_batched_tokens(self, req_id: str, num_batched_tokens: int):
-        if req_id in self._request_ids_num_batched_tokens:
-            return
-
-        self._request_ids_num_batched_tokens.add(req_id)
-        self._num_batched_tokens += num_batched_tokens
-
-    def subtract_num_batched_tokens(self, req_id: str,
-                                    num_batched_tokens: int):
-        if req_id in self._request_ids_num_batched_tokens:
-            self._request_ids_num_batched_tokens.remove(req_id)
-            self._num_batched_tokens -= num_batched_tokens
-
-    def add_num_requests(self, req_id: str, num_curr_requests: int):
-        if req_id in self._request_ids_num_curr_seqs:
-            return
-
-        self._request_ids_num_curr_seqs.add(req_id)
-        self._num_curr_requests += num_curr_requests
-
-    def subtract_num_seqs(self, req_id: str, num_curr_seqs: int):
-        if req_id in self._request_ids_num_curr_seqs:
-            self._request_ids_num_curr_seqs.remove(req_id)
-            self._num_curr_requests -= num_curr_seqs
-
-    @property
-    def num_batched_tokens(self):
-        return self._num_batched_tokens
-
-    @property
-    def num_curr_requests(self):
-        return self._num_curr_requests
-
-    def full(self) -> bool:
-        if self.num_batched_tokens >= self.token_budget:
-            return True
-
-        if self.num_curr_requests >= self.max_num_requests:
-            return True
-
-        return False
-
-
-@dataclass
-class SchedulerRunningOutputs:
-    decode_requests: List[DecodingSchedulableRequest]
-    prefill_requests: List[DecodingSchedulableRequest]
-    preempted: List[DecodingSchedulableRequest]
-
-    @classmethod
-    def create_empty(cls) -> "SchedulerRunningOutputs":
-        return SchedulerRunningOutputs(decode_requests=[],
-                                       prefill_requests=[],
-                                       preempted=[])
-
-
-@dataclass
-class SchedulerPrefillOutputs:
-    scheduled_requests: List[DecodingSchedulableRequest]
-    ignored_requests: List[DecodingSchedulableRequest]
-
-    @classmethod
-    def create_empty(cls) -> "SchedulerPrefillOutputs":
-        return SchedulerPrefillOutputs(
-            scheduled_requests=[],
-            ignored_requests=[],
-        )
-
-
 class PrefixCachingDecodingScheduler(Scheduler):
+    name = "Prefix Caching"
     support_scheduling = ["sync_scheduling", "async_scheduling"]
+    kv_cache_manager_class = PrefixCachingKVCacheManager
 
     def __init__(self, engine_config: EngineConfig,
                  request_processor: RequestProcessor) -> None:
         super().__init__(engine_config, request_processor)
 
         self.running: Deque[DecodingSchedulableRequest] = deque()
-        self.kv_cache_manager = PrefixCachingKVCacheManager(engine_config)
+        self.kv_cache_manager = self.kv_cache_manager_class(engine_config)
         self.record_metrics = engine_config.sys_config.record_metrics
         self.num_cumulative_preemption = 0
-        logger.info("Use Prefix Caching.")
+        logger.info(f"Use {self.name}.")
 
     @classmethod
     def from_engine(cls, engine):
@@ -171,7 +86,7 @@ class PrefixCachingDecodingScheduler(Scheduler):
                 self.kv_cache_manager.create_vblock(request)
 
             # 5. try to hit prefix caching
-            self.kv_cache_manager.register(request)
+            self.kv_cache_manager.update(request)
 
             # 6. Check if hit prefix caching ready
             if not request.vblock.ready():
@@ -232,7 +147,6 @@ class PrefixCachingDecodingScheduler(Scheduler):
 
     def _schedule_running(self, budget: DecodingSchedulingBudget,
                           running_queue) -> SchedulerRunningOutputs:
-
         prefill_requests = []
         decode_requests = []
         preempted = []
@@ -247,7 +161,7 @@ class PrefixCachingDecodingScheduler(Scheduler):
                 scheduled_ts = time.perf_counter()
 
             # 1. Write new token ids to vblock & try to hit prefix caching
-            self.kv_cache_manager.register(request)
+            self.kv_cache_manager.update(request)
 
             # 2. Check if hit prefix caching ready
             if not request.vblock.ready():
@@ -287,6 +201,7 @@ class PrefixCachingDecodingScheduler(Scheduler):
             else:
                 # 5. Can schedule this request.
                 request.token_chunk_size = budget_bound_token_chunk_size
+
                 self.kv_cache_manager.allocate(request)
 
                 request.vblock.acquire()
