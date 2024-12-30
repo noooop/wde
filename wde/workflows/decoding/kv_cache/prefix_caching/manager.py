@@ -101,6 +101,7 @@ class Block:
         self.ref_count += 1
 
     def decr(self):
+        assert self.ref_count > 0
         self.ref_count -= 1
         return self.ref_count
 
@@ -203,8 +204,12 @@ class PrefixCachingVirtualBlockTable:
 
             if len(delta_token_ids) == self._block_size:
                 # become full block
-                last_block = self._allocator.update_block(last_block)
-                self._blocks[-1] = last_block
+                new_last_block = self._allocator.update_block(last_block)
+
+                if new_last_block is not last_block:
+                    # last_block has been released
+                    new_last_block.incr()
+                    self._blocks[-1] = new_last_block
 
         if num_empty_slots >= num_token_ids - num_token_ids_curr:
             # No need to create new blocks
@@ -272,7 +277,9 @@ class PrefixCachingVirtualBlockTable:
         if num_free_gpu_blocks > num_need_allocated_blocks:
             return token_chunk_size
         else:
-            return num_empty_slots + num_free_gpu_blocks * self._block_size
+            return min(
+                token_chunk_size,
+                num_empty_slots + num_free_gpu_blocks * self._block_size)
 
     def allocate(self, token_chunk_size: int):
         num_computed_tokens = self.num_computed_tokens
@@ -413,7 +420,7 @@ class PrefixCachingBlockAllocator:
 
     def _maybe_update_full_block(self, block: Block):
         if not block.is_full_block():
-            return
+            return block
 
         full_block = block
 
@@ -424,7 +431,9 @@ class PrefixCachingBlockAllocator:
         self_prefix_hash = full_block.self_prefix_hash
 
         block = self._full_blocks_map.get(self_prefix_hash, None)
-        if block is None:
+        if block is full_block:
+            return full_block
+        elif block is None:
             self._full_blocks_map[self_prefix_hash] = full_block
             return full_block
         else:

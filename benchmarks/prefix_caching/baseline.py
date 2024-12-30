@@ -27,12 +27,12 @@ def benchmark(args):
         kv_cache_dtype=args.kv_cache_dtype,
         quantization_param_path=args.quantization_param_path,
         device=args.device,
-        enable_prefix_caching=args.enable_prefix_caching,
         max_num_batched_tokens=args.max_num_batched_tokens,
         max_num_requests=args.max_num_requests,
         scheduling=args.scheduling,
         frieren_executor_max_workers=args.frieren_executor_max_workers,
-        record_metrics=args.record_metrics)
+        record_metrics=args.record_metrics,
+        kv_cache_manager=args.kv_cache_manager)
 
     engine = LLMEngine.from_engine_args(engine_args)
     token_sampler = TokenSampler(args.tokenizer)
@@ -117,6 +117,8 @@ if __name__ == '__main__':
 
     from easydict import EasyDict as edict
 
+    from wde.workflows.decoding.scheduler import KV_CACHE_MANAGER_MAP
+
     args = edict()
 
     args.input_len = 1000
@@ -151,32 +153,26 @@ if __name__ == '__main__':
             import traceback
             traceback.print_exc()
 
-    for scheduling in ["sync", "simple_async"]:
-        print(f"scheduling: {scheduling}")
-        args.scheduling = scheduling
-        print()
+    for kv_cache_manager in list(KV_CACHE_MANAGER_MAP.keys()):
+        print("kv_cache_manager", kv_cache_manager)
+        args.kv_cache_manager = kv_cache_manager
 
-        args.enable_prefix_caching = False
-        args.hit_rate = 0.
-        run(args)
-
-        args.enable_prefix_caching = True
-        for hit_rate in [0.1 * x for x in range(0, 11)]:
-            args.hit_rate = hit_rate
-            run(args)
-
-    for scheduling in ["async"]:
-        for max_workers in [1, 2, 3]:
-            print(f"scheduling: {scheduling}-{max_workers}")
-            args.frieren_executor_max_workers = max_workers
+        for scheduling in ["sync", "simple_async"]:
+            print(f"scheduling: {scheduling}")
             args.scheduling = scheduling
             print()
 
-            args.enable_prefix_caching = False
-            args.hit_rate = 0.
-            run(args)
-
-            args.enable_prefix_caching = True
             for hit_rate in [0.1 * x for x in range(0, 11)]:
                 args.hit_rate = hit_rate
                 run(args)
+
+        for scheduling in ["async"]:
+            for max_workers in [1, 2, 3]:
+                print(f"scheduling: {scheduling}-{max_workers}")
+                args.frieren_executor_max_workers = max_workers
+                args.scheduling = scheduling
+                print()
+
+                for hit_rate in [0.1 * x for x in range(0, 11)]:
+                    args.hit_rate = hit_rate
+                    run(args)

@@ -139,6 +139,7 @@ class CacheConfig:
         num_gpu_blocks_override: Optional[int] = None,
         sliding_window: Optional[int] = None,
         enable_prefix_caching: bool = False,
+        kv_cache_manager: Optional[str] = None,
         cpu_offload_gb: float = 0,
         watermark: float = 0.01,
     ) -> None:
@@ -151,6 +152,7 @@ class CacheConfig:
         self.enable_prefix_caching = enable_prefix_caching
         self.cpu_offload_gb = cpu_offload_gb
         self.watermark = watermark
+        self.kv_cache_manager = kv_cache_manager
 
         self._verify_args()
         self._verify_cache_dtype()
