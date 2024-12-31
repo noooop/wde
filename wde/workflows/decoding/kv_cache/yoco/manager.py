@@ -4,6 +4,8 @@ from collections import deque
 from queue import PriorityQueue
 from typing import Deque, Dict, Iterable, List, Optional, cast
 
+import torch
+
 from wde.logger import init_logger
 from wde.workflows.decoding.kv_cache.interfaces import (BlockId,
                                                         NoFreeBlocksError)
@@ -11,6 +13,7 @@ from wde.workflows.decoding.kv_cache.prefix_caching.manager import (Block,
                                                                     PrefixHash)
 from wde.workflows.decoding.kv_cache.utils import (chunk_list,
                                                    get_num_required_blocks)
+from wde.workflows.decoding.kv_cache.yoco.copy_on_write import CopyOnWrite
 from wde.workflows.decoding.kv_cache.yoco.trie import Trie
 from wde.workflows.decoding.schema.request import DecodingSchedulableRequest
 
@@ -19,16 +22,19 @@ logger = init_logger(__name__)
 
 class YOCOPrefixCachingKVCacheManager:
 
-    def __init__(self, engine_config):
+    def __init__(self, engine_config, kv_cache: List[torch.Tensor]):
         self.engine_config = engine_config
         num_gpu_blocks = self.engine_config.cache_config.num_gpu_blocks
         self._block_size = self.engine_config.cache_config.block_size
         self.block_allocator = YOCOPrefixCachingBlockAllocator(
-            num_blocks=num_gpu_blocks, block_size=self._block_size)
+            num_blocks=num_gpu_blocks,
+            block_size=self._block_size,
+            kv_cache=kv_cache)
 
     @classmethod
     def from_engine(cls, engine):
-        return cls(engine_config=engine.engine_config)
+        return cls(engine_config=engine.engine_config,
+                   kv_cache=engine.model_inputs_builder.kv_caches)
 
     def create_vblock(self, request: DecodingSchedulableRequest):
         request.vblock = self.block_allocator.create_vblock()
@@ -51,6 +57,9 @@ class YOCOPrefixCachingKVCacheManager:
     def free_last_block(self, request: DecodingSchedulableRequest):
         request.vblock.free_last_block()
         request.num_preempted += 1
+
+    def join(self):
+        self.block_allocator.join()
 
 
 class YOCOVirtualBlockTable:
@@ -244,7 +253,7 @@ class YOCOVirtualBlockTable:
 
             self._num_token_ids += num_tokens
 
-            if new_last_block != last_block:
+            if new_last_block is not last_block:
                 last_block.decr()
                 new_last_block.incr()
 
@@ -373,10 +382,13 @@ class YOCOVirtualBlockTable:
 
 class YOCOPrefixCachingBlockAllocator:
 
-    def __init__(self,
-                 num_blocks: int,
-                 block_size: int,
-                 block_ids: Optional[Iterable[int]] = None):
+    def __init__(
+        self,
+        num_blocks: int,
+        block_size: int,
+        kv_cache: List[torch.tensor],
+        block_ids: Optional[Iterable[int]] = None,
+    ):
         self._block_size = block_size
         self._num_blocks = num_blocks
 
@@ -389,6 +401,7 @@ class YOCOPrefixCachingBlockAllocator:
 
         self._num_blocks = num_blocks
         self._free_physical_block_ids: Deque[BlockId] = deque(block_ids)
+        self._cow_thread = CopyOnWrite(kv_cache)
 
     def create_vblock(self):
         return YOCOVirtualBlockTable(block_size=self._block_size,
@@ -456,16 +469,14 @@ class YOCOPrefixCachingBlockAllocator:
 
         # hit < block_num_tokens
         # 5. need cow
-        block = self._cow(block, prefix_hash, delta_token_ids, hit)
-        block = self._update_block(block, trie=trie)
-        return block, num_tokens
+        block_new = self._cow(block, prefix_hash, delta_token_ids, hit)
+        block_new = self._update_block(block_new, trie=trie)
+        return block_new, num_tokens
 
     def _cow(self, block, prefix_hash, delta_token_ids, n_token):
         assert n_token < len(block.delta_token_ids)
 
-        # num_computed_tokens = min(n_token, block.num_computed_tokens)
-        # todo implement cow
-        num_computed_tokens = 0
+        num_computed_tokens = min(n_token, block.num_computed_tokens)
 
         try:
             physical_block_id = self._get_free_physical_block_id()
@@ -479,8 +490,8 @@ class YOCOPrefixCachingBlockAllocator:
                           physical_block_id=physical_block_id,
                           num_computed_tokens=num_computed_tokens)
 
-        # if num_computed_tokens > 0:
-        # todo implement cow
+        if num_computed_tokens > 0:
+            self._cow_thread.submit(block, block_new, num_computed_tokens)
         return block_new
 
     def _get_or_create_portion_blocks_trie(self, prefix_hash):
@@ -574,3 +585,6 @@ class YOCOPrefixCachingBlockAllocator:
                 # There's no need to keep so many candidates
                 trie.delete(block.delta_token_ids, block)
                 self._free_physical_block_ids.append(block.physical_block_id)
+
+    def join(self):
+        self._cow_thread.join()

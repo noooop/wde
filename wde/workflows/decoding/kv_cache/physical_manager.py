@@ -31,7 +31,6 @@ class PhysicalGPUKVCacheManager:
         self.initialize_cache()
 
         self.gpu_cache = None
-        self.cpu_cache = None
 
     @classmethod
     def from_engine(cls, engine):
@@ -66,7 +65,6 @@ class PhysicalGPUKVCacheManager:
 
         self.gpu_cache = self._allocate_kv_cache(
             num_gpu_blocks, self.engine_config.device_config.device_type)
-        self.cpu_cache = self._allocate_kv_cache(num_cpu_blocks, "cpu")
 
         set_random_seed(self.engine_config.model_config.seed)
         self.model_inputs_builder.kv_caches = self.gpu_cache

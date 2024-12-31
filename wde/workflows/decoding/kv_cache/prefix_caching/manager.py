@@ -52,6 +52,9 @@ class PrefixCachingKVCacheManager:
         request.vblock.free_last_block()
         request.num_preempted += 1
 
+    def join(self):
+        pass
+
 
 @dataclass(order=True)
 class Block:

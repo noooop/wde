@@ -24,18 +24,20 @@ class PrefixCachingDecodingScheduler(Scheduler):
     kv_cache_manager_class = PrefixCachingKVCacheManager
 
     def __init__(self, engine_config: EngineConfig,
-                 request_processor: RequestProcessor) -> None:
+                 request_processor: RequestProcessor,
+                 kv_cache_manager) -> None:
         super().__init__(engine_config, request_processor)
-
         self.running: Deque[DecodingSchedulableRequest] = deque()
-        self.kv_cache_manager = self.kv_cache_manager_class(engine_config)
+        self.kv_cache_manager = kv_cache_manager
         self.record_metrics = engine_config.sys_config.record_metrics
         self.num_cumulative_preemption = 0
         logger.info(f"Use {self.name}.")
 
     @classmethod
     def from_engine(cls, engine):
-        return cls(engine.engine_config, engine.request_processor)
+        kv_cache_manager = cls.kv_cache_manager_class.from_engine(engine)
+        return cls(engine.engine_config, engine.request_processor,
+                   kv_cache_manager)
 
     def _schedule_prefills(
         self,
@@ -293,6 +295,8 @@ class PrefixCachingDecodingScheduler(Scheduler):
                 request.metrics.scheduling_time = scheduling_time
                 request.metrics.num_requests = num_requests
                 request.metrics.num_batched_tokens = num_batched_tokens
+
+        self.kv_cache_manager.join()
 
         return scheduler_outputs
 
