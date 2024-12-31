@@ -95,13 +95,13 @@ sdpa 优化的 transformers 已经不好欺负了， 作为这次推理性能调
 - inference_time = inference_end_ts - inference_begin_ts：请求执行器推理的时间
 - latency = finish_ts - scheduled_ts：请求从调度到完成的时间
 
-先看图，经过同步调度 sync、简单异步调度 simple_async、异步调度 async、双缓存 double_buffer优化之后，性能明显提升
+先看图，经过同步调度 sync、简单异步调度 simple_async、异步调度 async 优化之后，性能明显提升
 
-<img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/benchmark_bge-m3/inference_time.png?raw=true" width="400">
+<img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/0.2.3/retriever/inference_time.png?raw=true" width="400">
 
 > 图3 上图的延迟计算口径为 inference_time = inference_end_ts - inference_begin_ts，请求执行器推理的时间
 
-<img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/benchmark_bge-m3/latency.png?raw=true" width="400">
+<img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/0.2.3/retriever/latency.png?raw=true" width="400">
 
 > 图4 上图延迟计算口径为 latency = finish_ts - scheduled_ts，请求从调度到完成的时间
 
@@ -111,13 +111,20 @@ sdpa 优化的 transformers 已经不好欺负了， 作为这次推理性能调
 python -m benchmarks.retriever.profiler.profiling_executor
 ```
 
-[同步调度代码](https://github.com/noooop/wde/blob/c1920124c750ea2c66bce0b28ad443e615467995/wde/tasks/prefill_only/executor/gpu_executor.py#L127C1-L143C30)
+[同步调度代码](https://github.com/noooop/wde/blob/823ea72d43b2c8cdbfb6a55e65010e18082feb4d/wde/workflows/core/executor/gpu_executor.py#L125C1-L153C30)
 
-使用 chrome://tracing/ 查看 sync_execute_loop.json
+使用 chrome://tracing/ 查看 sync-1-1.json ~ sync-1-64.json
 
-<img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/profiler/sync.png?raw=true" width="400">
+<img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/0.2.3/retriever/sync-1.png?raw=true" width="400">
+<img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/0.2.3/retriever/sync-2.png?raw=true" width="400">
 
-> 图5 可以看到同步调度时，两次模型计算之间有一些空隙，系统在运行上一个批次请求的后处理和下一个批次调度、预处理，GPU处于空闲状态。
+> 图5、图6 对于轻负载, 推理瓶颈为 cuda kernels launch 的速度
+
+<img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/0.2.3/retriever/sync-3.png?raw=true" width="400">
+
+> 图7 对于重负载，两次模型计算之间有一些空隙，系统在运行上一个批次请求的后处理和下一个批次调度、预处理，GPU处于空闲状态。
+
+尤其是每个请求都需要复杂预处理后处理的任务，GPU处于空闲状态的比例不容忽视。
 
 从 图3图4 sync曲线可以看到，同步调度性能跟transformers差不多。
 
@@ -125,7 +132,7 @@ python -m benchmarks.retriever.profiler.profiling_executor
 
 ### 简单异步调度分析
 
-[简单异步调度代码](https://github.com/noooop/wde/blob/c1920124c750ea2c66bce0b28ad443e615467995/wde/tasks/prefill_only/executor/gpu_executor.py#L145C1-L157C32)
+[简单异步调度代码](https://github.com/noooop/wde/blob/823ea72d43b2c8cdbfb6a55e65010e18082feb4d/wde/workflows/core/executor/gpu_executor.py#L155C1-L167C32)
 
 将系统改成异步调度
 - scheduler 和 executor 使用 queue 传输输入输出
@@ -133,51 +140,61 @@ python -m benchmarks.retriever.profiler.profiling_executor
 - input_queue 总是有多个 batch 供 executor 使用
 - executor 执行完上一个 batch，将结果放入 output_queue，立即执行下一个 batch
 
-使用 chrome://tracing/ 查看 simple_async_execute_loop.json
+使用 chrome://tracing/ 查看 sync-1-1.json ~ sync-1-64.json
 
-<img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/profiler/simple_async.png?raw=true" width="400">
+<img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/0.2.3/retriever/simple_async-1.png?raw=true" width="400">
 
-> 图6 可以看到简单异步调度，基本上消除了GPU空闲
+<img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/0.2.3/retriever/simple_async-2.png?raw=true" width="400">
 
-从 图3图4 可以看到simple_async曲线跟之前sync曲线，有一定提高
+> 图8、 图9  可以看到简单异步调度，基本上消除了两次模型计算之间有一些空隙，对于重负载 GPU 利用率得到提高
+
+从 图3图4 可以看到simple_async曲线跟之前sync曲线，峰值QPS有显著提升，但是batchsize=1几乎没有提升
+
+异步调度本质是两个或多个batch交替在GPU上执行，所以单个请求的延迟基本上要翻翻，从图9就可以看出来。
+
+好处是只要CPU上花的时间小于GPU花的时间，完全可以覆盖掉，这种优化方式在CUDA Parallel Programming 称为 Tiling.
 
 接下来能如何提高系统性能呢?
-
 
 ### non_blocking
 
 参考pytorch官方的 [non_blocking 教程](https://pytorch.org/tutorials/intermediate/pinmem_nonblock.html)， 使用多个 cuda.Stream 结合 non_blocking 可以加速系统运行
 
+<img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/0.2.3/retriever/async-1.png?raw=true" width="400">
+
+使用 chrome://tracing/ 查看 async-1-1.json ~ async-1-64.json
+
+
+> 图10 可以看到 io 和 计算确实可以并行
+
+从 图3图4 可以看到 async-1 曲线几乎和 simple_async曲线贴在一起， io 化的时间占比很小，所以几乎起不到优化作用
+
+### non_blocking +
+
 直接跳到结论，通过多个cuda.Stream并行计算，不仅io和计算并行可以提高性能，两个batch计算并行也可以提高性能 
 
-[non_blocking 异步调度代码](https://github.com/noooop/wde/blob/c1920124c750ea2c66bce0b28ad443e615467995/wde/tasks/prefill_only/executor/gpu_executor.py#L159C1-L190C26)
+这时候我们需要两个线程，async-N 中的 N 表示 有几个计算线程
 
-使用 chrome://tracing/ 查看 async_execute_loop.json
+使用 chrome://tracing/ 查看 查看 async-2-1.json ~ async-2-64.json
 
-<img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/profiler/async.png?raw=true" width="400">
+<img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/0.2.3/retriever/async-2-1.png?raw=true" width="400">
 
-> 图7 GPU空闲被两条重叠的Stream完全填补
+> 图11 对于轻负载，两个线程 cuda kernels launch 肯定比一个效率高
 
-从 图3图4 可以看到 async 曲线，相对simple_async曲线、sync曲线，效果非常显著
+<img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/0.2.3/retriever/async-2-2.png?raw=true" width="400">
 
-### double_buffer
+<img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/0.2.3/retriever/async-2-3.png?raw=true" width="400">
 
-上面 non_blocking async 调度，本质上是一种使用了两个cuda.Stream、两个batch，两个batch计算并行的调度方式
+> 图12、图13 对于重负载，算子之间都可以并行，进一步提高了GPU利用率
 
-既然batch之间计算并行可以提高性能，那就设计一种使用两个cuda.Stream、三个batch，两个batch计算并行的调度方式
+从 图3图4 可以看到 async-2 曲线，对于batchsize=1，qps提升很大，对于重负载也有一定提升
 
-[double_buffer 异步调度代码](https://github.com/noooop/wde/blob/c1920124c750ea2c66bce0b28ad443e615467995/wde/tasks/prefill_only/executor/gpu_executor.py#L192C1-L282C26)
+### non_blocking ++
 
-使用 chrome://tracing/ 查看 double_buffer_execute_loop.json
+上面 non_blocking async 调度，本质上是一种使用了两个cuda.Stream、两个batch，两个线程并行的异步调度方式
 
-<img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/profiler/double_buffer.png?raw=true" width="400">
+既然batch之间计算并行可以提高性能，那就设计一种使用三个cuda.Stream、三个batch，三个线程并行的异步调度方式
 
-> 图8 GPU时间线的两条Stream完全占满
-
-虽然 double_buffer 看起来很酷，但从 图3图4 可以看到 double_buffer 对比 async 几乎没有性能提升
-
-所以虽然可以设计一个使用 100 个 cuda.Stream、1000 个 batch，10000 个 batch计算并行的调度方式，但估计也不会更多的有性能提升，甚至可能有性能下降。
-
-尤其是在线服务，很难同时凑满 double_buffer 使用的三个 batch，所以 async 调度为wde系统默认调度方式
+从 图3图4 可以看到 async-3 曲线，几乎没有提升，所以两个线程并行的异步调度方式已经可以让GPU饱和
 
 ## 未完待续
