@@ -20,6 +20,6 @@ def get_scheduler(engine_config: DecodingEngineConfig):
 
         return KV_CACHE_MANAGER_MAP[kv_cache_manager]
     elif engine_config.cache_config.enable_prefix_caching:
-        return YOCO
+        return PREFIX_CACHING
     else:
         return NAIVE

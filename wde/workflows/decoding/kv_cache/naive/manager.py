@@ -2,75 +2,13 @@ from collections import deque
 from typing import Deque, Iterable, List, Optional
 
 from wde.logger import init_logger
-from wde.workflows.decoding.kv_cache.interfaces import (BlockAllocator,
-                                                        BlockId,
-                                                        NoFreeBlocksError,
-                                                        VirtualBlockTable)
+from wde.workflows.decoding.kv_cache.logic_manager import (BlockAllocator,
+                                                           BlockId,
+                                                           NoFreeBlocksError,
+                                                           VirtualBlockTable)
 from wde.workflows.decoding.kv_cache.utils import get_num_required_blocks
-from wde.workflows.decoding.schema.request import DecodingSchedulableRequest
 
 logger = init_logger(__name__)
-
-
-class NaiveKVCacheManager:
-
-    def __init__(self, engine_config):
-        self.engine_config = engine_config
-        num_gpu_blocks = self.engine_config.cache_config.num_gpu_blocks
-        self._block_size = self.engine_config.cache_config.block_size
-        self.block_allocator = NaiveBlockAllocator(num_blocks=num_gpu_blocks,
-                                                   block_size=self._block_size)
-
-        watermark = self.engine_config.cache_config.watermark
-        self.watermark_blocks = int(watermark * num_gpu_blocks)
-
-    @classmethod
-    def from_engine(cls, engine):
-        return cls(engine_config=engine.engine_config)
-
-    def high_watermark(self) -> bool:
-        return self.block_allocator.num_free_blocks < self.watermark_blocks
-
-    @property
-    def num_free_blocks(self):
-        return self.block_allocator.num_free_blocks
-
-    def create_vblock(self, request: DecodingSchedulableRequest):
-        request.vblock = self.block_allocator.create_vblock()
-
-    def can_allocate(self, request: DecodingSchedulableRequest,
-                     budget_bound_token_chunk_size: int) -> int:
-        num_empty_slots = request.vblock.num_empty_slots
-
-        # No allocat required
-        if num_empty_slots >= budget_bound_token_chunk_size:
-            return budget_bound_token_chunk_size
-
-        num_need_allocated_slots = budget_bound_token_chunk_size - num_empty_slots
-        num_need_allocated_blocks = get_num_required_blocks(
-            num_need_allocated_slots, self._block_size)
-
-        num_free_gpu_blocks = self.block_allocator.num_free_blocks
-
-        if num_free_gpu_blocks > num_need_allocated_blocks:
-            return budget_bound_token_chunk_size
-        else:
-            return min(
-                budget_bound_token_chunk_size,
-                num_empty_slots + num_free_gpu_blocks * self._block_size)
-
-    def allocate(self, request: DecodingSchedulableRequest) -> None:
-        token_ids = request.get_token_ids()
-        offset = request.vblock.num_token_ids + request.token_chunk_size
-        request.vblock.allocate(token_ids[:offset])
-        assert request.vblock.num_token_ids == request.vblock.num_computed_tokens + request.token_chunk_size
-
-    def free(self, request: DecodingSchedulableRequest) -> None:
-        request.vblock.free()
-
-    def free_last_block(self, request: DecodingSchedulableRequest):
-        request.vblock.free_last_block()
-        request.num_preempted += 1
 
 
 class NaiveVirtualBlockTable(VirtualBlockTable):
@@ -91,8 +29,8 @@ class NaiveVirtualBlockTable(VirtualBlockTable):
         self._num_computed_tokens = 0
 
     @property
-    def physical_block_ids(self):
-        return self._physical_block_ids
+    def seq_len(self):
+        return self._num_token_ids
 
     @property
     def num_token_ids(self):
@@ -101,6 +39,10 @@ class NaiveVirtualBlockTable(VirtualBlockTable):
     @property
     def num_computed_tokens(self):
         return self._num_computed_tokens
+
+    @property
+    def physical_block_ids(self):
+        return self._physical_block_ids
 
     def __len__(self):
         return len(self._physical_block_ids)
@@ -114,9 +56,32 @@ class NaiveVirtualBlockTable(VirtualBlockTable):
     def max_num_token_ids(self):
         return len(self._physical_block_ids) * self._block_size
 
-    def allocate(self, token_ids):
-        num_token_ids = len(token_ids)
+    def update(self, token_ids: List[int]):
+        pass
+
+    def can_allocate(self, token_chunk_size: int):
+        num_empty_slots = self.num_empty_slots
+
+        # No allocat required
+        if num_empty_slots >= token_chunk_size:
+            return token_chunk_size
+
+        num_need_allocated_slots = token_chunk_size - num_empty_slots
+        num_need_allocated_blocks = get_num_required_blocks(
+            num_need_allocated_slots, self._block_size)
+
+        num_free_gpu_blocks = self._allocator.num_free_blocks
+
+        if num_free_gpu_blocks > num_need_allocated_blocks:
+            return token_chunk_size
+        else:
+            return min(
+                token_chunk_size,
+                num_empty_slots + num_free_gpu_blocks * self._block_size)
+
+    def allocate(self, token_chunk_size: int):
         max_num_token_ids = self.max_num_token_ids
+        num_token_ids = token_chunk_size + self._num_token_ids
 
         # No allocate required
         if num_token_ids <= max_num_token_ids:
@@ -160,7 +125,9 @@ class NaiveBlockAllocator(BlockAllocator):
     def __init__(self,
                  num_blocks: int,
                  block_size: int,
-                 block_ids: Optional[Iterable[int]] = None):
+                 block_ids: Optional[Iterable[int]] = None,
+                 *args,
+                 **kwargs):
         self._block_size = block_size
 
         if block_ids is None:

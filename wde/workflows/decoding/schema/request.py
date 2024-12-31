@@ -9,7 +9,7 @@ from wde.workflows.core.schema.engine_io import SchedulableRequest
 if TYPE_CHECKING:
     from wde.workflows.decoding.backends.sampling.sampling_params import \
         SamplingParams
-    from wde.workflows.decoding.kv_cache.interfaces import VirtualBlockTable
+    from wde.workflows.decoding.kv_cache.logic_manager import VirtualBlockTable
     from wde.workflows.decoding.schema.execute_io import (Logprob,
                                                           PromptLogprobs,
                                                           SampleLogprobs)

@@ -7,10 +7,11 @@ from wde.workflows.core.config import EngineConfig
 from wde.workflows.core.processor.input_processor import RequestProcessor
 from wde.workflows.core.scheduler import Scheduler
 from wde.workflows.core.schema.engine_io import RequestOutput
+from wde.workflows.decoding.kv_cache.logic_manager import LogicKVCacheManager
 from wde.workflows.decoding.kv_cache.naive.scheduler import (
     DecodingSchedulingBudget, SchedulerPrefillOutputs, SchedulerRunningOutputs)
 from wde.workflows.decoding.kv_cache.prefix_caching.manager import \
-    PrefixCachingKVCacheManager
+    PrefixCachingBlockAllocator
 from wde.workflows.decoding.schema.engine_io import (
     DecodingSchedulableRequest, DecodingSchedulerOutput)
 from wde.workflows.decoding.schema.request import RequestStatus
@@ -21,7 +22,7 @@ logger = init_logger(__name__)
 class PrefixCachingDecodingScheduler(Scheduler):
     name = "Prefix Caching"
     support_scheduling = ["sync_scheduling", "async_scheduling"]
-    kv_cache_manager_class = PrefixCachingKVCacheManager
+    block_allocator_class = PrefixCachingBlockAllocator
 
     def __init__(self, engine_config: EngineConfig,
                  request_processor: RequestProcessor,
@@ -30,12 +31,12 @@ class PrefixCachingDecodingScheduler(Scheduler):
         self.running: Deque[DecodingSchedulableRequest] = deque()
         self.kv_cache_manager = kv_cache_manager
         self.record_metrics = engine_config.sys_config.record_metrics
-        self.num_cumulative_preemption = 0
-        logger.info(f"Use {self.name}.")
+        logger.info(f"Use {self.name} Scheduler.")
 
     @classmethod
     def from_engine(cls, engine):
-        kv_cache_manager = cls.kv_cache_manager_class.from_engine(engine)
+        kv_cache_manager = LogicKVCacheManager.from_engine(
+            engine=engine, block_allocator_class=cls.block_allocator_class)
         return cls(engine.engine_config, engine.request_processor,
                    kv_cache_manager)
 
@@ -50,6 +51,9 @@ class PrefixCachingDecodingScheduler(Scheduler):
         waiting_queue = self.waiting
         while waiting_queue:
             if budget.full():
+                break
+
+            if self.kv_cache_manager.high_watermark():
                 break
 
             request = waiting_queue[0]
@@ -173,6 +177,9 @@ class PrefixCachingDecodingScheduler(Scheduler):
 
             num_new_tokens = request.num_new_tokens
             assert num_new_tokens > 0
+
+            if request.is_prefill and self.kv_cache_manager.high_watermark():
+                break
 
             # 3. chunked prefill
             budget_bound_token_chunk_size = min(

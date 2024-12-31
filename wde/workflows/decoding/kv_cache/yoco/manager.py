@@ -7,62 +7,21 @@ from typing import Deque, Dict, Iterable, List, Optional, cast
 import torch
 
 from wde.logger import init_logger
-from wde.workflows.decoding.kv_cache.interfaces import (BlockId,
-                                                        NoFreeBlocksError)
+from wde.workflows.decoding.kv_cache.logic_manager import (BlockAllocator,
+                                                           BlockId,
+                                                           NoFreeBlocksError,
+                                                           VirtualBlockTable)
 from wde.workflows.decoding.kv_cache.prefix_caching.manager import (Block,
                                                                     PrefixHash)
 from wde.workflows.decoding.kv_cache.utils import (chunk_list,
                                                    get_num_required_blocks)
 from wde.workflows.decoding.kv_cache.yoco.copy_on_write import CopyOnWrite
 from wde.workflows.decoding.kv_cache.yoco.trie import Trie
-from wde.workflows.decoding.schema.request import DecodingSchedulableRequest
 
 logger = init_logger(__name__)
 
 
-class YOCOPrefixCachingKVCacheManager:
-
-    def __init__(self, engine_config, kv_cache: List[torch.Tensor]):
-        self.engine_config = engine_config
-        num_gpu_blocks = self.engine_config.cache_config.num_gpu_blocks
-        self._block_size = self.engine_config.cache_config.block_size
-        self.block_allocator = YOCOPrefixCachingBlockAllocator(
-            num_blocks=num_gpu_blocks,
-            block_size=self._block_size,
-            kv_cache=kv_cache)
-
-    @classmethod
-    def from_engine(cls, engine):
-        return cls(engine_config=engine.engine_config,
-                   kv_cache=engine.model_inputs_builder.kv_caches)
-
-    def create_vblock(self, request: DecodingSchedulableRequest):
-        request.vblock = self.block_allocator.create_vblock()
-
-    def update(self, request: DecodingSchedulableRequest):
-        token_ids = request.get_token_ids()
-        request.vblock.update(token_ids)
-
-    def can_allocate(self, request: DecodingSchedulableRequest,
-                     budget_bound_token_chunk_size: int) -> int:
-        return request.vblock.can_allocate(budget_bound_token_chunk_size)
-
-    def allocate(self, request: DecodingSchedulableRequest) -> None:
-        request.vblock.allocate(request.token_chunk_size)
-        assert request.vblock.seq_len == request.vblock.num_computed_tokens + request.token_chunk_size
-
-    def free(self, request: DecodingSchedulableRequest) -> None:
-        request.vblock.free()
-
-    def free_last_block(self, request: DecodingSchedulableRequest):
-        request.vblock.free_last_block()
-        request.num_preempted += 1
-
-    def join(self):
-        self.block_allocator.join()
-
-
-class YOCOVirtualBlockTable:
+class YOCOVirtualBlockTable(VirtualBlockTable):
     # | <-                           max capacity                                      -> |
     # | Full blocks...........                            |       last portion block      |
     # | <-           num_token_ids                            ->  | <- num_empty_slots -> |
@@ -380,7 +339,7 @@ class YOCOVirtualBlockTable:
         self._seq_len = min(self._num_token_ids, self._seq_len)
 
 
-class YOCOPrefixCachingBlockAllocator:
+class YOCOPrefixCachingBlockAllocator(BlockAllocator):
 
     def __init__(
         self,

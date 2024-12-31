@@ -8,7 +8,8 @@ from wde.workflows.core.config import EngineConfig
 from wde.workflows.core.processor.input_processor import RequestProcessor
 from wde.workflows.core.scheduler import Scheduler
 from wde.workflows.core.schema.engine_io import RequestOutput
-from wde.workflows.decoding.kv_cache.naive.manager import NaiveKVCacheManager
+from wde.workflows.decoding.kv_cache.logic_manager import LogicKVCacheManager
+from wde.workflows.decoding.kv_cache.naive.manager import NaiveBlockAllocator
 from wde.workflows.decoding.schema.engine_io import (
     DecodingSchedulableRequest, DecodingSchedulerOutput)
 from wde.workflows.decoding.schema.request import RequestStatus
@@ -105,19 +106,24 @@ class SchedulerPrefillOutputs:
 
 
 class NaiveDecodingScheduler(Scheduler):
+    name = "Naive"
     support_scheduling = ["sync_scheduling", "async_scheduling"]
 
     def __init__(self, engine_config: EngineConfig,
-                 request_processor: RequestProcessor) -> None:
+                 request_processor: RequestProcessor,
+                 kv_cache_manager) -> None:
         super().__init__(engine_config, request_processor)
         self.running: Deque[DecodingSchedulableRequest] = deque()
-        self.kv_cache_manager = NaiveKVCacheManager(engine_config)
+        self.kv_cache_manager = kv_cache_manager
         self.record_metrics = engine_config.sys_config.record_metrics
-        self.num_cumulative_preemption = 0
+        logger.info(f"Use {self.name} Scheduler.")
 
     @classmethod
     def from_engine(cls, engine):
-        return cls(engine.engine_config, engine.request_processor)
+        kv_cache_manager = LogicKVCacheManager.from_engine(
+            engine=engine, block_allocator_class=NaiveBlockAllocator)
+        return cls(engine.engine_config, engine.request_processor,
+                   kv_cache_manager)
 
     def _schedule_prefills(
         self,
@@ -207,7 +213,6 @@ class NaiveDecodingScheduler(Scheduler):
 
     def _schedule_running(self, budget: DecodingSchedulingBudget,
                           running_queue) -> SchedulerRunningOutputs:
-
         prefill_requests = []
         decode_requests = []
         preempted = []
@@ -256,6 +261,7 @@ class NaiveDecodingScheduler(Scheduler):
             else:
                 # Can schedule this request.
                 request.token_chunk_size = budget_bound_token_chunk_size
+
                 self.kv_cache_manager.allocate(request)
 
                 if request.is_prefill:
