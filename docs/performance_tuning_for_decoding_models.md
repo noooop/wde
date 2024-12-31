@@ -86,122 +86,88 @@ wde 使用 Chunked Fill，所以不区分预填充 (Prefill) 和解码 (Decoding
 python -m benchmarks.chat.profiler.profiling_decoding
 ```
 
-[同步调度代码](https://github.com/noooop/wde/blob/fb361f890bc2128175304d9788312be75b967b52/wde/workflows/core/executor/gpu_executor.py#L30C1-L46C30)
+[同步调度代码](https://github.com/noooop/wde/blob/823ea72d43b2c8cdbfb6a55e65010e18082feb4d/wde/workflows/core/executor/gpu_executor.py#L125C1-L153C30)
 
+使用 chrome://tracing/ 查看 sync-1-1.json ~ sync-1-64.json
 
-使用 chrome://tracing/ 查看 sync_execute_loop.json
+<img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/0.2.3/decoding/sync-1.png?raw=true" width="400">
 
-<img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/chat/profiling_decoding/sync1.png?raw=true" width="400">
+> 图1 对于轻负载，两个线程 cuda kernels launch 肯定比一个效率高，应该能有不错的加速效果
 
-> 图1 可以看到已经gpu利用率已经非常高了，没有什么空闲的空间
+<img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/0.2.3/decoding/sync-1.png?raw=true" width="400">
+
+> 图2 对于重负载，不是每次都会添加新request，而两次解码需要的CPU处理时间非常短，异步调度估计提高有限
 
 <img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/chat/profiling_decoding/sync2.png?raw=true" width="400">
 
-> 图2 放大对于7B-fp8的模型，一个step时间大概14ms，其中cpu部分比如调度预处理后处理才0.3ms
+> 图3 放大对于7B-fp8的模型，一个step时间大概14ms，其中cpu部分比如调度预处理后处理才0.3ms
 
 <img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/chat/profiling_decoding/sync3.png?raw=true" width="400">
 
-> 图3 1.5B的模型，一个step时间大概6ms，0.3ms也是不值一提
+> 图4 1.5B的模型，一个step时间大概6ms，0.3ms也是不值一提
 
 所以简单的实现异步调度几乎不会提高吞吐
 
-### 简单异步调度
+### 异步调度
 
-[简单调度代码](https://github.com/noooop/wde/blob/fb361f890bc2128175304d9788312be75b967b52/wde/workflows/core/executor/gpu_executor.py#L48C1-L60C32)
+异步调度优化QPS的原理请移步 [对 prefill only models 推理性能调优](https://github.com/noooop/wde/blob/main/docs/performance_tuning_for_prefill_only_models.md)
 
+直接对着图说吧 
 
-使用 chrome://tracing/ 查看 simple_async_execute_loop.json
+##### 7B-fp8
 
-<img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/chat/profiling_decoding/simple_async1.png?raw=true" width="400">
+<img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/0.2.3/decoding/7B-fp8-inference_time.png?raw=true" width="400">
 
-> 图4 好像比图1密集了一点点
+> 图 5 延迟口径是inference_time
 
-<img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/chat/profiling_decoding/simple_async2.png?raw=true" width="400">
+- simple_async 和 async-1，几乎没有性能提升，甚至有性能下降
+- max_num_batched_tokens = 32 时，async-2 对比 sync QPS高22%
+- max_num_batched_tokens = 1536 时, async-2 对比 sync QPS几乎相同，这时GPU饱和
+- 所以提高GPU利用率最好的办法是加大 batchsize
 
-> 图5 确实gpu在做预处理时，gpu在执行，重叠的比例真的很小
+<img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/0.2.3/decoding/7B-fp8-latency.png?raw=true" width="400">
 
-<img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/chat/profiling_decoding/simple_async3.png?raw=true" width="400">
+> 图 6 延迟口径是latency
+- async-2 延迟是 sync 的两倍
+- async-3 对比 async-2 几乎没有QPS提升，但延迟是sync的两倍
 
-> 图6 延迟口径是inference_time,  反应到吞吐延迟曲线上，大 max_num_batched_tokens 吞吐甚至会降低
+##### 7B-bf16
 
-### non_blocking
+<img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/0.2.3/decoding/7B-bf16-inference_time.png?raw=true" width="400">
 
-参考pytorch官方的 [non_blocking 教程](https://pytorch.org/tutorials/intermediate/pinmem_nonblock.html)， 使用多个 cuda.Stream 结合 non_blocking 可以加速系统运行
+> 图 7 延迟口径是inference_time 
 
-直接跳到结论，通过多个cuda.Stream并行计算，不仅io和计算并行可以提高性能，两个batch计算并行也可以提高性能 
-
-[non_blocking 异步调度代码](https://github.com/noooop/wde/blob/fb361f890bc2128175304d9788312be75b967b52/wde/workflows/core/executor/gpu_executor.py#L62C1-L93C26)
-
-使用 chrome://tracing/ 查看 async_execute_loop.json
-
-<img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/chat/profiling_decoding/async1.png?raw=true" width="400">
-
-> 图7 GPU空闲被两条重叠的Stream完全填补
+<img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/0.2.3/decoding/7B-bf16-latency.png?raw=true" width="400">
 
 
-<img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/chat/profiling_decoding/async2.png?raw=true" width="400">
+> 图8 延迟口径是latency
 
-> 图8 放大，不仅 io 和 计算 可以并行
+- max_num_batched_tokens = 32 时，async-2 对比 sync QPS高10%
+- max_num_batched_tokens = 768 时 对比 sync QPS高2%
+- max_num_batched_tokens = 1024 时出现抢占
+- max_num_batched_tokens = 1536 时 oom
+- 7B-fp8 qps 几乎是 7B-bf16 的两倍，fp8 是性价比最高的推理精度
 
-<img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/chat/profiling_decoding/async3.png?raw=true" width="400">
+##### 3B-bf16
 
-> 图9 小计算，甚至大计算之间也可以并行
+<img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/0.2.3/decoding/3B-bf16-inference_time.png?raw=true" width="400">
 
+> 图 9 延迟口径是inference_time 
 
-<img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/chat/profiling_decoding/async4.png?raw=true" width="400">
-
-> 图10 延迟口径是inference_time, 吞吐 async 确实比 sync 高一些
-
-### double_buffer
-
-[double_buffer 异步调度代码](https://github.com/noooop/wde/blob/fb361f890bc2128175304d9788312be75b967b52/wde/workflows/core/executor/gpu_executor.py#L95C1-L185C26)
-
-
-<img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/chat/profiling_decoding/double_buffer.png?raw=true" width="400">
-
-> 图11 延迟口径是inference_time, double_buffer 不会有任何提高，这里提一嘴主要是代码写得比较酷
+<img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/0.2.3/decoding/3B-bf16-latency.png?raw=true" width="400">
 
 
-### 代价是什么呢
-
-异步调度本质上是交错调度两个批次的请求，所以对于每个请求，生成延迟会翻翻
-
-<img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/chat/profiling_decoding/latency-7b-fp8.png?raw=true" width="400">
-
-> 图12 latency = finish_ts - scheduled_ts：从调度到完成的时间
-
-<img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/chat/profiling_decoding/latency-1.5b-bf16.png?raw=true" width="400">
-
-> 图13 latency = finish_ts - scheduled_ts：从调度到完成的时间， 对于1.5b的小模型，加速效果要更好一些
-
-
-### 与其他系统对比
-
-跟 vllm-0.6.3.post1 和 sgl-0.3.5.post2 友善的对比一下 Qwen2.5-7B-Instruct-fp8
-
-（为什么不测Qwen2.5-7B-Instruct-bp16， 24G的 4090 没法上很大的 max_num_batched_tokens 跑不到模型峰值
-
-> 严重拉偏架警告 (狗头) 
+> 图10 延迟口径是latency
 > 
-> 这个测试肯定是严重偏向异步调度的
-> 
-> 0. 从上我们知道 max_num_batched_tokens 变大，吞吐变大延迟变高，这里面可是有很多文章可以做的
-> 1. 虽然写的是 max_num_batched_tokens，但异步调度需要交错调度两个批次的请求，也就是需要两倍的 max_num_batched_tokens 才能跑起来
-> 2. 没有测延迟，一方面不同的软件库很难做到记录相同口径的延迟，更重要的也要掩盖异步调度需要交错调度两个批次延迟翻倍的负面影响
+- max_num_batched_tokens = 32 时，async-2 对比 sync QPS高23%
+- max_num_batched_tokens = 768 时 对比 sync QPS高3%
 
 
-<img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/chat/profiling_decoding/throughput.png?raw=true" width="400">
+### 总结
 
-> 图14 横坐标 max_num_batched_tokens， 纵坐标 qps
-> - vllm 和 sync 一模一样，毕竟wde的代码就是建立在vllm基础上的
-> - sgl 确实要快一些，但不知道为什么 chunked_prefill_size 小于256会报错
-> - 刨去以上拉偏架行为，异步调度确实可以提高GPU利用率，可以用更小的 max_num_batched_tokens 达到性能饱和
+异步调度对小模型低负载效果比较好，大模型高负载几乎没有效果
 
-友善的对比一下 Qwen2.5-3B-Instruct-bf16
 
-<img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/chat/profiling_decoding/throughput-3B.png?raw=true" width="400">
-
-> 图 15 横坐标 max_num_batched_tokens， 纵坐标 qps， 小模型异步调度的优势要更明显一点
 
 ## 未完待续
 
