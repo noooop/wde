@@ -92,6 +92,10 @@ class PhysicalGPUKVCacheManager:
         else:
             dtype = STR_DTYPE_TO_TORCH_DTYPE[cache_config.cache_dtype]
 
+        logger.info(
+            f"KV cache shape:{(num_attention_layers, num_blocks, block_size, num_kv_heads, head_size, dtype)}."
+        )
+
         pin_memory = is_pin_memory_available() if device == "cpu" else False
         kv_cache: List[torch.Tensor] = []
         for _ in range(num_attention_layers):
@@ -163,6 +167,9 @@ class PhysicalGPUKVCacheManager:
              peak_memory) / _GB)
 
         cache_block_size = self._get_cache_block_size_bytes()
+
+        logger.info(f"Cache block size: {cache_block_size}")
+
         num_gpu_blocks = int(
             (total_gpu_memory *
              self.engine_config.cache_config.gpu_memory_utilization -

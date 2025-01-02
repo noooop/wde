@@ -4,10 +4,11 @@ from typing import List
 
 class TokenSampler:
 
-    def __init__(self, tokenizer):
+    def __init__(self, tokenizer, trust_remote_code=False):
         if isinstance(tokenizer, str):
             from vllm.transformers_utils.tokenizer import get_tokenizer
-            tokenizer = get_tokenizer(tokenizer)
+            tokenizer = get_tokenizer(tokenizer,
+                                      trust_remote_code=trust_remote_code)
 
         vocab = tokenizer.get_vocab()
         vocab = {
