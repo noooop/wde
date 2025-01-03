@@ -334,6 +334,27 @@ class PrefixCachingVirtualBlockTable(VirtualBlockTable):
                 seq_len - i * self._block_size, self._block_size)
             self._blocks[i].release()
 
+    def new_full_blocks(self):
+        _new_full_blocks = []
+        block_size = self._block_size
+        seq_len = self.seq_len
+        max_num_block = get_num_required_blocks(seq_len, self._block_size)
+
+        num_computed_tokens = self.num_computed_tokens
+        last_block_idx = max(
+            0,
+            get_num_required_blocks(num_computed_tokens, self._block_size) - 1)
+
+        for i in range(last_block_idx, max_num_block):
+            new_num_computed_tokens = min(seq_len - i * self._block_size,
+                                          self._block_size)
+
+            if self._blocks[
+                    i].num_computed_tokens < block_size and new_num_computed_tokens == block_size:
+                _new_full_blocks.append(self._blocks[i])
+
+        return _new_full_blocks
+
 
 class PrefixCachingBlockAllocator(BlockAllocator):
 
@@ -422,7 +443,7 @@ class PrefixCachingBlockAllocator(BlockAllocator):
 
     def _get_free_physical_block_id(self):
         try:
-            physical_block_id = self._free_physical_block_ids.pop()
+            physical_block_id = self._free_physical_block_ids.popleft()
             return physical_block_id
         except IndexError:
             pass

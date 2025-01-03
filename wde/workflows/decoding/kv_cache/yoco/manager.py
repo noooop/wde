@@ -507,7 +507,7 @@ class YOCOPrefixCachingBlockAllocator(BlockAllocator):
 
     def _get_free_physical_block_id(self):
         try:
-            physical_block_id = self._free_physical_block_ids.pop()
+            physical_block_id = self._free_physical_block_ids.popleft()
             return physical_block_id
         except IndexError:
             pass

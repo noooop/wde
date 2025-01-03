@@ -27,10 +27,11 @@ class PhysicalGPUKVCacheManager:
         self.init_gpu_memory = worker.init_gpu_memory
         self.attn_backend = attn_backend
 
+        self.gpu_cache = None
+        self.cpu_cache = None
+
         self.determine_num_available_blocks()
         self.initialize_cache()
-
-        self.gpu_cache = None
 
     @classmethod
     def from_engine(cls, engine):
@@ -66,6 +67,9 @@ class PhysicalGPUKVCacheManager:
         self.gpu_cache = self._allocate_kv_cache(
             num_gpu_blocks, self.engine_config.device_config.device_type)
 
+        if num_cpu_blocks > 0:
+            self.cpu_cache = self._allocate_kv_cache(num_cpu_blocks, "cpu")
+
         set_random_seed(self.engine_config.model_config.seed)
         self.model_inputs_builder.kv_caches = self.gpu_cache
 
@@ -93,7 +97,7 @@ class PhysicalGPUKVCacheManager:
             dtype = STR_DTYPE_TO_TORCH_DTYPE[cache_config.cache_dtype]
 
         logger.info(
-            f"KV cache shape:{(num_attention_layers, num_blocks, block_size, num_kv_heads, head_size, dtype)}."
+            f"Device: {device}, KV cache shape:{(num_attention_layers, num_blocks, block_size, num_kv_heads, head_size, dtype)}."
         )
 
         pin_memory = is_pin_memory_available() if device == "cpu" else False

@@ -27,7 +27,7 @@ class DecodingEngineArgs(EngineArgs):
     block_size: int = 16
     enable_prefix_caching: bool = False
     kv_cache_manager: Optional[str] = None
-    swap_space: int = 4  # GiB
+    swap_space: int = 0  # GiB
     cpu_offload_gb: int = 0  # GiB
     gpu_memory_utilization: float = 0.90
     num_gpu_blocks_override: Optional[int] = None
