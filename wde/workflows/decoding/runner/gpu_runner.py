@@ -7,13 +7,13 @@ from wde.logger import init_logger
 from wde.workflows.core.backends.attention import AttentionBackend
 from wde.workflows.core.config import EngineConfig
 from wde.workflows.core.runner.gpu_runner import GPURunner
-from wde.workflows.core.schema.execute_io import ExecuteInput
 from wde.workflows.decoding.backends.sampling.logits_processor import \
     LogitsProcessor
 from wde.workflows.decoding.backends.sampling.sampler import Sampler
 from wde.workflows.decoding.backends.sampling.sampling_metadata import \
     SamplingMetadata
-from wde.workflows.decoding.schema.execute_io import (DecodingModelInput,
+from wde.workflows.decoding.schema.execute_io import (DecodingExecuteInput,
+                                                      DecodingModelInput,
                                                       SamplerOutput)
 
 logger = init_logger(__name__)
@@ -52,7 +52,7 @@ class GPUDecodingRunner(GPURunner):
     @torch.inference_mode()
     def execute_model(
         self,
-        execute_input: ExecuteInput,
+        execute_input: DecodingExecuteInput,
     ) -> SamplerOutput:
 
         model_input = cast(DecodingModelInput, execute_input.model_input)
@@ -80,6 +80,10 @@ class GPUDecodingRunner(GPURunner):
         with torch.cuda.stream(execute_input.deferred_stream):
             model_input = model_input.to("cuda", non_blocking=True)
             model_input = model_input.deferred_to("cuda", non_blocking=True)
+
+        if execute_input.swap_out_task is not None:
+            main_stream.synchronize()
+            execute_input.swap_out_task.submit()
 
         deferred_stream.synchronize()
 

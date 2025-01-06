@@ -3,7 +3,8 @@ from typing import TYPE_CHECKING, Dict, List, Optional, Tuple, Union
 
 import torch
 
-from wde.workflows.core.schema.execute_io import ExecuteOutput, ModelInput
+from wde.workflows.core.schema.execute_io import (ExecuteInput, ExecuteOutput,
+                                                  ModelInput)
 
 if TYPE_CHECKING:
     from concurrent.futures import Future
@@ -13,6 +14,12 @@ if TYPE_CHECKING:
         SamplingMetadata
     from wde.workflows.decoding.backends.sampling.sampling_params import \
         SamplingType
+    from wde.workflows.decoding.kv_cache.offloading.swap_out import SwapOutTask
+
+
+@dataclass
+class DecodingExecuteInput(ExecuteInput):
+    swap_out_task: Optional["SwapOutTask"] = None
 
 
 @dataclass

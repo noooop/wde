@@ -1,3 +1,5 @@
+import queue
+from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Optional
 
 import torch
@@ -46,13 +48,19 @@ class SwapOutTask:
         with torch.cuda.stream(self.swap_out_manager.stream):
             self.swap_blocks()
         self.swap_out_manager.stream.synchronize()
+        self.swap_out_manager.finishd_task.put(self)
+
+    def do_callback(self):
         self.swap_out_manager.finish_callback(self.need_swap_out)
+
+    def submit(self):
+        self.swap_out_manager.threads.submit(self.swap_out)
 
 
 class SwapOutManager:
 
     def __init__(self, cpu_cache, gpu_cache, gpu_block_allocator,
-                 cpu_block_allocator: "CPUBlockAllocator"):
+                 cpu_block_allocator: "CPUBlockAllocator", max_workers: int):
         assert cpu_cache is not None
         assert gpu_cache is not None
         assert len(cpu_cache) == len(gpu_cache)
@@ -64,6 +72,8 @@ class SwapOutManager:
         self.stream = torch.cuda.Stream()
         self.gpu_block_allocator = gpu_block_allocator
         self.cpu_block_allocator = cpu_block_allocator
+        self.threads = ThreadPoolExecutor(max_workers=max_workers)
+        self.finishd_task = queue.Queue()
 
     def prepare_task(self, scheduler_outputs) -> Optional[SwapOutTask]:
         remove_duplicates = set()
@@ -103,3 +113,12 @@ class SwapOutManager:
         for gpu_block, cpu_block in need_swap_out:
             self.gpu_block_allocator.free(gpu_block)
             self.cpu_block_allocator.free(cpu_block)
+
+    def check_finishd_task(self):
+        while True:
+            try:
+                task = self.finishd_task.get(block=False)
+            except queue.Empty:
+                break
+
+            task.do_callback()

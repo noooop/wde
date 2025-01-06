@@ -2,6 +2,7 @@ import random
 import time
 
 import numpy as np
+import torch
 
 
 def benchmark(args):
@@ -64,19 +65,26 @@ def benchmark(args):
 
     num_cached_tokens = {}
 
-    n_step = 0
-    while engine.has_unfinished_requests():
-        n_step += 1
-        request_outputs = engine.step()
-        for request in request_outputs:
-            metrics_list.append(request.metrics)
+    with torch.profiler.profile(activities=[
+            torch.profiler.ProfilerActivity.CPU,
+            torch.profiler.ProfilerActivity.CUDA,
+    ]) as prof:
 
-            request_id = request.request_id
+        n_step = 0
+        while engine.has_unfinished_requests():
+            n_step += 1
+            request_outputs = engine.step()
+            for request in request_outputs:
+                metrics_list.append(request.metrics)
 
-            if request_id not in num_cached_tokens:
-                num_cached_tokens[request_id] = []
+                request_id = request.request_id
 
-            num_cached_tokens[request_id].append(request.num_cached_tokens)
+                if request_id not in num_cached_tokens:
+                    num_cached_tokens[request_id] = []
+
+                num_cached_tokens[request_id].append(request.num_cached_tokens)
+
+    prof.export_chrome_trace("test_swap_out.json")
 
     end = time.perf_counter()
     actual_hit_rate = np.mean([v[1:][-1] for v in num_cached_tokens.values()
@@ -86,7 +94,7 @@ def benchmark(args):
     avg_latency = elapsed_time / n_step
 
     if not args.record_metrics:
-        print(f"num_batched_tokens {args.max_num_batched_tokens}, Throughput: "
+        print(f"Batchsize {args.max_num_requests}, Throughput: "
               f"{len(requests) / elapsed_time:.4f} requests/s, "
               f"Avg Latency {avg_latency * 1000:0.4f} ms, n_step {n_step}")
     else:
@@ -101,7 +109,7 @@ def benchmark(args):
         inference_time = np.mean([m.inference_time for m in metrics_list])
         latency = np.mean([m.latency for m in metrics_list])
         print(
-            f"num_batched_tokens {args.max_num_batched_tokens}, Throughput: "
+            f"Batchsize {args.max_num_requests}, Throughput: "
             f"{len(requests) / elapsed_time:.4f} requests/s, "
             f"actual hit rate {actual_hit_rate}, "
             f"Scheduling time {scheduling_time * 1000:0.4f} ms, "
@@ -118,13 +126,11 @@ if __name__ == '__main__':
 
     from easydict import EasyDict as edict
 
-    from wde.workflows.decoding.scheduler import KV_CACHE_MANAGER_MAP
-
     args = edict()
 
-    args.input_len = 8192
+    args.input_len = 1024 * 2
     args.output_len = 1
-    args.num_prompts = 4
+    args.num_prompts = 2
 
     args.seed = 0
     args.model = "Qwen/Qwen2.5-3B-Instruct"
@@ -140,10 +146,10 @@ if __name__ == '__main__':
     args.tokenizer = args.model
     args.gpu_memory_utilization = 0.9
 
-    args.max_num_requests = 1
+    args.max_num_requests = 32
+    args.max_num_batched_tokens = 1024
     args.record_metrics = True
     args.frieren_executor_max_workers = 1
-    args.hit_rate = 0.
 
     def run(args):
         try:
@@ -154,39 +160,9 @@ if __name__ == '__main__':
             import traceback
             traceback.print_exc()
 
-    def test_vary_max_num_batched_tokens(args):
-        max_num_batched_tokens_list = [1024, 768, 512, 384, 256, 128, 64, 32]
+    args.swap_space = 40
+    args.scheduling = "sync"
+    args.kv_cache_manager = "prefix_caching"
+    args.hit_rate = 0.
 
-        for max_num_batched_tokens in max_num_batched_tokens_list:
-            args.max_num_batched_tokens = max_num_batched_tokens
-            run(args)
-
-    def test_vary_scheduling(args):
-        for scheduling in ["sync", "simple_async"]:
-            print(f"scheduling: {scheduling}")
-            args.scheduling = scheduling
-            print()
-
-            test_vary_max_num_batched_tokens(args)
-
-        for scheduling in ["async"]:
-            for max_workers in [1, 2, 3]:
-                print(f"scheduling: {scheduling}-{max_workers}")
-                args.frieren_executor_max_workers = max_workers
-                args.scheduling = scheduling
-                print()
-
-                test_vary_max_num_batched_tokens(args)
-
-    def test_vary_kv_cache_manager(args):
-        args.swap_space = 0
-        for kv_cache_manager in list(KV_CACHE_MANAGER_MAP.keys()):
-            print("kv_cache_manager", kv_cache_manager)
-            args.kv_cache_manager = kv_cache_manager
-            test_vary_scheduling(args)
-
-        print("kv_cache_manager", "OffloadingKVCaching")
-        args.swap_space = 40
-        test_vary_scheduling(args)
-
-    test_vary_kv_cache_manager(args)
+    benchmark(args)

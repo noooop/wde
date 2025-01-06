@@ -23,7 +23,7 @@ class OffloadingKVCachingDecodingScheduler(PrefixCachingDecodingScheduler):
 
     def __init__(self, engine_config: EngineConfig,
                  request_processor: RequestProcessor, kv_cache_manager,
-                 offloading_manager) -> None:
+                 offloading_manager: OffloadingManager) -> None:
         super().__init__(engine_config, request_processor, kv_cache_manager)
         self.offloading_manager = offloading_manager
 
@@ -46,6 +46,8 @@ class OffloadingKVCachingDecodingScheduler(PrefixCachingDecodingScheduler):
                    offloading_manager=offloading_manager)
 
     def schedule(self) -> Optional[DecodingSchedulerOutput]:
+        self.offloading_manager.check_swap_out_finishd_task()
+
         if self.record_metrics:
             scheduling_begin_ts = time.perf_counter()
 
@@ -54,10 +56,8 @@ class OffloadingKVCachingDecodingScheduler(PrefixCachingDecodingScheduler):
         for request in scheduler_outputs.scheduled_requests:
             request.busy = True
 
-        swap_out_task = self.offloading_manager.get_swap_out_task(
+        scheduler_outputs.swap_out_task = self.offloading_manager.get_swap_out_task(
             scheduler_outputs)
-
-        swap_out_task.swap_out()
 
         if self.record_metrics:
             scheduling_end_ts = time.perf_counter()

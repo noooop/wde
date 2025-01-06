@@ -76,7 +76,11 @@ class OffloadingManager:
             cpu_cache,
             gpu_cache,
             gpu_block_allocator=self.gpu_block_allocator,
-            cpu_block_allocator=self.cpu_block_allocator)
+            cpu_block_allocator=self.cpu_block_allocator,
+            max_workers=self.engine_config.scheduler_config.max_num_on_the_fly)
 
     def get_swap_out_task(self, scheduler_outputs):
         return self.swap_out_manager.prepare_task(scheduler_outputs)
+
+    def check_swap_out_finishd_task(self):
+        self.swap_out_manager.check_finishd_task()

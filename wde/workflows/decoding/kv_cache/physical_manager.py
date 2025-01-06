@@ -7,9 +7,9 @@ from vllm.utils import (STR_DTYPE_TO_TORCH_DTYPE, get_dtype_size,
 
 from wde.logger import init_logger
 from wde.workflows.core.backends.utils import set_random_seed
-from wde.workflows.core.schema.execute_io import ExecuteInput
 from wde.workflows.decoding.backends.sampling.sampling_params import \
     SamplingParams
+from wde.workflows.decoding.schema.execute_io import DecodingExecuteInput
 from wde.workflows.decoding.schema.request import DecodingSchedulableRequest
 
 logger = init_logger(__name__)
@@ -222,7 +222,7 @@ class PhysicalGPUKVCacheManager:
         model_input.kv_caches = kv_caches
 
         self.worker.runner.execute_model(
-            ExecuteInput(worker_input=None, model_input=model_input))
+            DecodingExecuteInput(worker_input=None, model_input=model_input))
         torch.cuda.synchronize()
         return
 

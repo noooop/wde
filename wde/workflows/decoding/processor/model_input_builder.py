@@ -7,12 +7,12 @@ from vllm.utils import flatten_2d_lists, is_pin_memory_available
 from wde.workflows.core.backends.attention import AttentionBackend
 from wde.workflows.core.config import EngineConfig
 from wde.workflows.core.processor.model_input_builder import ModelInputBuilder
-from wde.workflows.core.schema.execute_io import ExecuteInput
 from wde.workflows.decoding.backends.sampling.sampling_metadata import \
     SamplingMetadata
 from wde.workflows.decoding.schema.engine_io import (
     DecodingSchedulableRequest, DecodingSchedulerOutput)
-from wde.workflows.decoding.schema.execute_io import DecodingModelInput
+from wde.workflows.decoding.schema.execute_io import (DecodingExecuteInput,
+                                                      DecodingModelInput)
 
 pin_memory = is_pin_memory_available()
 
@@ -118,13 +118,17 @@ class DecodingModelInputBuilder(ModelInputBuilder):
                                   sampling_metadata=sampling_metadata,
                                   kv_caches=self.kv_caches)
 
-    def __call__(self,
-                 scheduler_output: DecodingSchedulerOutput) -> ExecuteInput:
+    def __call__(
+            self,
+            scheduler_output: DecodingSchedulerOutput) -> DecodingExecuteInput:
 
         scheduled_requests = scheduler_output.scheduled_requests
 
         if scheduled_requests is None:
-            return ExecuteInput(worker_input=None, model_input=None)
+            return DecodingExecuteInput(worker_input=None, model_input=None)
 
         model_input = self.prepare_model_input(scheduled_requests)
-        return ExecuteInput(worker_input=None, model_input=model_input)
+        return DecodingExecuteInput(
+            worker_input=None,
+            model_input=model_input,
+            swap_out_task=scheduler_output.swap_out_task)
