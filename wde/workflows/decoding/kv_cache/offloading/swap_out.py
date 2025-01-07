@@ -5,6 +5,8 @@ from typing import TYPE_CHECKING, Optional
 import torch
 from vllm import _custom_ops as ops
 
+from wde.workflows.core.executor.stream_pool import StreamPool
+
 if TYPE_CHECKING:
     from wde.workflows.decoding.kv_cache.offloading.manager import \
         CPUBlockAllocator
@@ -25,9 +27,11 @@ def swap_layer(
 
 class SwapOutTask:
 
-    def __init__(self, need_swap_out, swap_out_manager: "SwapOutManager"):
+    def __init__(self, need_swap_out, swap_out_manager: "SwapOutManager",
+                 stream: torch.cuda.Stream):
         self.swap_out_manager = swap_out_manager
         self.need_swap_out = need_swap_out
+        self.stream = stream
 
     def swap_blocks(self):
         num_attention_layers = self.swap_out_manager.num_attention_layers
@@ -45,10 +49,11 @@ class SwapOutTask:
             swap_layer(gpu_cache[i], cpu_cache[i], blocks_to_swap)
 
     def swap_out(self):
-        with torch.cuda.stream(self.swap_out_manager.stream):
+        with torch.cuda.stream(self.stream):
             self.swap_blocks()
-        self.swap_out_manager.stream.synchronize()
+        self.stream.synchronize()
         self.swap_out_manager.finishd_task.put(self)
+        self.swap_out_manager.stream_pool.put(self.stream)
 
     def do_callback(self):
         self.swap_out_manager.finish_callback(self.need_swap_out)
@@ -69,7 +74,7 @@ class SwapOutManager:
         self.cpu_cache = cpu_cache
         self.num_attention_layers = len(self.gpu_cache)
 
-        self.stream = torch.cuda.Stream()
+        self.stream_pool = StreamPool()
         self.gpu_block_allocator = gpu_block_allocator
         self.cpu_block_allocator = cpu_block_allocator
         self.threads = ThreadPoolExecutor(max_workers=max_workers)
@@ -107,7 +112,11 @@ class SwapOutManager:
         if not need_swap_out:
             return None
 
-        return SwapOutTask(need_swap_out=need_swap_out, swap_out_manager=self)
+        stream = self.stream_pool.get()
+
+        return SwapOutTask(need_swap_out=need_swap_out,
+                           swap_out_manager=self,
+                           stream=stream)
 
     def finish_callback(self, need_swap_out):
         for gpu_block, cpu_block in need_swap_out:

@@ -9,6 +9,7 @@ import torch
 from wde.utils import lazy_import
 from wde.workflows.core.backends.attention import AttentionBackend
 from wde.workflows.core.config import EngineConfig
+from wde.workflows.core.executor.stream_pool import StreamPool
 from wde.workflows.core.schema.execute_io import ExecuteInput, ExecuteOutput
 from wde.workflows.core.worker.gpu_worker import WorkerBase
 from wde.workflows.core.workflow import Workflow
@@ -100,7 +101,7 @@ class FrierenExecutor:
                  worker: WorkerBase,
                  max_workers=1,
                  record_metrics=False):
-        self.stream_pool = Queue()
+        self.stream_pool = StreamPool()
         self.worker = worker
         self.max_workers = max_workers
         self.record_metrics = record_metrics
@@ -112,22 +113,12 @@ class FrierenExecutor:
             max_workers=engine_config.sys_config.frieren_executor_max_workers,
             record_metrics=engine_config.sys_config.record_metrics)
 
-    def get_stream(self):
-        if self.stream_pool.empty():
-            stream = torch.cuda.Stream()
-            return stream
-        else:
-            return self.stream_pool.get()
-
-    def put_stream(self, stream):
-        return self.stream_pool.put(stream)
-
     def execute_model(self, execute_input: ExecuteInput) -> ExecuteOutput:
         if self.record_metrics:
             inference_begin_ts = time.perf_counter()
 
-        execute_input.main_stream = self.get_stream()
-        execute_input.deferred_stream = self.get_stream()
+        execute_input.main_stream = self.stream_pool.get()
+        execute_input.deferred_stream = self.stream_pool.get()
 
         with torch.cuda.stream(execute_input.main_stream):
             self.worker.non_blocking_h2d(execute_input)
@@ -140,8 +131,8 @@ class FrierenExecutor:
         execute_input.main_stream.synchronize()
         execute_input.deferred_stream.synchronize()
 
-        self.put_stream(execute_input.main_stream)
-        self.put_stream(execute_input.deferred_stream)
+        self.stream_pool.put(execute_input.main_stream)
+        self.stream_pool.put(execute_input.deferred_stream)
 
         execute_input.main_stream = None
         execute_input.deferred_stream = None
@@ -179,8 +170,8 @@ class FrierenExecutor:
             execute_input.main_stream.synchronize()
             execute_input.deferred_stream.synchronize()
 
-            self.put_stream(execute_input.main_stream)
-            self.put_stream(execute_input.deferred_stream)
+            self.stream_pool.put(execute_input.main_stream)
+            self.stream_pool.put(execute_input.deferred_stream)
 
             execute_input.main_stream = None
             execute_input.deferred_stream = None
@@ -203,8 +194,8 @@ class FrierenExecutor:
                     inference_begin_ts = None
 
                 scheduler_output, execute_input = o
-                execute_input.main_stream = self.get_stream()
-                execute_input.deferred_stream = self.get_stream()
+                execute_input.main_stream = self.stream_pool.get()
+                execute_input.deferred_stream = self.stream_pool.get()
 
                 with torch.cuda.stream(execute_input.main_stream):
                     self.worker.non_blocking_h2d(execute_input)
