@@ -10,9 +10,9 @@ from wde.logger import init_logger
 from wde.workflows.decoding.kv_cache.logic_manager import (BlockAllocator,
                                                            BlockId,
                                                            NoFreeBlocksError,
+                                                           PrefixHash,
                                                            VirtualBlockTable)
-from wde.workflows.decoding.kv_cache.prefix_caching.manager import (Block,
-                                                                    PrefixHash)
+from wde.workflows.decoding.kv_cache.prefix_caching.allocator import Block
 from wde.workflows.decoding.kv_cache.utils import (chunk_list,
                                                    get_num_required_blocks)
 from wde.workflows.decoding.kv_cache.yoco.copy_on_write import CopyOnWrite

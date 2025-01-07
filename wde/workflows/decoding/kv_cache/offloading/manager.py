@@ -8,8 +8,7 @@ from wde.workflows.decoding.kv_cache.logic_manager import (BlockId,
                                                            NoFreeBlocksError,
                                                            PrefixHash)
 from wde.workflows.decoding.kv_cache.offloading.swap_out import SwapOutManager
-from wde.workflows.decoding.kv_cache.prefix_caching.manager import (
-    Block, PrefixCachingBlockAllocator)
+from wde.workflows.decoding.kv_cache.prefix_caching.allocator import Block
 
 
 class CPUBlockAllocator:
@@ -66,7 +65,7 @@ class CPUBlockAllocator:
 class OffloadingManager:
 
     def __init__(self, engine_config, cpu_cache, gpu_cache,
-                 gpu_block_allocator: PrefixCachingBlockAllocator):
+                 gpu_block_allocator):
         self.engine_config = engine_config
         self.gpu_block_allocator = gpu_block_allocator
         self.cpu_block_allocator = CPUBlockAllocator(

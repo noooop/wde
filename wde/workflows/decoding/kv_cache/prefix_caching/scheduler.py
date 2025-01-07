@@ -3,6 +3,7 @@ from collections import deque
 from typing import Deque, List, Optional, cast
 
 from wde.logger import init_logger
+from wde.utils import lazy_import
 from wde.workflows.core.config import EngineConfig
 from wde.workflows.core.processor.input_processor import RequestProcessor
 from wde.workflows.core.scheduler import Scheduler
@@ -10,8 +11,6 @@ from wde.workflows.core.schema.engine_io import RequestOutput
 from wde.workflows.decoding.kv_cache.logic_manager import LogicKVCacheManager
 from wde.workflows.decoding.kv_cache.naive.scheduler import (
     DecodingSchedulingBudget, SchedulerPrefillOutputs, SchedulerRunningOutputs)
-from wde.workflows.decoding.kv_cache.prefix_caching.manager import \
-    PrefixCachingBlockAllocator
 from wde.workflows.decoding.schema.engine_io import (
     DecodingSchedulableRequest, DecodingSchedulerOutput)
 from wde.workflows.decoding.schema.request import RequestStatus
@@ -22,7 +21,6 @@ logger = init_logger(__name__)
 class PrefixCachingDecodingScheduler(Scheduler):
     name = "Prefix Caching"
     support_scheduling = ["sync_scheduling", "async_scheduling"]
-    block_allocator_class = PrefixCachingBlockAllocator
 
     def __init__(self, engine_config: EngineConfig,
                  request_processor: RequestProcessor,
@@ -31,12 +29,15 @@ class PrefixCachingDecodingScheduler(Scheduler):
         self.running: Deque[DecodingSchedulableRequest] = deque()
         self.kv_cache_manager = kv_cache_manager
         self.record_metrics = engine_config.sys_config.record_metrics
-        logger.info(f"Use {self.name} Scheduler.")
+        logger.info(
+            f"Use {self.name} Scheduler with {self.kv_cache_manager.name} block allocator."
+        )
 
     @classmethod
     def from_engine(cls, engine):
+        block_allocator_class = lazy_import(engine.workflow.BlockAllocator)
         kv_cache_manager = LogicKVCacheManager.from_engine(
-            engine=engine, block_allocator_class=cls.block_allocator_class)
+            engine=engine, block_allocator_class=block_allocator_class)
         return cls(engine.engine_config, engine.request_processor,
                    kv_cache_manager)
 

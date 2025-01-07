@@ -5,7 +5,6 @@ import pytest
 
 from tests.tasks.decode_only.util import (HfDecodingRunner, WDERunner,
                                           check_logprobs_close)
-from wde.workflows.decoding.scheduler import KV_CACHE_MANAGER_MAP
 
 MODELS = ["Qwen/Qwen2.5-0.5B-Instruct", "Qwen/Qwen2.5-1.5B-Instruct"]
 
@@ -42,10 +41,10 @@ def example_prompts():
 @pytest.mark.parametrize("dtype", ["bfloat16"])
 @pytest.mark.parametrize("max_tokens", [5])
 @pytest.mark.parametrize("scheduling", ["sync", "simple_async", "async"])
-@pytest.mark.parametrize("kv_cache_manager", list(KV_CACHE_MANAGER_MAP.keys()))
+@pytest.mark.parametrize("enable_prefix_caching", [False, True])
 def test_models(hf_runner, wde_runner, example_prompts, model: str, dtype: str,
                 max_tokens: int, scheduling: str,
-                kv_cache_manager: str) -> None:
+                enable_prefix_caching: bool) -> None:
 
     NUM_LOG_PROBS = 4
 
@@ -56,7 +55,8 @@ def test_models(hf_runner, wde_runner, example_prompts, model: str, dtype: str,
     with wde_runner(model,
                     dtype=dtype,
                     scheduling=scheduling,
-                    kv_cache_manager=kv_cache_manager) as wde_model:
+                    enable_prefix_caching=enable_prefix_caching,
+                    swap_space=10) as wde_model:
         outputs = wde_model.generate_greedy_logprobs(example_prompts,
                                                      max_tokens, NUM_LOG_PROBS)
 

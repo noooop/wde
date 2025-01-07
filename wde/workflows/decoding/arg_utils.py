@@ -26,7 +26,7 @@ class DecodingEngineArgs(EngineArgs):
     # cache_config
     block_size: int = 16
     enable_prefix_caching: bool = False
-    kv_cache_manager: Optional[str] = None
+    block_allocator: Optional[str] = None
     swap_space: int = 0  # GiB
     cpu_offload_gb: int = 0  # GiB
     gpu_memory_utilization: float = 0.90
@@ -78,7 +78,7 @@ class DecodingEngineArgs(EngineArgs):
             num_gpu_blocks_override=self.num_gpu_blocks_override,
             sliding_window=engine_config.model_config.get_sliding_window(),
             enable_prefix_caching=self.enable_prefix_caching,
-            kv_cache_manager=self.kv_cache_manager,
+            block_allocator=self.block_allocator,
             cpu_offload_gb=self.cpu_offload_gb,
             watermark=self.watermark)
 

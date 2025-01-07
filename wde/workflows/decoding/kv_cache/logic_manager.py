@@ -22,6 +22,10 @@ class LogicKVCacheManager:
         watermark = self.engine_config.cache_config.watermark
         self.watermark_blocks = int(watermark * self._num_gpu_blocks)
 
+    @property
+    def name(self):
+        return self.block_allocator.__class__.__name__
+
     @classmethod
     def from_engine(cls, engine, block_allocator_class):
         kv_cache = engine.model_inputs_builder.kv_caches

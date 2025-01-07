@@ -33,7 +33,7 @@ def benchmark(args):
         scheduling=args.scheduling,
         frieren_executor_max_workers=args.frieren_executor_max_workers,
         record_metrics=args.record_metrics,
-        kv_cache_manager=args.kv_cache_manager,
+        block_allocator=args.block_allocator,
         swap_space=args.swap_space)
 
     engine = LLMEngine.from_engine_args(engine_args)
@@ -162,7 +162,7 @@ if __name__ == '__main__':
 
     args.swap_space = 40
     args.scheduling = "sync"
-    args.kv_cache_manager = "prefix_caching"
+    args.block_allocator = "prefix_caching"
     args.hit_rate = 0.
 
     benchmark(args)

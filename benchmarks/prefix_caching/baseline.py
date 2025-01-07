@@ -32,7 +32,7 @@ def benchmark(args):
         scheduling=args.scheduling,
         frieren_executor_max_workers=args.frieren_executor_max_workers,
         record_metrics=args.record_metrics,
-        kv_cache_manager=args.kv_cache_manager)
+        block_allocator=args.block_allocator)
 
     engine = LLMEngine.from_engine_args(engine_args)
     token_sampler = TokenSampler(args.tokenizer)
@@ -117,7 +117,7 @@ if __name__ == '__main__':
 
     from easydict import EasyDict as edict
 
-    from wde.workflows.decoding.scheduler import KV_CACHE_MANAGER_MAP
+    from wde.workflows.decoding.scheduler import BLOCK_ALLOCATOR_MAP
 
     args = edict()
 
@@ -153,9 +153,9 @@ if __name__ == '__main__':
             import traceback
             traceback.print_exc()
 
-    for kv_cache_manager in list(KV_CACHE_MANAGER_MAP.keys()):
-        print("kv_cache_manager", kv_cache_manager)
-        args.kv_cache_manager = kv_cache_manager
+    for block_allocator in list(BLOCK_ALLOCATOR_MAP.keys()):
+        print("block_allocator", block_allocator)
+        args.block_allocator = block_allocator
 
         for scheduling in ["sync", "simple_async"]:
             print(f"scheduling: {scheduling}")

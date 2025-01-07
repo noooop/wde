@@ -461,3 +461,70 @@ class PrefixCachingBlockAllocator(BlockAllocator):
 
         physical_block_id = self._get_free_physical_block_id()
         block.physical_block_id = physical_block_id
+
+
+class DisablePrefixCachingBlockAllocator(BlockAllocator):
+
+    def __init__(self,
+                 num_blocks: int,
+                 block_size: int,
+                 block_ids: Optional[Iterable[int]] = None,
+                 *args,
+                 **kwargs):
+        self._block_size = block_size
+        self._num_blocks = num_blocks
+
+        if block_ids is None:
+            block_ids = range(num_blocks)
+
+        self._num_blocks = num_blocks
+        self._free_physical_block_ids: Deque[BlockId] = deque(block_ids)
+
+    def create_vblock(self):
+        return PrefixCachingVirtualBlockTable(block_size=self._block_size,
+                                              block_allocator=self)
+
+    @property
+    def block_size(self):
+        return self._block_size
+
+    @property
+    def num_total_blocks(self) -> int:
+        return self._num_blocks
+
+    @property
+    def num_free_blocks(self) -> int:
+        return len(self._free_physical_block_ids)
+
+    def get_full_block(self, prefix_hash, self_prefix_hash, delta_token_ids):
+        assert len(delta_token_ids) == self._block_size
+
+        block = Block(delta_token_ids=delta_token_ids,
+                      prefix_hash=prefix_hash,
+                      self_prefix_hash=self_prefix_hash,
+                      _block_size=self._block_size)
+
+        return block
+
+    def update_block(self, block: Block):
+        return block
+
+    def free(self, block: Block) -> None:
+        ref_count = block.decr()
+
+        if ref_count == 0:
+            self._free_physical_block_ids.append(block.physical_block_id)
+
+    def _get_free_physical_block_id(self):
+        try:
+            physical_block_id = self._free_physical_block_ids.popleft()
+            return physical_block_id
+        except IndexError:
+            raise NoFreeBlocksError()
+
+    def allocate_block(self, block: Block):
+        if block.physical_block_id is not None:
+            return
+
+        physical_block_id = self._get_free_physical_block_id()
+        block.physical_block_id = physical_block_id

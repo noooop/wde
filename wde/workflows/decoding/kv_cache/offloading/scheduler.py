@@ -2,13 +2,12 @@ import time
 from typing import Optional
 
 from wde.logger import init_logger
+from wde.utils import lazy_import
 from wde.workflows.core.config import EngineConfig
 from wde.workflows.core.processor.input_processor import RequestProcessor
 from wde.workflows.decoding.kv_cache.logic_manager import LogicKVCacheManager
 from wde.workflows.decoding.kv_cache.offloading.manager import \
     OffloadingManager
-from wde.workflows.decoding.kv_cache.prefix_caching.manager import \
-    PrefixCachingBlockAllocator
 from wde.workflows.decoding.kv_cache.prefix_caching.scheduler import \
     PrefixCachingDecodingScheduler
 from wde.workflows.decoding.schema.engine_io import DecodingSchedulerOutput
@@ -19,7 +18,6 @@ logger = init_logger(__name__)
 class OffloadingKVCachingDecodingScheduler(PrefixCachingDecodingScheduler):
     name = "Offloading KV Caching"
     support_scheduling = ["sync_scheduling", "async_scheduling"]
-    block_allocator_class = PrefixCachingBlockAllocator
 
     def __init__(self, engine_config: EngineConfig,
                  request_processor: RequestProcessor, kv_cache_manager,
@@ -29,8 +27,10 @@ class OffloadingKVCachingDecodingScheduler(PrefixCachingDecodingScheduler):
 
     @classmethod
     def from_engine(cls, engine):
+        block_allocator_class = lazy_import(engine.workflow.BlockAllocator)
+
         gpu_kv_cache_manager = LogicKVCacheManager.from_engine(
-            engine=engine, block_allocator_class=cls.block_allocator_class)
+            engine=engine, block_allocator_class=block_allocator_class)
 
         cpu_cache = engine.kv_cache_manager.cpu_cache
         gpu_cache = engine.kv_cache_manager.gpu_cache

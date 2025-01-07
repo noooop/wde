@@ -32,7 +32,7 @@ def benchmark(args):
         scheduling=args.scheduling,
         frieren_executor_max_workers=args.frieren_executor_max_workers,
         record_metrics=args.record_metrics,
-        kv_cache_manager=args.kv_cache_manager,
+        block_allocator=args.block_allocator,
         swap_space=args.swap_space)
 
     engine = LLMEngine.from_engine_args(engine_args)
@@ -118,7 +118,7 @@ if __name__ == '__main__':
 
     from easydict import EasyDict as edict
 
-    from wde.workflows.decoding.scheduler import KV_CACHE_MANAGER_MAP
+    from wde.workflows.decoding.scheduler import BLOCK_ALLOCATOR_MAP
 
     args = edict()
 
@@ -178,15 +178,19 @@ if __name__ == '__main__':
 
                 test_vary_max_num_batched_tokens(args)
 
-    def test_vary_kv_cache_manager(args):
+    def test_vary_block_allocator(args):
         args.swap_space = 0
-        for kv_cache_manager in list(KV_CACHE_MANAGER_MAP.keys()):
-            print("kv_cache_manager", kv_cache_manager)
-            args.kv_cache_manager = kv_cache_manager
+        for block_allocator in list(BLOCK_ALLOCATOR_MAP.keys()):
+            print("block_allocator", block_allocator)
+            args.block_allocator = block_allocator
+            #test_vary_scheduling(args)
+
+        args.swap_space = 40
+        for enable_prefix_caching in [True, False]:
+            print("kv_cache_manager", "OffloadingKVCaching",
+                  "enable_prefix_caching", enable_prefix_caching)
+            args.block_allocator = None
+            args.enable_prefix_caching = enable_prefix_caching
             test_vary_scheduling(args)
 
-        print("kv_cache_manager", "OffloadingKVCaching")
-        args.swap_space = 40
-        test_vary_scheduling(args)
-
-    test_vary_kv_cache_manager(args)
+    test_vary_block_allocator(args)

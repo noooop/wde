@@ -1,6 +1,6 @@
 from wde.tasks.chat.schema.api import PROTOCOL
 from wde.workflows.core.workflow import Workflow
-from wde.workflows.decoding.scheduler import get_scheduler
+from wde.workflows.decoding.scheduler import get_scheduler_and_block_allocator
 
 
 class DecodeOnlyDecodingWorkflow(Workflow):
@@ -18,7 +18,6 @@ class DecodeOnlyDecodingWorkflow(Workflow):
         "wde.workflows.decoding.processor.model_input_builder:"
         "DecodingModelInputBuilder")
 
-    Scheduler: str
     AttnBackend: str = ("wde.workflows.decoding.backends.attention.selector:"
                         "DecodingAttnBackend")
 
@@ -31,6 +30,9 @@ class DecodeOnlyDecodingWorkflow(Workflow):
     attn_type: str = "DECODER"
     protocol: str = PROTOCOL
 
+    Scheduler: str
+    BlockAllocator: str
+
     @classmethod
     def from_engine(cls, engine):
         workflow = cls()
@@ -42,6 +44,10 @@ class DecodeOnlyDecodingWorkflow(Workflow):
         ]:
             workflow.Executor += ":GPUAsyncExecutor"
 
-        workflow.Scheduler = get_scheduler(engine.engine_config)
+        Scheduler, BlockAllocator = get_scheduler_and_block_allocator(
+            engine.engine_config)
+
+        workflow.Scheduler = Scheduler
+        workflow.BlockAllocator = BlockAllocator
 
         return workflow
