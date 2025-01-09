@@ -1,5 +1,5 @@
 from dataclasses import dataclass, fields
-from typing import Optional
+from typing import Optional, Union
 
 from wde.logger import init_logger
 from wde.workflows.core.config import CacheConfig, EngineConfig, ModelConfig
@@ -60,12 +60,32 @@ class DecodingSchedulerConfig:
                 "be greater than 1")
 
 
+class DecodingOffloadingSchedulerConfig(DecodingSchedulerConfig):
+
+    def __init__(self,
+                 block_size: int,
+                 max_num_swap_in_blocks=None,
+                 max_num_swap_in_requests=None,
+                 *args,
+                 **kwargs):
+        super().__init__(*args, **kwargs)
+
+        if max_num_swap_in_blocks is None:
+            max_num_swap_in_blocks = self.max_num_batched_tokens // block_size
+
+        if max_num_swap_in_requests is None:
+            max_num_swap_in_requests = self.max_num_requests
+
+        self.max_num_swap_in_blocks = max_num_swap_in_blocks
+        self.max_num_swap_in_requests = max_num_swap_in_requests
+
+
 @dataclass
 class DecodingEngineConfig(EngineConfig):
-
     model_config: DecodingModelConfig
     cache_config: Optional[CacheConfig] = None
-    scheduler_config: DecodingSchedulerConfig
+    scheduler_config: Union[DecodingSchedulerConfig,
+                            DecodingOffloadingSchedulerConfig]
 
     def to_dict(self):
         """Return the configs as a dictionary, for use in **kwargs.

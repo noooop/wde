@@ -5,6 +5,7 @@ from wde.logger import init_logger
 from wde.workflows.core.arg_utils import EngineArgs
 from wde.workflows.decoding.config import (CacheConfig, DecodingEngineConfig,
                                            DecodingModelConfig,
+                                           DecodingOffloadingSchedulerConfig,
                                            DecodingSchedulerConfig,
                                            EngineConfig)
 
@@ -39,6 +40,8 @@ class DecodingEngineArgs(EngineArgs):
     max_num_on_the_fly: Optional[int] = None
     scheduling: str = "async"
     preemption_mode: Optional[str] = None
+    max_num_swap_in_blocks: Optional[int] = None
+    max_num_swap_in_requests: Optional[int] = None
 
     def __post_init__(self):
         if self.tokenizer is None:
@@ -82,14 +85,28 @@ class DecodingEngineArgs(EngineArgs):
             cpu_offload_gb=self.cpu_offload_gb,
             watermark=self.watermark)
 
-        scheduler_config = DecodingSchedulerConfig(
-            frieren_executor_max_workers=self.frieren_executor_max_workers,
-            max_num_batched_tokens=self.max_num_batched_tokens,
-            max_num_requests=self.max_num_requests,
-            max_model_len=engine_config.model_config.max_model_len,
-            preemption_mode=self.preemption_mode,
-            max_num_on_the_fly=self.max_num_on_the_fly,
-            scheduling=self.scheduling)
+        if self.swap_space > 0:
+            scheduler_config = DecodingOffloadingSchedulerConfig(
+                frieren_executor_max_workers=self.frieren_executor_max_workers,
+                max_num_batched_tokens=self.max_num_batched_tokens,
+                max_num_requests=self.max_num_requests,
+                max_model_len=engine_config.model_config.max_model_len,
+                preemption_mode=self.preemption_mode,
+                max_num_on_the_fly=self.max_num_on_the_fly,
+                scheduling=self.scheduling,
+                block_size=self.block_size,
+                max_num_swap_in_blocks=self.max_num_swap_in_blocks,
+                max_num_swap_in_requests=self.max_num_swap_in_requests,
+            )
+        else:
+            scheduler_config = DecodingSchedulerConfig(
+                frieren_executor_max_workers=self.frieren_executor_max_workers,
+                max_num_batched_tokens=self.max_num_batched_tokens,
+                max_num_requests=self.max_num_requests,
+                max_model_len=engine_config.model_config.max_model_len,
+                preemption_mode=self.preemption_mode,
+                max_num_on_the_fly=self.max_num_on_the_fly,
+                scheduling=self.scheduling)
 
         return DecodingEngineConfig(model_config=model_config,
                                     cache_config=cache_config,

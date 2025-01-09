@@ -8,7 +8,7 @@ from .execute_io import PromptLogprobs, SampleLogprobs
 from .request import DecodingSchedulableRequest, RequestStatus
 
 if TYPE_CHECKING:
-    from wde.workflows.decoding.kv_cache.offloading.swap_out import SwapOutTask
+    from wde.workflows.decoding.kv_cache.offloading.swap import SwapTask
 
 
 @dataclass
@@ -19,7 +19,8 @@ class DecodingSchedulerOutput(SchedulerOutput):
     num_batched_tokens: int
     num_requests: int
 
-    swap_out_task: Optional["SwapOutTask"] = None
+    need_swap_in_blocks: List
+    swap_out_task: Optional["SwapTask"] = None
 
     def is_empty(self) -> bool:
         return not self.scheduled_requests
@@ -101,8 +102,9 @@ class DecodingRequestOutput(RequestOutput):
         finished = request.finished
 
         # The last output token is definitely not computed
-        num_cached_tokens = request.get_len(
-        ) - 1 - request.num_actual_computed_tokens
+        num_cached_tokens = max(
+            request.num_computed_tokens - request.num_actual_computed_tokens,
+            0)
         num_preempted = request.num_preempted
 
         return cls(request.request_id, prompt, prompt_token_ids,

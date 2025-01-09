@@ -46,6 +46,8 @@ def test_models(hf_runner, wde_runner, example_prompts, model: str, dtype: str,
                 max_tokens: int, scheduling: str,
                 enable_prefix_caching: bool) -> None:
 
+    example_prompts = example_prompts * 4
+
     NUM_LOG_PROBS = 4
 
     with hf_runner(model, dtype=dtype) as hf_model:

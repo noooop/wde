@@ -76,6 +76,11 @@ class Block:
     def num_empty_slots(self):
         return self._block_size - len(self.delta_token_ids)
 
+    def ensure_self_prefix_hash(self):
+        if self.self_prefix_hash is None:
+            self.self_prefix_hash = hash(
+                (self.prefix_hash, self.delta_token_ids))
+
 
 class PrefixCachingVirtualBlockTable(VirtualBlockTable):
     # | <-                           max capacity                                      -> |
@@ -149,6 +154,9 @@ class PrefixCachingVirtualBlockTable(VirtualBlockTable):
 
         assert num_token_ids >= num_token_ids_curr
         num_blocks_curr = len(self._blocks)
+
+        if num_token_ids == num_blocks_curr:
+            return
 
         if num_blocks_curr == 0:
             # Start from scratch
@@ -354,6 +362,26 @@ class PrefixCachingVirtualBlockTable(VirtualBlockTable):
                 _new_full_blocks.append(self._blocks[i])
 
         return _new_full_blocks
+
+    def get_maybe_swap_in_blocks(self):
+        blocks = []
+
+        for block in self._blocks:
+            if not block.is_full_block():
+                # 1. offloading kv cache only take cares of full blocks
+                continue
+
+            if block.is_full_and_computed():
+                # 2. computed, no need to swap in
+                continue
+
+            if block.lock:
+                # 3. busy block, maybe doing swap_in, maybe doing computing
+                continue
+
+            # swap_in this block if possible
+            blocks.append(block)
+        return blocks
 
 
 class PrefixCachingBlockAllocator(BlockAllocator):

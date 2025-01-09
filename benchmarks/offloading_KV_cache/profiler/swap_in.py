@@ -34,7 +34,6 @@ def benchmark(args):
         frieren_executor_max_workers=args.frieren_executor_max_workers,
         record_metrics=args.record_metrics,
         block_allocator=args.block_allocator,
-        enable_prefix_caching=args.enable_prefix_caching,
         swap_space=args.swap_space)
 
     engine = LLMEngine.from_engine_args(engine_args)
@@ -70,10 +69,10 @@ def benchmark(args):
             torch.profiler.ProfilerActivity.CPU,
             torch.profiler.ProfilerActivity.CUDA,
     ]) as prof:
-
         n_step = 0
         while engine.has_unfinished_requests():
             n_step += 1
+
             request_outputs = engine.step()
             for request in request_outputs:
                 metrics_list.append(request.metrics)
@@ -88,7 +87,7 @@ def benchmark(args):
 
     end = time.perf_counter()
 
-    prof.export_chrome_trace("test_swap_out.json")
+    prof.export_chrome_trace("test_swap_in.json")
 
     num_cached_tokens = np.array(
         [0 for i in range(len(num_cached_tokens_dict))])
@@ -138,7 +137,7 @@ if __name__ == '__main__':
 
     args.input_len = 1024 * 2
     args.output_len = 2
-    args.num_prompts = 2
+    args.num_prompts = 4
 
     args.seed = 0
     args.model = "Qwen/Qwen2.5-3B-Instruct"
@@ -172,6 +171,6 @@ if __name__ == '__main__':
     args.scheduling = "sync"
     args.block_allocator = None
     args.enable_prefix_caching = False
-    args.hit_rate = 0.
+    args.hit_rate = 1.
 
     benchmark(args)

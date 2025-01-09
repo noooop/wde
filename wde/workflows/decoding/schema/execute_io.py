@@ -14,7 +14,7 @@ if TYPE_CHECKING:
         SamplingMetadata
     from wde.workflows.decoding.backends.sampling.sampling_params import \
         SamplingType
-    from wde.workflows.decoding.kv_cache.offloading.swap_out import SwapOutTask
+    from wde.workflows.decoding.kv_cache.offloading.swap import SwapOutTask
 
 
 @dataclass

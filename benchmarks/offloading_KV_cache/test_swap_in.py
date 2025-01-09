@@ -2,7 +2,6 @@ import random
 import time
 
 import numpy as np
-import torch
 
 
 def benchmark(args):
@@ -34,7 +33,6 @@ def benchmark(args):
         frieren_executor_max_workers=args.frieren_executor_max_workers,
         record_metrics=args.record_metrics,
         block_allocator=args.block_allocator,
-        enable_prefix_caching=args.enable_prefix_caching,
         swap_space=args.swap_space)
 
     engine = LLMEngine.from_engine_args(engine_args)
@@ -64,45 +62,31 @@ def benchmark(args):
         )
         engine.add_request(str(request_id), inputs, sampling_params)
 
-    num_cached_tokens_dict = {}
+    num_cached_tokens = {}
 
-    with torch.profiler.profile(activities=[
-            torch.profiler.ProfilerActivity.CPU,
-            torch.profiler.ProfilerActivity.CUDA,
-    ]) as prof:
+    n_step = 0
+    while engine.has_unfinished_requests():
+        n_step += 1
+        request_outputs = engine.step()
+        for request in request_outputs:
+            metrics_list.append(request.metrics)
 
-        n_step = 0
-        while engine.has_unfinished_requests():
-            n_step += 1
-            request_outputs = engine.step()
-            for request in request_outputs:
-                metrics_list.append(request.metrics)
+            request_id = request.request_id
 
-                request_id = request.request_id
+            if request_id not in num_cached_tokens:
+                num_cached_tokens[request_id] = []
 
-                if request_id not in num_cached_tokens_dict:
-                    num_cached_tokens_dict[request_id] = []
-
-                num_cached_tokens_dict[request_id].append(
-                    request.num_cached_tokens)
+            num_cached_tokens[request_id].append(request.num_cached_tokens)
 
     end = time.perf_counter()
-
-    prof.export_chrome_trace("test_swap_out.json")
-
-    num_cached_tokens = np.array(
-        [0 for i in range(len(num_cached_tokens_dict))])
-    for k, v in num_cached_tokens_dict.items():
-        num_cached_tokens[int(k)] = v[-1]
-        print(k, v)
-
-    actual_hit_rate = np.mean(num_cached_tokens / args.input_len)
+    actual_hit_rate = np.mean([v[1:][-1] for v in num_cached_tokens.values()
+                               ]) / args.input_len
 
     elapsed_time = end - start
     avg_latency = elapsed_time / n_step
 
     if not args.record_metrics:
-        print(f"Batchsize {args.max_num_requests}, Throughput: "
+        print(f"num_batched_tokens {args.max_num_batched_tokens}, Throughput: "
               f"{len(requests) / elapsed_time:.4f} requests/s, "
               f"Avg Latency {avg_latency * 1000:0.4f} ms, n_step {n_step}")
     else:
@@ -117,7 +101,7 @@ def benchmark(args):
         inference_time = np.mean([m.inference_time for m in metrics_list])
         latency = np.mean([m.latency for m in metrics_list])
         print(
-            f"Batchsize {args.max_num_requests}, Throughput: "
+            f"num_batched_tokens {args.max_num_batched_tokens}, Throughput: "
             f"{len(requests) / elapsed_time:.4f} requests/s, "
             f"actual hit rate {actual_hit_rate}, "
             f"Scheduling time {scheduling_time * 1000:0.4f} ms, "
@@ -136,9 +120,9 @@ if __name__ == '__main__':
 
     args = edict()
 
-    args.input_len = 1024 * 2
-    args.output_len = 2
-    args.num_prompts = 2
+    args.input_len = 1000
+    args.output_len = 24
+    args.num_prompts = 1000
 
     args.seed = 0
     args.model = "Qwen/Qwen2.5-3B-Instruct"
@@ -147,15 +131,12 @@ if __name__ == '__main__':
     args.kv_cache_dtype = "auto"
     args.device = "cuda"
 
-    args.max_model_len = 10000
+    args.max_model_len = 2000
 
     args.trust_remote_code = False
     args.quantization_param_path = None
     args.tokenizer = args.model
     args.gpu_memory_utilization = 0.9
-
-    args.max_num_requests = 32
-    args.max_num_batched_tokens = 1024
     args.record_metrics = True
     args.frieren_executor_max_workers = 1
 
@@ -168,10 +149,37 @@ if __name__ == '__main__':
             import traceback
             traceback.print_exc()
 
-    args.swap_space = 10
-    args.scheduling = "sync"
-    args.block_allocator = None
-    args.enable_prefix_caching = False
-    args.hit_rate = 0.
+    args.max_num_requests = 32
+    args.max_num_batched_tokens = 1024
 
-    benchmark(args)
+    args.swap_space = 40
+    args.block_allocator = None
+
+    def test_vary_hit_rate(args):
+        for hit_rate in [0.1 * x for x in range(0, 11)]:
+            args.hit_rate = hit_rate
+            run(args)
+
+    def test_vary_scheduling(args):
+        for scheduling in ["sync", "simple_async"]:
+            print(f"scheduling: {scheduling}")
+            args.scheduling = scheduling
+            print()
+
+            test_vary_hit_rate(args)
+
+        for scheduling in ["async"]:
+            for max_workers in [1, 2, 3]:
+                print(f"scheduling: {scheduling}-{max_workers}")
+                args.frieren_executor_max_workers = max_workers
+                args.scheduling = scheduling
+                print()
+                test_vary_hit_rate(args)
+
+    def test_vary_enable_prefix_caching(args):
+        for enable_prefix_caching in [True, False]:
+            print("enable_prefix_caching: ", enable_prefix_caching)
+            args.enable_prefix_caching = enable_prefix_caching
+            test_vary_scheduling(args)
+
+    test_vary_enable_prefix_caching(args)
