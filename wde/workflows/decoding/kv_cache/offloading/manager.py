@@ -155,6 +155,10 @@ class OffloadingManager:
 
         return swap_in_task
 
+    def try_allocate_swap_in_blocks(self, need_swap_in_blocks):
+        return self.swap_in_manager.try_allocate_swap_in_blocks(
+            need_swap_in_blocks)
+
     def check_finishd_task(self):
         while True:
             try:

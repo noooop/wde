@@ -7,8 +7,7 @@ from wde.logger import init_logger
 from wde.utils import lazy_import
 from wde.workflows.core.config import EngineConfig
 from wde.workflows.core.processor.input_processor import RequestProcessor
-from wde.workflows.decoding.kv_cache.logic_manager import (LogicKVCacheManager,
-                                                           NoFreeBlocksError)
+from wde.workflows.decoding.kv_cache.logic_manager import LogicKVCacheManager
 from wde.workflows.decoding.kv_cache.naive.scheduler import \
     DecodingSchedulingBudget
 from wde.workflows.decoding.kv_cache.offloading.manager import \
@@ -242,23 +241,8 @@ class OffloadingKVCachingDecodingScheduler(PrefixCachingDecodingScheduler):
                                                                 budget_bound_num_blocks]
 
             # 9. try allocate
-            allocated_swap_in_blocks = []
-            for cpu_block, gpu_block in curr_need_swap_in_blocks:
-                assert cpu_block.ready()
-                # read from cpu_block
-                cpu_block.incr()
-
-                assert gpu_block.ready()
-                # write to gpu_block, need acquire lock
-
-                try:
-                    self.offloading_manager.gpu_block_allocator.allocate_block(
-                        gpu_block)
-                except NoFreeBlocksError:
-                    break
-
-                gpu_block.acquire()
-                allocated_swap_in_blocks.append((cpu_block, gpu_block))
+            allocated_swap_in_blocks = self.offloading_manager.try_allocate_swap_in_blocks(
+                curr_need_swap_in_blocks)
 
             # 10. add to swap_in_task
             num_blocks = len(allocated_swap_in_blocks)
@@ -311,23 +295,8 @@ class OffloadingKVCachingDecodingScheduler(PrefixCachingDecodingScheduler):
                                                                 budget_bound_num_blocks]
 
             # 5. try allocate
-            allocated_swap_in_blocks = []
-            for cpu_block, gpu_block in curr_need_swap_in_blocks:
-                assert cpu_block.ready()
-                # read from cpu_block
-                cpu_block.incr()
-
-                assert gpu_block.ready()
-                # write to gpu_block, need acquire lock
-
-                try:
-                    self.offloading_manager.gpu_block_allocator.allocate_block(
-                        gpu_block)
-                except NoFreeBlocksError:
-                    break
-
-                gpu_block.acquire()
-                allocated_swap_in_blocks.append((cpu_block, gpu_block))
+            allocated_swap_in_blocks = self.offloading_manager.try_allocate_swap_in_blocks(
+                curr_need_swap_in_blocks)
 
             # 6. add to swap_in_task
             num_blocks = len(allocated_swap_in_blocks)

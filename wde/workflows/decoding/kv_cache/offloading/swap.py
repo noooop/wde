@@ -3,6 +3,8 @@ from typing import TYPE_CHECKING, Optional
 import torch
 from vllm import _custom_ops as ops
 
+from wde.workflows.decoding.kv_cache.logic_manager import NoFreeBlocksError
+
 if TYPE_CHECKING:
     from wde.workflows.decoding.kv_cache.offloading.manager import (
         CPUBlockAllocator, OffloadingManager)
@@ -176,6 +178,26 @@ class SwapInManager:
                 need_swap_in_blocks.append((cpu_block, gpu_block))
 
         return need_swap_in_blocks
+
+    def try_allocate_swap_in_blocks(self, need_swap_in_blocks):
+        allocated_swap_in_blocks = []
+        for cpu_block, gpu_block in need_swap_in_blocks:
+            assert cpu_block.ready()
+            # read from cpu_block
+            cpu_block.incr()
+
+            # write to gpu_block, need acquire lock
+            assert gpu_block.ready()
+
+            try:
+                self.offloading_manager.gpu_block_allocator.allocate_block(
+                    gpu_block)
+            except NoFreeBlocksError:
+                break
+
+            gpu_block.acquire()
+            allocated_swap_in_blocks.append((cpu_block, gpu_block))
+        return allocated_swap_in_blocks
 
     def finish_callback(self, need_swap_out):
         for cpu_block, gpu_block in need_swap_out:
