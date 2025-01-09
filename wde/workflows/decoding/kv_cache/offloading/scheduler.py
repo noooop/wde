@@ -142,7 +142,7 @@ class OffloadingKVCachingDecodingScheduler(PrefixCachingDecodingScheduler):
             running_queue, busy_requests = self._split_running_queue()
 
             if running_queue:
-                self._schedule_in_runnings(running_queue, swap_in_budget)
+                self._schedule_swap_in_runnings(running_queue, swap_in_budget)
 
                 running_scheduled = self._schedule_running(
                     budget, running_queue)
@@ -236,19 +236,18 @@ class OffloadingKVCachingDecodingScheduler(PrefixCachingDecodingScheduler):
                 num_need_swap_in_blocks,
                 swap_in_budget.remaining_blocks_budget())
 
-            # 8. lock all block avoid recompute
             curr_need_swap_in_blocks = curr_need_swap_in_blocks[:
                                                                 budget_bound_num_blocks]
 
-            # 9. try allocate
+            # 8. try to allocate & lock blocks avoid recompute
             allocated_swap_in_blocks = self.offloading_manager.try_allocate_swap_in_blocks(
                 curr_need_swap_in_blocks)
 
-            # 10. add to swap_in_task
+            # 9. add to swap_in_task
             num_blocks = len(allocated_swap_in_blocks)
             swap_in_budget.need_swap_in_blocks.extend(allocated_swap_in_blocks)
 
-            # 11. add to budget
+            # 10. add to budget
             swap_in_budget.add_num_blocks(request.request_id, num_blocks)
             swap_in_budget.add_num_requests(request.request_id, 1)
 
@@ -264,7 +263,7 @@ class OffloadingKVCachingDecodingScheduler(PrefixCachingDecodingScheduler):
             ignored_requests=ignored_requests,
             all_swap_in_able_swap_in_ed=all_swap_in_able_swap_in_ed)
 
-    def _schedule_in_runnings(self, running_queue, swap_in_budget):
+    def _schedule_swap_in_runnings(self, running_queue, swap_in_budget):
         for request in running_queue:
             if swap_in_budget.full():
                 break
@@ -290,18 +289,17 @@ class OffloadingKVCachingDecodingScheduler(PrefixCachingDecodingScheduler):
                 num_need_swap_in_blocks,
                 swap_in_budget.remaining_blocks_budget())
 
-            # 4. lock all block avoid recompute
             curr_need_swap_in_blocks = curr_need_swap_in_blocks[:
                                                                 budget_bound_num_blocks]
 
-            # 5. try allocate
+            # 4. try to allocate & lock blocks avoid recompute
             allocated_swap_in_blocks = self.offloading_manager.try_allocate_swap_in_blocks(
                 curr_need_swap_in_blocks)
 
-            # 6. add to swap_in_task
+            # 5. add to swap_in_task
             num_blocks = len(allocated_swap_in_blocks)
             swap_in_budget.need_swap_in_blocks.extend(allocated_swap_in_blocks)
 
-            # 7. add to budget
+            # 6. add to budget
             swap_in_budget.add_num_blocks(request.request_id, num_blocks)
             swap_in_budget.add_num_requests(request.request_id, 1)

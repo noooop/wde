@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, List, Optional, Sequence, Union
 
 from wde.workflows.core.schema.engine_io import (RequestMetrics, RequestOutput,
@@ -19,7 +19,7 @@ class DecodingSchedulerOutput(SchedulerOutput):
     num_batched_tokens: int
     num_requests: int
 
-    need_swap_in_blocks: List
+    need_swap_in_blocks: List = field(default_factory=list)
     swap_out_task: Optional["SwapTask"] = None
 
     def is_empty(self) -> bool:

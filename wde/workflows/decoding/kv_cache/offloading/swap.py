@@ -195,6 +195,7 @@ class SwapInManager:
             except NoFreeBlocksError:
                 break
 
+            gpu_block.incr()
             gpu_block.acquire()
             allocated_swap_in_blocks.append((cpu_block, gpu_block))
         return allocated_swap_in_blocks
@@ -204,3 +205,4 @@ class SwapInManager:
             gpu_block.num_computed_tokens = gpu_block._block_size
             gpu_block.release()
             self.cpu_block_allocator.free(cpu_block)
+            self.gpu_block_allocator.free(gpu_block)
