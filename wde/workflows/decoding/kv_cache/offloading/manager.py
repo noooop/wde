@@ -1,9 +1,7 @@
 import queue
-import time
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from queue import PriorityQueue
 from typing import Deque, Dict, Optional
 
 from wde.workflows.core.executor.stream_pool import StreamPool
@@ -12,12 +10,13 @@ from wde.workflows.decoding.kv_cache.logic_manager import (BlockId,
                                                            PrefixHash)
 from wde.workflows.decoding.kv_cache.offloading.swap import (SwapInManager,
                                                              SwapOutManager)
+from wde.workflows.decoding.kv_cache.prefix_caching.lru_evictor import \
+    LRUEvictor
 from wde.workflows.decoding.schema.engine_io import DecodingSchedulerOutput
 
 
-@dataclass(order=True)
+@dataclass
 class CPUBlock:
-    last_accessed_ts: float = -1
     self_prefix_hash: Optional[PrefixHash] = None
     physical_block_id: Optional[BlockId] = None
     ref_count: int = 0
@@ -52,11 +51,12 @@ class CPUBlockAllocator:
         self.num_blocks = num_blocks
         self._block_size = block_size
 
+        self._num_blocks = num_blocks
         self._full_blocks_map: Dict[PrefixHash, CPUBlock] = {}
-        self._free_full_blocks: PriorityQueue[CPUBlock] = PriorityQueue()
 
-        block_ids = range(num_blocks)
-        self._free_physical_block_ids: Deque[BlockId] = deque(block_ids)
+        self._free_full_blocks = LRUEvictor()
+        self._free_physical_block_ids: Deque[BlockId] = deque(
+            range(num_blocks))
 
     def __contains__(self, self_prefix_hash):
         return self_prefix_hash in self._full_blocks_map
@@ -70,6 +70,8 @@ class CPUBlockAllocator:
         if not block.ready():
             return None
 
+        self._free_full_blocks.remove(block)
+
         return block
 
     def _get_free_physical_block_id(self):
@@ -79,19 +81,16 @@ class CPUBlockAllocator:
         except IndexError:
             pass
 
-        try:
-            full_blocks = self._free_full_blocks.get()
-            del self._full_blocks_map[full_blocks.self_prefix_hash]
-            return full_blocks.physical_block_id
-        except queue.Empty:
-            raise NoFreeBlocksError()
+        full_blocks = self._free_full_blocks.evict()
+        self._full_blocks_map.pop(full_blocks.self_prefix_hash, None)
+        return full_blocks.physical_block_id
 
     def free(self, block: CPUBlock) -> None:
         ref_count = block.decr()
 
         if ref_count == 0:
-            block.last_accessed_ts = time.time()
-            self._free_full_blocks.put(block)
+            assert self._full_blocks_map[block.self_prefix_hash] is block
+            self._free_full_blocks.add(block)
 
     def copy_block(self, block):
         assert block.self_prefix_hash is not None

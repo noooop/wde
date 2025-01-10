@@ -33,6 +33,7 @@ def benchmark(args):
         frieren_executor_max_workers=args.frieren_executor_max_workers,
         record_metrics=args.record_metrics,
         block_allocator=args.block_allocator,
+        enable_prefix_caching=args.enable_prefix_caching,
         swap_space=args.swap_space)
 
     engine = LLMEngine.from_engine_args(engine_args)

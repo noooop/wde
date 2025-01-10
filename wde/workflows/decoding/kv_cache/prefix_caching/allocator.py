@@ -1,8 +1,5 @@
-import queue
-import time
 from collections import deque
 from dataclasses import dataclass
-from queue import PriorityQueue
 from typing import Deque, Dict, Iterable, List, Optional
 
 from wde.logger import init_logger
@@ -11,16 +8,16 @@ from wde.workflows.decoding.kv_cache.logic_manager import (BlockAllocator,
                                                            NoFreeBlocksError,
                                                            PrefixHash,
                                                            VirtualBlockTable)
+from wde.workflows.decoding.kv_cache.prefix_caching.lru_evictor import \
+    LRUEvictor
 from wde.workflows.decoding.kv_cache.utils import (chunk_list,
                                                    get_num_required_blocks)
 
 logger = init_logger(__name__)
 
 
-@dataclass(order=True)
+@dataclass
 class Block:
-    last_accessed_ts: float = -1
-
     delta_token_ids: Optional[List[int]] = None
 
     # Previous block prefix_hash
@@ -395,13 +392,13 @@ class PrefixCachingBlockAllocator(BlockAllocator):
         self._block_size = block_size
         self._num_blocks = num_blocks
 
-        self._full_blocks_map: Dict[PrefixHash, Block] = {}
-        self._free_full_blocks: PriorityQueue[Block] = PriorityQueue()
-
         if block_ids is None:
             block_ids = range(num_blocks)
 
         self._num_blocks = num_blocks
+        self._full_blocks_map: Dict[PrefixHash, Block] = {}
+
+        self._free_full_blocks = LRUEvictor()
         self._free_physical_block_ids: Deque[BlockId] = deque(block_ids)
 
     def create_vblock(self):
@@ -418,19 +415,21 @@ class PrefixCachingBlockAllocator(BlockAllocator):
 
     @property
     def num_free_blocks(self) -> int:
-        return len(
-            self._free_physical_block_ids) + self._free_full_blocks.qsize()
+        return len(self._free_physical_block_ids) + len(self._free_full_blocks)
 
     def get_full_block(self, prefix_hash, self_prefix_hash, delta_token_ids):
         assert len(delta_token_ids) == self._block_size
 
         block = self._full_blocks_map.get(self_prefix_hash, None)
+
         if block is None:
             block = Block(delta_token_ids=delta_token_ids,
                           prefix_hash=prefix_hash,
                           self_prefix_hash=self_prefix_hash,
                           _block_size=self._block_size)
-            self.update_block(block)
+            self._full_blocks_map[self_prefix_hash] = block
+        else:
+            self._free_full_blocks.remove(block)
         return block
 
     def _maybe_update_full_block(self, block: Block):
@@ -439,35 +438,37 @@ class PrefixCachingBlockAllocator(BlockAllocator):
 
         full_block = block
 
-        if full_block.self_prefix_hash is None:
-            full_block.self_prefix_hash = hash(
-                (full_block.prefix_hash, full_block.delta_token_ids))
-
+        full_block.ensure_self_prefix_hash()
         self_prefix_hash = full_block.self_prefix_hash
 
         block = self._full_blocks_map.get(self_prefix_hash, None)
         if block is full_block:
-            return full_block
+            return block
         elif block is None:
             self._full_blocks_map[self_prefix_hash] = full_block
             return full_block
         else:
-            self.free(full_block)
+            self._free(full_block)
             return block
 
     def update_block(self, block: Block):
         return self._maybe_update_full_block(block)
 
+    def _free(self, block: Block):
+        assert block.ref_count == 1
+        assert block not in self._free_full_blocks
+
+        self._free_physical_block_ids.append(block.physical_block_id)
+
     def free(self, block: Block) -> None:
         ref_count = block.decr()
 
         if ref_count == 0:
-            if block.is_full_block(
-            ) and block.self_prefix_hash in self._full_blocks_map:
-                block.last_accessed_ts = time.time()
-                self._free_full_blocks.put(block)
-            else:
+            if not block.is_full_block():
                 self._free_physical_block_ids.append(block.physical_block_id)
+            else:
+                assert self._full_blocks_map[block.self_prefix_hash] is block
+                self._free_full_blocks.add(block)
 
     def _get_free_physical_block_id(self):
         try:
@@ -476,12 +477,9 @@ class PrefixCachingBlockAllocator(BlockAllocator):
         except IndexError:
             pass
 
-        try:
-            full_blocks = self._free_full_blocks.get()
-            del self._full_blocks_map[full_blocks.self_prefix_hash]
-            return full_blocks.physical_block_id
-        except queue.Empty:
-            raise NoFreeBlocksError()
+        full_blocks = self._free_full_blocks.evict()
+        self._full_blocks_map.pop(full_blocks.self_prefix_hash, None)
+        return full_blocks.physical_block_id
 
     def allocate_block(self, block: Block):
         if block.physical_block_id is not None:
