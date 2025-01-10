@@ -1,7 +1,7 @@
 import time
 from collections import deque
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import Deque, List, Optional
 
 from wde.logger import init_logger
 from wde.utils import lazy_import
@@ -60,6 +60,12 @@ class DecodingSwapInSchedulingBudget:
 class SchedulerSwapInPrefillsOutputs:
     ignored_requests: List[DecodingSchedulableRequest]
     all_swap_in_able_swap_in_ed: List[DecodingSchedulableRequest]
+
+
+@dataclass
+class SchedulerSwapInRunningOutputs:
+    busy_requests: List[DecodingSchedulableRequest]
+    running_queue: Deque[DecodingSchedulableRequest]
 
 
 class OffloadingKVCachingDecodingScheduler(PrefixCachingDecodingScheduler):
@@ -128,8 +134,11 @@ class OffloadingKVCachingDecodingScheduler(PrefixCachingDecodingScheduler):
         swap_in_budget = DecodingSwapInSchedulingBudget.from_engine_config(
             self.engine_config)
 
+        swap_in_runnings = self._schedule_swap_in_runnings(swap_in_budget)
         swap_in_prefills = self._schedule_swap_in_prefills(swap_in_budget)
-        self.running.extend(swap_in_prefills.all_swap_in_able_swap_in_ed)
+
+        running_queue = swap_in_runnings.running_queue
+        running_queue.extend(swap_in_prefills.all_swap_in_able_swap_in_ed)
 
         scheduled_requests = []
 
@@ -138,28 +147,18 @@ class OffloadingKVCachingDecodingScheduler(PrefixCachingDecodingScheduler):
             max_num_requests=self.scheduler_config.max_num_requests,
         )
 
-        if self.running:
-            running_queue, busy_requests = self._split_running_queue()
+        running_scheduled = self._schedule_running(budget, running_queue)
 
-            if running_queue:
-                self._schedule_swap_in_runnings(running_queue, swap_in_budget)
+        self.running = running_queue
 
-                running_scheduled = self._schedule_running(
-                    budget, running_queue)
+        self.running.extend(running_scheduled.decode_requests)
+        self.running.extend(running_scheduled.prefill_requests)
 
-                self.running = running_queue
+        self.running.extend(swap_in_runnings.busy_requests)
+        self.running.extend(running_scheduled.preempted)
 
-                self.running.extend(running_scheduled.decode_requests)
-                self.running.extend(running_scheduled.prefill_requests)
-
-                self.running.extend(busy_requests)
-                self.running.extend(running_scheduled.preempted)
-
-                scheduled_requests.extend(running_scheduled.decode_requests)
-                scheduled_requests.extend(running_scheduled.prefill_requests)
-
-            else:
-                self.running = deque(busy_requests)
+        scheduled_requests.extend(running_scheduled.decode_requests)
+        scheduled_requests.extend(running_scheduled.prefill_requests)
 
         assert (budget.num_batched_tokens
                 <= self.scheduler_config.max_num_batched_tokens)
@@ -263,13 +262,42 @@ class OffloadingKVCachingDecodingScheduler(PrefixCachingDecodingScheduler):
             ignored_requests=ignored_requests,
             all_swap_in_able_swap_in_ed=all_swap_in_able_swap_in_ed)
 
-    def _schedule_swap_in_runnings(self, running_queue, swap_in_budget):
-        for request in running_queue:
+    def _schedule_swap_in_runnings(self, swap_in_budget):
+        busy_requests = []
+        running_queue = []
+
+        if not self.running:
+            return SchedulerSwapInRunningOutputs(
+                busy_requests=busy_requests,
+                running_queue=deque(running_queue))
+
+        for request in self.running:
+            if request.request_id in self.aborted_requests:
+                self.actual_abort_request(request.request_id)
+                continue
+
+            if request.request_id not in self.requests:
+                # aborted_requests
+                continue
+
+            if request.busy:
+                busy_requests.append(request)
+            else:
+                running_queue.append(request)
+
+        running = deque(
+            sorted(running_queue, key=lambda request: request.arrival_time))
+
+        running_queue = deque()
+
+        while running:
             if swap_in_budget.full():
                 break
 
             if self.kv_cache_manager.high_watermark():
                 break
+
+            request = running.popleft()
 
             # 1. Write new token ids to vblock & try to hit prefix caching
             self.kv_cache_manager.update(request)
@@ -278,11 +306,15 @@ class OffloadingKVCachingDecodingScheduler(PrefixCachingDecodingScheduler):
             curr_need_swap_in_blocks = self.offloading_manager.get_swap_in_blocks(
                 request)
 
+            # 3. no need swap in
             if not curr_need_swap_in_blocks:
-                swap_in_budget.add_num_requests(request.request_id, 1)
+                if not request.vblock.ready():
+                    busy_requests.append(request)
+                else:
+                    running_queue.append(request)
                 continue
 
-            # 3. meet budget
+            # 4. meet budget
             num_need_swap_in_blocks = len(curr_need_swap_in_blocks)
 
             budget_bound_num_blocks = min(
@@ -292,14 +324,22 @@ class OffloadingKVCachingDecodingScheduler(PrefixCachingDecodingScheduler):
             curr_need_swap_in_blocks = curr_need_swap_in_blocks[:
                                                                 budget_bound_num_blocks]
 
-            # 4. try to allocate & lock blocks avoid recompute
+            # 5. try to allocate & lock blocks avoid recompute
             allocated_swap_in_blocks = self.offloading_manager.try_allocate_swap_in_blocks(
                 curr_need_swap_in_blocks)
 
-            # 5. add to swap_in_task
+            # 6. add to swap_in_task
             num_blocks = len(allocated_swap_in_blocks)
             swap_in_budget.need_swap_in_blocks.extend(allocated_swap_in_blocks)
 
-            # 6. add to budget
+            # 7. add to budget
             swap_in_budget.add_num_blocks(request.request_id, num_blocks)
             swap_in_budget.add_num_requests(request.request_id, 1)
+
+            # 8. add to busy_requests
+            busy_requests.append(request)
+
+        running_queue.extend(running)
+
+        return SchedulerSwapInRunningOutputs(
+            busy_requests=busy_requests, running_queue=deque(running_queue))
