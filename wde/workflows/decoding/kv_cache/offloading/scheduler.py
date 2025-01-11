@@ -15,7 +15,8 @@ from wde.workflows.decoding.kv_cache.offloading.manager import \
 from wde.workflows.decoding.kv_cache.prefix_caching.scheduler import \
     PrefixCachingDecodingScheduler
 from wde.workflows.decoding.schema.engine_io import DecodingSchedulerOutput
-from wde.workflows.decoding.schema.request import DecodingSchedulableRequest
+from wde.workflows.decoding.schema.request import (DecodingSchedulableRequest,
+                                                   RequestStatus)
 
 logger = init_logger(__name__)
 
@@ -58,8 +59,10 @@ class DecodingSwapInSchedulingBudget:
 
 @dataclass
 class SchedulerSwapInPrefillsOutputs:
+    scheduled_requests: List[DecodingSchedulableRequest]
     ignored_requests: List[DecodingSchedulableRequest]
     all_swap_in_able_swap_in_ed: List[DecodingSchedulableRequest]
+    not_all_swap_in_able_swap_in_ed: List[DecodingSchedulableRequest]
 
 
 @dataclass
@@ -134,31 +137,33 @@ class OffloadingKVCachingDecodingScheduler(PrefixCachingDecodingScheduler):
         swap_in_budget = DecodingSwapInSchedulingBudget.from_engine_config(
             self.engine_config)
 
-        swap_in_runnings = self._schedule_swap_in_runnings(swap_in_budget)
-        swap_in_prefills = self._schedule_swap_in_prefills(swap_in_budget)
-
-        running_queue = swap_in_runnings.running_queue
-        running_queue.extend(swap_in_prefills.all_swap_in_able_swap_in_ed)
-
-        scheduled_requests = []
-
         budget = DecodingSchedulingBudget(
             token_budget=self.scheduler_config.max_num_batched_tokens,
             max_num_requests=self.scheduler_config.max_num_requests,
         )
 
+        # schedule running
+        swap_in_runnings = self._schedule_swap_in_runnings(swap_in_budget)
+        running_queue = swap_in_runnings.running_queue
         running_scheduled = self._schedule_running(budget, running_queue)
 
-        self.running = running_queue
+        # schedule prefills
+        prefills = self._schedule_swap_in_prefills(swap_in_budget, budget)
 
+        self.running = running_queue
         self.running.extend(running_scheduled.decode_requests)
         self.running.extend(running_scheduled.prefill_requests)
-
-        self.running.extend(swap_in_runnings.busy_requests)
         self.running.extend(running_scheduled.preempted)
+        self.running.extend(swap_in_runnings.busy_requests)
+        self.running.extend(prefills.scheduled_requests)
+        self.running.extend(prefills.all_swap_in_able_swap_in_ed)
 
+        self.waiting.extendleft(prefills.not_all_swap_in_able_swap_in_ed)
+
+        scheduled_requests = []
         scheduled_requests.extend(running_scheduled.decode_requests)
         scheduled_requests.extend(running_scheduled.prefill_requests)
+        scheduled_requests.extend(prefills.scheduled_requests)
 
         assert (budget.num_batched_tokens
                 <= self.scheduler_config.max_num_batched_tokens)
@@ -168,15 +173,31 @@ class OffloadingKVCachingDecodingScheduler(PrefixCachingDecodingScheduler):
             scheduled_requests=scheduled_requests,
             num_batched_tokens=budget.num_batched_tokens,
             num_requests=budget.num_curr_requests,
-            ignored_requests=swap_in_prefills.ignored_requests,
+            ignored_requests=prefills.ignored_requests,
             need_swap_in_blocks=swap_in_budget.need_swap_in_blocks)
 
-    def _schedule_swap_in_prefills(self, swap_in_budget):
+    def _schedule_swap_in_prefills(self, swap_in_budget, budget):
+        # for normal prefill
         ignored_requests: List[DecodingSchedulableRequest] = []
+        scheduled_requests: List[DecodingSchedulableRequest] = []
+
+        # for swap_in
         all_swap_in_able_swap_in_ed: List[DecodingSchedulableRequest] = []
+        not_all_swap_in_able_swap_in_ed: List[DecodingSchedulableRequest] = []
+
+        if not self.waiting:
+            return SchedulerSwapInPrefillsOutputs(
+                scheduled_requests=scheduled_requests,
+                ignored_requests=ignored_requests,
+                all_swap_in_able_swap_in_ed=all_swap_in_able_swap_in_ed,
+                not_all_swap_in_able_swap_in_ed=not_all_swap_in_able_swap_in_ed
+            )
 
         waiting_queue = self.waiting
         while waiting_queue:
+            if budget.full():
+                break
+
             if swap_in_budget.full():
                 break
 
@@ -184,6 +205,9 @@ class OffloadingKVCachingDecodingScheduler(PrefixCachingDecodingScheduler):
                 break
 
             request = waiting_queue[0]
+
+            if self.record_metrics:
+                scheduled_ts = time.perf_counter()
 
             # 1. Check if it has been aborted
             if request.request_id in self.aborted_requests:
@@ -196,7 +220,7 @@ class OffloadingKVCachingDecodingScheduler(PrefixCachingDecodingScheduler):
                 request = self.request_processor(request)
                 waiting_queue[0] = request
 
-            # The busy flag now acts as whether all_swap_in_able_swap_in_ed
+            # The busy flag in waiting_queue now acts as whether it is preprocessed
             if not request.busy:
                 # 3. Check if the input exceeds the maximum length
                 num_prompt_token_ids = request.num_prompt_token_ids
@@ -211,56 +235,119 @@ class OffloadingKVCachingDecodingScheduler(PrefixCachingDecodingScheduler):
                     waiting_queue.popleft()
                     continue
 
-                # 4. create vblock &
+                # 4. create vblock
                 if request.vblock is None:
                     self.kv_cache_manager.create_vblock(request)
 
                 # 5. try to hit prefix caching
                 self.kv_cache_manager.update(request)
 
+                request.busy = True
+
             # 6. find blocks need swap in
             curr_need_swap_in_blocks = self.offloading_manager.get_swap_in_blocks(
                 request)
 
             if not curr_need_swap_in_blocks:
+                # all_swap_in_able_swap_in_ed
+                # normal prefill
+
+                # N1. Check if hit prefix caching ready
+                if not request.vblock.ready():
+                    waiting_queue.popleft()
+
+                    # move to running_queue
+                    request.busy = False
+                    all_swap_in_able_swap_in_ed.append(request)
+
+                    if len(all_swap_in_able_swap_in_ed
+                           ) > budget.max_num_requests:
+                        # too many not ready requests.
+                        # no need to continue exploring
+                        # maybe all requests have the same prefix
+                        # We don't need to confirm that all requests are not ready
+                        break
+                    continue
+
+                # N2. chunked prefill
+                num_new_tokens = request.num_new_tokens
+                budget_bound_token_chunk_size = min(
+                    num_new_tokens, budget.remaining_token_budget())
+
+                if budget_bound_token_chunk_size == 0:
+                    # No budget => Stop
+                    break
+
+                # N3. try to allocate gpu blocks
+                memory_bound_token_chunk_size = self.kv_cache_manager.can_allocate(
+                    request, budget_bound_token_chunk_size)
+
+                if memory_bound_token_chunk_size == 0:
+                    # No free gpu blocks => Stop
+                    break
+
+                # N4. Allocate kv cache
+                request.token_chunk_size = memory_bound_token_chunk_size
+                self.kv_cache_manager.allocate(request)
+
+                # N5. lock all block avoid recompute
+                request.vblock.acquire()
+
+                # N6. Can schedule this request.
                 waiting_queue.popleft()
-                swap_in_budget.add_num_requests(request.request_id, 1)
-                all_swap_in_able_swap_in_ed.append(request)
-                continue
 
-            # 7. meet budget
-            num_need_swap_in_blocks = len(curr_need_swap_in_blocks)
+                # N7. set running
+                request.status = RequestStatus.RUNNING
 
-            budget_bound_num_blocks = min(
-                num_need_swap_in_blocks,
-                swap_in_budget.remaining_blocks_budget())
+                scheduled_requests.append(request)
+                budget.add_num_batched_tokens(request.request_id,
+                                              request.token_chunk_size)
+                budget.add_num_requests(request.request_id, 1)
 
-            curr_need_swap_in_blocks = curr_need_swap_in_blocks[:
-                                                                budget_bound_num_blocks]
+                if self.record_metrics:
+                    request.set_scheduled_ts(scheduled_ts)
 
-            # 8. try to allocate & lock blocks avoid recompute
-            allocated_swap_in_blocks = self.offloading_manager.try_allocate_swap_in_blocks(
-                curr_need_swap_in_blocks)
-
-            # 9. add to swap_in_task
-            num_blocks = len(allocated_swap_in_blocks)
-            swap_in_budget.need_swap_in_blocks.extend(allocated_swap_in_blocks)
-
-            # 10. add to budget
-            swap_in_budget.add_num_blocks(request.request_id, num_blocks)
-            swap_in_budget.add_num_requests(request.request_id, 1)
-
-            if num_need_swap_in_blocks == num_blocks:
-                request.busy = False
-                waiting_queue.popleft()
-                all_swap_in_able_swap_in_ed.append(request)
             else:
-                # The busy flag now acts as whether all_swap_in_able_swap_in_ed
-                request.busy = True
+                # need swap_in
+                waiting_queue.popleft()
+
+                # S1. meet budget
+                num_need_swap_in_blocks = len(curr_need_swap_in_blocks)
+
+                budget_bound_num_blocks = min(
+                    num_need_swap_in_blocks,
+                    swap_in_budget.remaining_blocks_budget())
+
+                curr_need_swap_in_blocks = curr_need_swap_in_blocks[:
+                                                                    budget_bound_num_blocks]
+
+                # S2. try to allocate & lock blocks avoid recompute
+                allocated_swap_in_blocks = self.offloading_manager.try_allocate_swap_in_blocks(
+                    curr_need_swap_in_blocks)
+
+                # S3. add to swap_in_task
+                num_blocks = len(allocated_swap_in_blocks)
+                swap_in_budget.need_swap_in_blocks.extend(
+                    allocated_swap_in_blocks)
+
+                # S4. add to budget
+                swap_in_budget.add_num_blocks(request.request_id, num_blocks)
+                swap_in_budget.add_num_requests(request.request_id, 1)
+
+                if num_need_swap_in_blocks == num_blocks:
+                    # move to running_queue
+                    request.busy = False
+                    all_swap_in_able_swap_in_ed.append(request)
+                else:
+                    # The busy flag in waiting_queue now acts as whether it is preprocessed
+                    # move to waiting_queue
+                    not_all_swap_in_able_swap_in_ed.append(request)
 
         return SchedulerSwapInPrefillsOutputs(
+            scheduled_requests=scheduled_requests,
             ignored_requests=ignored_requests,
-            all_swap_in_able_swap_in_ed=all_swap_in_able_swap_in_ed)
+            all_swap_in_able_swap_in_ed=all_swap_in_able_swap_in_ed,
+            not_all_swap_in_able_swap_in_ed=not_all_swap_in_able_swap_in_ed)
 
     def _schedule_swap_in_runnings(self, swap_in_budget):
         busy_requests = []
