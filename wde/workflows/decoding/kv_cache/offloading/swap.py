@@ -116,11 +116,11 @@ class SwapOutManager:
                     break
 
                 # read from gpu_block
-                gpu_block.incr()
+                self.gpu_block_allocator.hold(gpu_block)
 
                 # write to cpu_block
-                cpu_block.incr()
                 cpu_block.acquire()
+                self.cpu_block_allocator.hold(cpu_block)
 
                 need_swap_out.append((gpu_block, cpu_block))
 
@@ -184,19 +184,19 @@ class SwapInManager:
         for cpu_block, gpu_block in need_swap_in_blocks:
             assert cpu_block.ready()
             # read from cpu_block
-            cpu_block.incr()
+            self.cpu_block_allocator.hold(cpu_block)
 
             # write to gpu_block, need acquire lock
             assert gpu_block.ready()
 
             try:
-                self.offloading_manager.gpu_block_allocator.allocate_block(
-                    gpu_block)
+                self.offloading_manager.gpu_block_allocator.allocate(gpu_block)
             except NoFreeBlocksError:
                 break
 
-            gpu_block.incr()
             gpu_block.acquire()
+            self.gpu_block_allocator.hold(gpu_block)
+
             allocated_swap_in_blocks.append((cpu_block, gpu_block))
         return allocated_swap_in_blocks
 

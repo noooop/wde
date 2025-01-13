@@ -93,7 +93,7 @@ class NaiveVirtualBlockTable(VirtualBlockTable):
             num_need_allocated_slots, self._block_size)
 
         for i in range(num_need_allocated_blocks):
-            physical_block_id = self._allocator.allocate_block()
+            physical_block_id = self._allocator.allocate()
             self._physical_block_ids.append(physical_block_id)
 
         self._num_token_ids = num_token_ids
@@ -136,20 +136,19 @@ class NaiveBlockAllocator(BlockAllocator):
         self._num_blocks = num_blocks
         self._free_physical_block_ids: Deque[BlockId] = deque(block_ids)
 
-    @property
-    def num_total_blocks(self) -> int:
-        return self._num_blocks
+    def create(self):
+        return NaiveVirtualBlockTable(block_size=self._block_size,
+                                      block_allocator=self)
 
     @property
     def num_free_blocks(self) -> int:
         return len(self._free_physical_block_ids)
 
-    def create_vblock(self):
-        return NaiveVirtualBlockTable(block_size=self._block_size,
-                                      block_allocator=self)
-
-    def allocate_block(self):
+    def allocate(self):
         return self._get_free_physical_block_id()
+
+    def hold(self, *args, **kwargs):
+        pass
 
     def free(self, physical_block_id: BlockId) -> None:
         self._put_physical_block_id(physical_block_id)
@@ -165,3 +164,7 @@ class NaiveBlockAllocator(BlockAllocator):
         assert physical_block_id < self._num_blocks
 
         self._free_physical_block_ids.appendleft(physical_block_id)
+
+    @property
+    def num_total_blocks(self) -> int:
+        return self._num_blocks

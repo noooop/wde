@@ -58,7 +58,7 @@ class DecodingSwapInSchedulingBudget:
 
 
 @dataclass
-class SchedulerSwapInPrefillsOutputs:
+class SchedulerSwapInWaitingOutputs:
     scheduled_requests: List[DecodingSchedulableRequest]
     ignored_requests: List[DecodingSchedulableRequest]
     all_swap_in_able_swap_in_ed: List[DecodingSchedulableRequest]
@@ -147,23 +147,24 @@ class OffloadingKVCachingDecodingScheduler(PrefixCachingDecodingScheduler):
         running_queue = swap_in_runnings.running_queue
         running_scheduled = self._schedule_running(budget, running_queue)
 
-        # schedule prefills
-        prefills = self._schedule_swap_in_prefills(swap_in_budget, budget)
+        # schedule waiting
+        waiting_scheduled = self._schedule_waiting(swap_in_budget, budget)
 
         self.running = running_queue
         self.running.extend(running_scheduled.decode_requests)
         self.running.extend(running_scheduled.prefill_requests)
         self.running.extend(running_scheduled.preempted)
         self.running.extend(swap_in_runnings.busy_requests)
-        self.running.extend(prefills.scheduled_requests)
-        self.running.extend(prefills.all_swap_in_able_swap_in_ed)
+        self.running.extend(waiting_scheduled.scheduled_requests)
+        self.running.extend(waiting_scheduled.all_swap_in_able_swap_in_ed)
 
-        self.waiting.extendleft(prefills.not_all_swap_in_able_swap_in_ed)
+        self.waiting.extendleft(
+            waiting_scheduled.not_all_swap_in_able_swap_in_ed)
 
         scheduled_requests = []
         scheduled_requests.extend(running_scheduled.decode_requests)
         scheduled_requests.extend(running_scheduled.prefill_requests)
-        scheduled_requests.extend(prefills.scheduled_requests)
+        scheduled_requests.extend(waiting_scheduled.scheduled_requests)
 
         assert (budget.num_batched_tokens
                 <= self.scheduler_config.max_num_batched_tokens)
@@ -173,10 +174,11 @@ class OffloadingKVCachingDecodingScheduler(PrefixCachingDecodingScheduler):
             scheduled_requests=scheduled_requests,
             num_batched_tokens=budget.num_batched_tokens,
             num_requests=budget.num_curr_requests,
-            ignored_requests=prefills.ignored_requests,
+            ignored_requests=waiting_scheduled.ignored_requests,
             need_swap_in_blocks=swap_in_budget.need_swap_in_blocks)
 
-    def _schedule_swap_in_prefills(self, swap_in_budget, budget):
+    def _schedule_waiting(self, swap_in_budget,
+                          budget) -> SchedulerSwapInWaitingOutputs:
         # for normal prefill
         ignored_requests: List[DecodingSchedulableRequest] = []
         scheduled_requests: List[DecodingSchedulableRequest] = []
@@ -186,7 +188,7 @@ class OffloadingKVCachingDecodingScheduler(PrefixCachingDecodingScheduler):
         not_all_swap_in_able_swap_in_ed: List[DecodingSchedulableRequest] = []
 
         if not self.waiting:
-            return SchedulerSwapInPrefillsOutputs(
+            return SchedulerSwapInWaitingOutputs(
                 scheduled_requests=scheduled_requests,
                 ignored_requests=ignored_requests,
                 all_swap_in_able_swap_in_ed=all_swap_in_able_swap_in_ed,
@@ -236,8 +238,7 @@ class OffloadingKVCachingDecodingScheduler(PrefixCachingDecodingScheduler):
                     continue
 
                 # 4. create vblock
-                if request.vblock is None:
-                    self.kv_cache_manager.create_vblock(request)
+                self.kv_cache_manager.create(request)
 
                 # 5. try to hit prefix caching
                 self.kv_cache_manager.update(request)
@@ -343,7 +344,7 @@ class OffloadingKVCachingDecodingScheduler(PrefixCachingDecodingScheduler):
                     # move to waiting_queue
                     not_all_swap_in_able_swap_in_ed.append(request)
 
-        return SchedulerSwapInPrefillsOutputs(
+        return SchedulerSwapInWaitingOutputs(
             scheduled_requests=scheduled_requests,
             ignored_requests=ignored_requests,
             all_swap_in_able_swap_in_ed=all_swap_in_able_swap_in_ed,

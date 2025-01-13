@@ -93,13 +93,13 @@ class SchedulerRunningOutputs:
 
 
 @dataclass
-class SchedulerPrefillOutputs:
+class SchedulerWaitingOutputs:
     scheduled_requests: List[DecodingSchedulableRequest]
     ignored_requests: List[DecodingSchedulableRequest]
 
     @classmethod
-    def create_empty(cls) -> "SchedulerPrefillOutputs":
-        return SchedulerPrefillOutputs(
+    def create_empty(cls) -> "SchedulerWaitingOutputs":
+        return SchedulerWaitingOutputs(
             scheduled_requests=[],
             ignored_requests=[],
         )
@@ -128,10 +128,10 @@ class NaiveDecodingScheduler(Scheduler):
         return cls(engine.engine_config, engine.request_processor,
                    kv_cache_manager)
 
-    def _schedule_prefills(
+    def _schedule_waiting(
         self,
         budget: DecodingSchedulingBudget,
-    ) -> SchedulerPrefillOutputs:
+    ) -> SchedulerWaitingOutputs:
         ignored_requests: List[DecodingSchedulableRequest] = []
         scheduled_requests: List[DecodingSchedulableRequest] = []
 
@@ -182,8 +182,7 @@ class NaiveDecodingScheduler(Scheduler):
                 break
 
             # 5. create vblock
-            if request.vblock is None:
-                self.kv_cache_manager.create_vblock(request)
+            self.kv_cache_manager.create(request)
 
             # 6. try allocate
             memory_bound_token_chunk_size = self.kv_cache_manager.can_allocate(
@@ -211,7 +210,7 @@ class NaiveDecodingScheduler(Scheduler):
             if self.record_metrics:
                 request.set_scheduled_ts(scheduled_ts)
 
-        return SchedulerPrefillOutputs(scheduled_requests=scheduled_requests,
+        return SchedulerWaitingOutputs(scheduled_requests=scheduled_requests,
                                        ignored_requests=ignored_requests)
 
     def _schedule_running(self, budget: DecodingSchedulingBudget,
@@ -316,18 +315,18 @@ class NaiveDecodingScheduler(Scheduler):
                 <= self.scheduler_config.max_num_batched_tokens)
         assert budget.num_curr_requests <= self.scheduler_config.max_num_requests
 
-        prefills = self._schedule_prefills(budget)
+        waiting_scheduled = self._schedule_waiting(budget)
 
         assert (budget.num_batched_tokens
                 <= self.scheduler_config.max_num_batched_tokens)
         assert budget.num_curr_requests <= self.scheduler_config.max_num_requests
 
-        self.running.extend(prefills.scheduled_requests)
-        scheduled_requests.extend(prefills.scheduled_requests)
+        self.running.extend(waiting_scheduled.scheduled_requests)
+        scheduled_requests.extend(waiting_scheduled.scheduled_requests)
 
         return DecodingSchedulerOutput(
             scheduled_requests=scheduled_requests,
-            ignored_requests=prefills.ignored_requests,
+            ignored_requests=waiting_scheduled.ignored_requests,
             num_batched_tokens=budget.num_batched_tokens,
             num_requests=budget.num_curr_requests,
         )

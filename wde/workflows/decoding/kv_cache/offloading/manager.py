@@ -24,6 +24,7 @@ class CPUBlock:
 
     def incr(self):
         self.ref_count += 1
+        return self.ref_count
 
     def decr(self):
         assert self.ref_count > 0
@@ -74,24 +75,6 @@ class CPUBlockAllocator:
 
         return block
 
-    def _get_free_physical_block_id(self):
-        try:
-            physical_block_id = self._free_physical_block_ids.popleft()
-            return physical_block_id
-        except IndexError:
-            pass
-
-        full_blocks = self._free_full_blocks.evict()
-        self._full_blocks_map.pop(full_blocks.self_prefix_hash, None)
-        return full_blocks.physical_block_id
-
-    def free(self, block: CPUBlock) -> None:
-        ref_count = block.decr()
-
-        if ref_count == 0:
-            assert self._full_blocks_map[block.self_prefix_hash] is block
-            self._free_full_blocks.add(block)
-
     def copy_block(self, block):
         assert block.self_prefix_hash is not None
 
@@ -105,6 +88,36 @@ class CPUBlockAllocator:
 
         self._full_blocks_map[new_block.self_prefix_hash] = new_block
         return new_block
+
+    def hold(self, block: CPUBlock):
+        ref_count = block.incr()
+
+        if ref_count == 1:
+            self._remove_from_free_blocks(block)
+
+    def free(self, block: CPUBlock) -> None:
+        ref_count = block.decr()
+
+        if ref_count == 0:
+            assert self._full_blocks_map[block.self_prefix_hash] is block
+            self._free_full_blocks.add(block)
+
+    def _remove_from_free_blocks(self, block: CPUBlock):
+        if block is None:
+            return
+
+        self._free_full_blocks.remove(block)
+
+    def _get_free_physical_block_id(self):
+        try:
+            physical_block_id = self._free_physical_block_ids.popleft()
+            return physical_block_id
+        except IndexError:
+            pass
+
+        full_blocks = self._free_full_blocks.evict()
+        self._full_blocks_map.pop(full_blocks.self_prefix_hash, None)
+        return full_blocks.physical_block_id
 
 
 class OffloadingManager:

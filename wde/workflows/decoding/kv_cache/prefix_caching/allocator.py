@@ -60,6 +60,7 @@ class Block:
 
     def incr(self):
         self.ref_count += 1
+        return self.ref_count
 
     def decr(self):
         assert self.ref_count > 0
@@ -173,11 +174,11 @@ class PrefixCachingVirtualBlockTable(VirtualBlockTable):
 
             if len(delta_token_ids) == self._block_size:
                 # become full block
-                new_last_block = self._allocator.update_block(last_block)
+                new_last_block = self._allocator.update(last_block)
 
                 if new_last_block is not last_block:
                     # last_block has been released
-                    new_last_block.incr()
+                    self._allocator.hold(new_last_block)
                     self._blocks[-1] = new_last_block
 
         if num_empty_slots >= num_token_ids - num_token_ids_curr:
@@ -212,7 +213,7 @@ class PrefixCachingVirtualBlockTable(VirtualBlockTable):
                               prefix_hash=prefix_hash,
                               self_prefix_hash=None,
                               _block_size=block_size)
-            block.incr()
+            self._allocator.hold(block)
             self._blocks.append(block)
 
     def can_allocate(self, token_chunk_size: int):
@@ -264,7 +265,7 @@ class PrefixCachingVirtualBlockTable(VirtualBlockTable):
                                                  self._block_size)
 
         for i in range(last_block_idx, max_num_block):
-            self._allocator.allocate_block(self._blocks[i])
+            self._allocator.allocate(self._blocks[i])
 
         self._seq_len = seq_len
 
@@ -401,21 +402,20 @@ class PrefixCachingBlockAllocator(BlockAllocator):
         self._free_full_blocks = LRUEvictor()
         self._free_physical_block_ids: Deque[BlockId] = deque(block_ids)
 
-    def create_vblock(self):
+    def create(self):
         return PrefixCachingVirtualBlockTable(block_size=self._block_size,
                                               block_allocator=self)
 
     @property
-    def block_size(self):
-        return self._block_size
-
-    @property
-    def num_total_blocks(self) -> int:
-        return self._num_blocks
-
-    @property
     def num_free_blocks(self) -> int:
         return len(self._free_physical_block_ids) + len(self._free_full_blocks)
+
+    def allocate(self, block: Block):
+        if block.physical_block_id is not None:
+            return
+
+        physical_block_id = self._get_free_physical_block_id()
+        block.physical_block_id = physical_block_id
 
     def get_full_block(self, prefix_hash, self_prefix_hash, delta_token_ids):
         assert len(delta_token_ids) == self._block_size
@@ -432,6 +432,25 @@ class PrefixCachingBlockAllocator(BlockAllocator):
             self._free_full_blocks.remove(block)
         return block
 
+    def hold(self, block: Block):
+        ref_count = block.incr()
+
+        if ref_count == 1:
+            self._remove_from_free_blocks(block)
+
+    def free(self, block: Block):
+        ref_count = block.decr()
+
+        if ref_count == 0:
+            if not block.is_full_block():
+                self._free_physical_block_ids.append(block.physical_block_id)
+            else:
+                assert self._full_blocks_map[block.self_prefix_hash] is block
+                self._free_full_blocks.add(block)
+
+    def update(self, block: Block):
+        return self._maybe_update_full_block(block)
+
     def _maybe_update_full_block(self, block: Block):
         if not block.is_full_block():
             return block
@@ -446,29 +465,17 @@ class PrefixCachingBlockAllocator(BlockAllocator):
             return block
         elif block is None:
             self._full_blocks_map[self_prefix_hash] = full_block
+
             return full_block
         else:
             self._free(full_block)
             return block
-
-    def update_block(self, block: Block):
-        return self._maybe_update_full_block(block)
 
     def _free(self, block: Block):
         assert block.ref_count == 1
         assert block not in self._free_full_blocks
 
         self._free_physical_block_ids.append(block.physical_block_id)
-
-    def free(self, block: Block) -> None:
-        ref_count = block.decr()
-
-        if ref_count == 0:
-            if not block.is_full_block():
-                self._free_physical_block_ids.append(block.physical_block_id)
-            else:
-                assert self._full_blocks_map[block.self_prefix_hash] is block
-                self._free_full_blocks.add(block)
 
     def _get_free_physical_block_id(self):
         try:
@@ -481,12 +488,20 @@ class PrefixCachingBlockAllocator(BlockAllocator):
         self._full_blocks_map.pop(full_blocks.self_prefix_hash, None)
         return full_blocks.physical_block_id
 
-    def allocate_block(self, block: Block):
-        if block.physical_block_id is not None:
+    def _remove_from_free_blocks(self, block):
+        if block is None:
             return
 
-        physical_block_id = self._get_free_physical_block_id()
-        block.physical_block_id = physical_block_id
+        if block.is_full_block():
+            self._free_full_blocks.remove(block)
+
+    @property
+    def block_size(self):
+        return self._block_size
+
+    @property
+    def num_total_blocks(self) -> int:
+        return self._num_blocks
 
 
 class DisablePrefixCachingBlockAllocator(BlockAllocator):
@@ -506,21 +521,29 @@ class DisablePrefixCachingBlockAllocator(BlockAllocator):
         self._num_blocks = num_blocks
         self._free_physical_block_ids: Deque[BlockId] = deque(block_ids)
 
-    def create_vblock(self):
+    def create(self):
         return PrefixCachingVirtualBlockTable(block_size=self._block_size,
                                               block_allocator=self)
 
     @property
-    def block_size(self):
-        return self._block_size
-
-    @property
-    def num_total_blocks(self) -> int:
-        return self._num_blocks
-
-    @property
     def num_free_blocks(self) -> int:
         return len(self._free_physical_block_ids)
+
+    def allocate(self, block: Block):
+        if block.physical_block_id is not None:
+            return
+
+        physical_block_id = self._get_free_physical_block_id()
+        block.physical_block_id = physical_block_id
+
+    def hold(self, block: Block):
+        block.incr()
+
+    def free(self, block: Block):
+        ref_count = block.decr()
+
+        if ref_count == 0:
+            self._free_physical_block_ids.append(block.physical_block_id)
 
     def get_full_block(self, prefix_hash, self_prefix_hash, delta_token_ids):
         assert len(delta_token_ids) == self._block_size
@@ -532,15 +555,6 @@ class DisablePrefixCachingBlockAllocator(BlockAllocator):
 
         return block
 
-    def update_block(self, block: Block):
-        return block
-
-    def free(self, block: Block) -> None:
-        ref_count = block.decr()
-
-        if ref_count == 0:
-            self._free_physical_block_ids.append(block.physical_block_id)
-
     def _get_free_physical_block_id(self):
         try:
             physical_block_id = self._free_physical_block_ids.popleft()
@@ -548,9 +562,10 @@ class DisablePrefixCachingBlockAllocator(BlockAllocator):
         except IndexError:
             raise NoFreeBlocksError()
 
-    def allocate_block(self, block: Block):
-        if block.physical_block_id is not None:
-            return
+    @property
+    def block_size(self):
+        return self._block_size
 
-        physical_block_id = self._get_free_physical_block_id()
-        block.physical_block_id = physical_block_id
+    @property
+    def num_total_blocks(self) -> int:
+        return self._num_blocks

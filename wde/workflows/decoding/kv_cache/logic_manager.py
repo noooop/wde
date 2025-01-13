@@ -1,9 +1,12 @@
-from typing import List, Optional
-
-from wde.workflows.decoding.schema.request import DecodingSchedulableRequest
+from typing import TYPE_CHECKING, List, Optional
 
 BlockId = int
 PrefixHash = Optional[int]
+
+if TYPE_CHECKING:
+    from wde.workflows.decoding.kv_cache.prefix_caching.allocator import Block
+    from wde.workflows.decoding.schema.request import \
+        DecodingSchedulableRequest
 
 
 class NoFreeBlocksError(ValueError):
@@ -47,25 +50,28 @@ class LogicKVCacheManager:
     def high_watermark(self) -> bool:
         return self.block_allocator.num_free_blocks < self.watermark_blocks
 
-    def create_vblock(self, request: DecodingSchedulableRequest):
-        request.vblock = self.block_allocator.create_vblock()
+    def create(self, request: "DecodingSchedulableRequest"):
+        if request.vblock is not None:
+            return
 
-    def update(self, request: DecodingSchedulableRequest):
+        request.vblock = self.block_allocator.create()
+
+    def update(self, request: "DecodingSchedulableRequest"):
         token_ids = request.get_token_ids()
         request.vblock.update(token_ids)
 
-    def can_allocate(self, request: DecodingSchedulableRequest,
+    def can_allocate(self, request: "DecodingSchedulableRequest",
                      budget_bound_token_chunk_size: int) -> int:
         return request.vblock.can_allocate(budget_bound_token_chunk_size)
 
-    def allocate(self, request: DecodingSchedulableRequest) -> None:
+    def allocate(self, request: "DecodingSchedulableRequest") -> None:
         request.vblock.allocate(request.token_chunk_size)
         assert request.vblock.seq_len == request.vblock.num_computed_tokens + request.token_chunk_size
 
-    def free(self, request: DecodingSchedulableRequest) -> None:
+    def free(self, request: "DecodingSchedulableRequest") -> None:
         request.vblock.free()
 
-    def free_last_block(self, request: DecodingSchedulableRequest):
+    def free_last_block(self, request: "DecodingSchedulableRequest"):
         request.vblock.free_last_block()
         request.num_preempted += 1
 
@@ -91,9 +97,6 @@ class VirtualBlockTable:
     def physical_block_ids(self):
         raise NotImplementedError
 
-    def update(self, token_ids: List[int]):
-        raise NotImplementedError
-
     def can_allocate(self, token_chunk_size: int):
         raise NotImplementedError
 
@@ -109,17 +112,26 @@ class VirtualBlockTable:
     def update_num_computed_tokens(self):
         raise NotImplementedError
 
+    ##################################
+    # api for PrefixCaching
+
+    def update(self, token_ids: List[int]):
+        raise NotImplementedError
+
 
 class BlockAllocator:
+
+    def create(self):
+        raise NotImplementedError
 
     @property
     def num_free_blocks(self) -> int:
         raise NotImplementedError
 
-    def create_vblock(self):
+    def allocate(self, *args, **kwargs):
         raise NotImplementedError
 
-    def allocate_block(self, *args, **kwargs):
+    def hold(self, *args, **kwargs):
         raise NotImplementedError
 
     def free(self, *args, **kwargs):
@@ -127,3 +139,9 @@ class BlockAllocator:
 
     def join(self):
         pass
+
+    ##################################
+    # api for PrefixCaching
+
+    def update(self, block: "Block"):
+        return block

@@ -10,7 +10,7 @@ from wde.workflows.core.scheduler import Scheduler
 from wde.workflows.core.schema.engine_io import RequestOutput
 from wde.workflows.decoding.kv_cache.logic_manager import LogicKVCacheManager
 from wde.workflows.decoding.kv_cache.naive.scheduler import (
-    DecodingSchedulingBudget, SchedulerPrefillOutputs, SchedulerRunningOutputs)
+    DecodingSchedulingBudget, SchedulerRunningOutputs, SchedulerWaitingOutputs)
 from wde.workflows.decoding.schema.engine_io import (
     DecodingSchedulableRequest, DecodingSchedulerOutput)
 from wde.workflows.decoding.schema.request import RequestStatus
@@ -41,10 +41,10 @@ class PrefixCachingDecodingScheduler(Scheduler):
         return cls(engine.engine_config, engine.request_processor,
                    kv_cache_manager)
 
-    def _schedule_prefills(
+    def _schedule_waiting(
         self,
         budget: DecodingSchedulingBudget,
-    ) -> SchedulerPrefillOutputs:
+    ) -> SchedulerWaitingOutputs:
         ignored_requests: List[DecodingSchedulableRequest] = []
         scheduled_requests: List[DecodingSchedulableRequest] = []
         not_ready_requests: List[DecodingSchedulableRequest] = []
@@ -88,9 +88,8 @@ class PrefixCachingDecodingScheduler(Scheduler):
                 waiting_queue.popleft()
                 continue
 
-            # 4. create vblock &
-            if request.vblock is None:
-                self.kv_cache_manager.create_vblock(request)
+            # 4. create vblock
+            self.kv_cache_manager.create(request)
 
             # 5. try to hit prefix caching
             self.kv_cache_manager.update(request)
@@ -149,7 +148,7 @@ class PrefixCachingDecodingScheduler(Scheduler):
         for request in not_ready_requests:
             self.waiting.append(request)
 
-        return SchedulerPrefillOutputs(scheduled_requests=scheduled_requests,
+        return SchedulerWaitingOutputs(scheduled_requests=scheduled_requests,
                                        ignored_requests=ignored_requests)
 
     def _schedule_running(self, budget: DecodingSchedulingBudget,
@@ -269,7 +268,7 @@ class PrefixCachingDecodingScheduler(Scheduler):
                 <= self.scheduler_config.max_num_batched_tokens)
         assert budget.num_curr_requests <= self.scheduler_config.max_num_requests
 
-        prefills = self._schedule_prefills(budget)
+        prefills = self._schedule_waiting(budget)
 
         assert (budget.num_batched_tokens
                 <= self.scheduler_config.max_num_batched_tokens)
