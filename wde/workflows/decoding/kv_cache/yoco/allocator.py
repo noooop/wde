@@ -560,7 +560,7 @@ class YOCOPrefixCachingBlockAllocator(BlockAllocator):
         try:
             block = self._free_portion_blocks.evict()
             return self._free_block_and_get_physical_block_id(block)
-        except NoFreeBlocksError():
+        except NoFreeBlocksError:
             pass
 
         block = self._free_full_blocks.evict()
