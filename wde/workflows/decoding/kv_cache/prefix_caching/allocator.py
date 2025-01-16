@@ -217,19 +217,10 @@ class PrefixCachingVirtualBlockTable(VirtualBlockTable):
             self._blocks.append(block)
 
     def can_allocate(self, token_chunk_size: int):
-        num_computed_tokens = self.num_computed_tokens
-        max_num_block = get_num_required_blocks(
-            num_computed_tokens + token_chunk_size, self._block_size)
+        (last_computed_block, max_num_blocks, num_computed_tokens,
+         seq_len) = self.get_computed_offset(token_chunk_size)
 
-        # new token ids should have been appended to blocks
-        assert num_computed_tokens + token_chunk_size <= self.num_token_ids
-        assert max_num_block <= len(self._blocks)
-
-        # last portion block
-        last_block_idx = max(
-            0,
-            get_num_required_blocks(num_computed_tokens, self._block_size) - 1)
-        last_block = self._blocks[last_block_idx]
+        last_block = self._blocks[last_computed_block]
 
         num_empty_slots = last_block.num_empty_slots
 
@@ -238,7 +229,7 @@ class PrefixCachingVirtualBlockTable(VirtualBlockTable):
             return token_chunk_size
 
         num_need_allocated_blocks = 0
-        for i in range(last_block_idx, max_num_block):
+        for i in range(last_computed_block, max_num_blocks):
             if self._blocks[i].physical_block_id is None:
                 num_need_allocated_blocks += 1
 
@@ -252,19 +243,10 @@ class PrefixCachingVirtualBlockTable(VirtualBlockTable):
                 num_empty_slots + num_free_gpu_blocks * self._block_size)
 
     def allocate(self, token_chunk_size: int):
-        num_computed_tokens = self.num_computed_tokens
-        seq_len = num_computed_tokens + token_chunk_size
+        (last_computed_block, max_num_blocks, num_computed_tokens,
+         seq_len) = self.get_computed_offset(token_chunk_size)
 
-        max_num_block = get_num_required_blocks(seq_len, self._block_size)
-
-        # new token ids should have been appended to blocks
-        assert seq_len <= self.num_token_ids
-        assert max_num_block <= len(self._blocks)
-
-        last_block_idx = get_num_required_blocks(num_computed_tokens,
-                                                 self._block_size)
-
-        for i in range(last_block_idx, max_num_block):
+        for i in range(last_computed_block, max_num_blocks):
             self._allocator.allocate(self._blocks[i])
 
         self._seq_len = seq_len
@@ -281,6 +263,26 @@ class PrefixCachingVirtualBlockTable(VirtualBlockTable):
             _physical_block_ids.append(physical_block_id)
 
         return _physical_block_ids
+
+    def get_computed_offset(self, token_chunk_size=None):
+        num_computed_tokens = self.num_computed_tokens
+
+        if token_chunk_size is not None:
+            # new token ids should have been appended to blocks
+            assert num_computed_tokens + token_chunk_size <= self.num_token_ids
+
+            seq_len = num_computed_tokens + token_chunk_size
+        else:
+            seq_len = self.seq_len
+
+        max_num_blocks = get_num_required_blocks(seq_len, self._block_size)
+        assert max_num_blocks <= len(self._blocks)
+
+        last_computed_block = max(
+            0,
+            get_num_required_blocks(num_computed_tokens, self._block_size) - 1)
+
+        return last_computed_block, max_num_blocks, num_computed_tokens, seq_len
 
     def ready(self) -> bool:
         for block in self._blocks:
@@ -323,19 +325,10 @@ class PrefixCachingVirtualBlockTable(VirtualBlockTable):
         self._seq_len = min(self._num_token_ids, self._seq_len)
 
     def update_num_computed_tokens(self):
-        seq_len = self.seq_len
-        max_num_block = get_num_required_blocks(seq_len, self._block_size)
+        (last_computed_block, max_num_blocks, num_computed_tokens,
+         seq_len) = self.get_computed_offset()
 
-        # new token ids should have been appended to blocks
-        assert seq_len <= self.seq_len
-        assert max_num_block <= len(self._blocks)
-
-        num_computed_tokens = self.num_computed_tokens
-        last_block_idx = max(
-            0,
-            get_num_required_blocks(num_computed_tokens, self._block_size) - 1)
-
-        for i in range(last_block_idx, max_num_block):
+        for i in range(last_computed_block, max_num_blocks):
             self._blocks[i].num_computed_tokens = min(
                 seq_len - i * self._block_size, self._block_size)
             self._blocks[i].release()
@@ -343,15 +336,11 @@ class PrefixCachingVirtualBlockTable(VirtualBlockTable):
     def new_full_blocks(self):
         _new_full_blocks = []
         block_size = self._block_size
-        seq_len = self.seq_len
-        max_num_block = get_num_required_blocks(seq_len, self._block_size)
 
-        num_computed_tokens = self.num_computed_tokens
-        last_block_idx = max(
-            0,
-            get_num_required_blocks(num_computed_tokens, self._block_size) - 1)
+        (last_computed_block, max_num_blocks, num_computed_tokens,
+         seq_len) = self.get_computed_offset()
 
-        for i in range(last_block_idx, max_num_block):
+        for i in range(last_computed_block, max_num_blocks):
             new_num_computed_tokens = min(seq_len - i * self._block_size,
                                           self._block_size)
 
@@ -441,12 +430,18 @@ class PrefixCachingBlockAllocator(BlockAllocator):
     def free(self, block: Block):
         ref_count = block.decr()
 
-        if ref_count == 0:
-            if not block.is_full_block():
+        if ref_count > 0:
+            return
+
+        if not block.is_full_block():
+            if block.physical_block_id is not None:
                 self._free_physical_block_ids.append(block.physical_block_id)
-            else:
+        else:
+            if block.physical_block_id is not None:
                 assert self._full_blocks_map[block.self_prefix_hash] is block
                 self._free_full_blocks.add(block)
+            else:
+                self._full_blocks_map.pop(block.self_prefix_hash, None)
 
     def update(self, block: Block):
         return self._maybe_update_full_block(block)

@@ -101,6 +101,26 @@ class YOCOVirtualBlockTable(VirtualBlockTable):
 
         return _physical_block_ids
 
+    def get_computed_offset(self, token_chunk_size=None):
+        num_computed_tokens = self.num_computed_tokens
+
+        if token_chunk_size is not None:
+            # new token ids should have been appended to blocks
+            assert num_computed_tokens + token_chunk_size <= self.num_token_ids
+
+            seq_len = num_computed_tokens + token_chunk_size
+        else:
+            seq_len = self.seq_len
+
+        max_num_blocks = get_num_required_blocks(seq_len, self._block_size)
+        assert max_num_blocks <= len(self._blocks)
+
+        last_computed_block = max(
+            0,
+            get_num_required_blocks(num_computed_tokens, self._block_size) - 1)
+
+        return last_computed_block, max_num_blocks, num_computed_tokens, seq_len
+
     #####################################
     # lock
     # Reading kv cache does not require lock
@@ -270,19 +290,10 @@ class YOCOVirtualBlockTable(VirtualBlockTable):
             self._blocks.append(block)
 
     def can_allocate(self, token_chunk_size: int):
-        num_computed_tokens = self.num_computed_tokens
-        max_num_block = get_num_required_blocks(
-            num_computed_tokens + token_chunk_size, self._block_size)
+        (last_computed_block, max_num_blocks, num_computed_tokens,
+         seq_len) = self.get_computed_offset(token_chunk_size)
 
-        # new token ids should have been appended to blocks
-        assert num_computed_tokens + token_chunk_size <= self.num_token_ids
-        assert max_num_block <= len(self._blocks)
-
-        # last portion block
-        last_block_idx = max(
-            0,
-            get_num_required_blocks(num_computed_tokens, self._block_size) - 1)
-        last_block = self._blocks[last_block_idx]
+        last_block = self._blocks[last_computed_block]
 
         num_empty_slots = last_block.num_empty_slots
 
@@ -291,7 +302,7 @@ class YOCOVirtualBlockTable(VirtualBlockTable):
             return token_chunk_size
 
         num_need_allocated_blocks = 0
-        for i in range(last_block_idx, max_num_block):
+        for i in range(last_computed_block, max_num_blocks):
             if self._blocks[i].physical_block_id is None:
                 num_need_allocated_blocks += 1
 
@@ -305,19 +316,10 @@ class YOCOVirtualBlockTable(VirtualBlockTable):
                 num_empty_slots + num_free_gpu_blocks * self._block_size)
 
     def allocate(self, token_chunk_size: int):
-        num_computed_tokens = self.num_computed_tokens
-        seq_len = num_computed_tokens + token_chunk_size
+        (last_computed_block, max_num_blocks, num_computed_tokens,
+         seq_len) = self.get_computed_offset(token_chunk_size)
 
-        max_num_block = get_num_required_blocks(seq_len, self._block_size)
-
-        # new token ids should have been appended to blocks
-        assert seq_len <= self.num_token_ids
-        assert max_num_block <= len(self._blocks)
-
-        last_block_idx = get_num_required_blocks(num_computed_tokens,
-                                                 self._block_size)
-
-        for i in range(last_block_idx, max_num_block):
+        for i in range(last_computed_block, max_num_blocks):
             self._allocator.allocate(self._blocks[i])
 
         self._seq_len = seq_len
@@ -337,6 +339,42 @@ class YOCOVirtualBlockTable(VirtualBlockTable):
         self._allocator.free(last_block)
         self._num_token_ids = len(self._blocks) * self._block_size
         self._seq_len = min(self._num_token_ids, self._seq_len)
+
+    def new_full_blocks(self):
+        _new_full_blocks = []
+        block_size = self._block_size
+        (last_computed_block, max_num_blocks, num_computed_tokens,
+         seq_len) = self.get_computed_offset()
+
+        for i in range(last_computed_block, max_num_blocks):
+            new_num_computed_tokens = min(seq_len - i * self._block_size,
+                                          self._block_size)
+
+            if self._blocks[
+                    i].num_computed_tokens < block_size and new_num_computed_tokens == block_size:
+                _new_full_blocks.append(self._blocks[i])
+
+        return _new_full_blocks
+
+    def get_maybe_swap_in_blocks(self):
+        blocks = []
+
+        for block in self._blocks:
+            if not block.is_full_block():
+                # 1. offloading kv cache only take cares of full blocks
+                continue
+
+            if block.is_full_and_computed():
+                # 2. computed, no need to swap in
+                continue
+
+            if block.lock:
+                # 3. busy block, maybe doing swap_in, maybe doing computing
+                continue
+
+            # swap_in this block if possible
+            blocks.append(block)
+        return blocks
 
 
 class YOCOPrefixCachingBlockAllocator(BlockAllocator):
@@ -392,14 +430,14 @@ class YOCOPrefixCachingBlockAllocator(BlockAllocator):
             return
 
         if block.is_full_block():
-            if block.self_prefix_hash in self._full_blocks_map:
+            if block.physical_block_id is not None:
+                assert self._full_blocks_map[block.self_prefix_hash] is block
                 self._free_full_blocks.add(block)
             else:
-                # Found the same full_block
+                self._full_blocks_map.pop(block.self_prefix_hash, None)
                 trie = self._get_or_create_portion_blocks_trie(
                     block.prefix_hash)
                 trie.delete(block.delta_token_ids, block)
-                self._free_physical_block_ids.append(block.physical_block_id)
         else:
             trie = self._get_or_create_portion_blocks_trie(block.prefix_hash)
             hit, candidates = trie.find(block.delta_token_ids)

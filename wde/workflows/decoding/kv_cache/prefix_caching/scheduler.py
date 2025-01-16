@@ -207,6 +207,7 @@ class PrefixCachingDecodingScheduler(Scheduler):
                             break
                 else:
                     preempted.append(request)
+                    break
             else:
                 # 5. Can schedule this request.
                 request.token_chunk_size = budget_bound_token_chunk_size
