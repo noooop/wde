@@ -106,7 +106,7 @@ python -m benchmarks.chat.profiler.profiling_decoding
 
 > 图4 1.5B的模型，一个step时间大概6ms，0.3ms也是不值一提
 
-所以简单的实现异步调度几乎不会提高吞吐
+所以简单的实现异步调度几乎不会提高吞吐, 尤其是考虑到GIL的影响，甚至会导致性能下降
 
 ### 异步调度
 
@@ -114,53 +114,68 @@ python -m benchmarks.chat.profiler.profiling_decoding
 
 直接对着图说吧 
 
+##### 7B-bf16
+
+<img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/0.3.0/decoding/7B-bf16-inference_time.png?raw=true" width="400">
+
+> 图5 延迟口径是inference_time 
+
+<img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/0.3.0/decoding/7B-bf16-latency.png?raw=true" width="400">
+
+
+> 图6 延迟口径是latency
+
+<img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/0.3.0/decoding/7B-bf16-qps.png?raw=true" width="400">
+
+> 图7 与其他系统 QPS对比
+
+- max_num_batched_tokens = 32 时，async-2 对比 sync QPS 高 8%
+- max_num_batched_tokens = 768 时 对比 sync QPS 低 2%
+- max_num_batched_tokens = 1024 时出现抢占
+- max_num_batched_tokens = 1536 时 oom
+- 7B-bf16 压力测试对于 24G 的 4090 来说还是太大了
+
 ##### 7B-fp8
 
-<img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/0.2.3/decoding/7B-fp8-inference_time.png?raw=true" width="400">
+<img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/0.3.0/decoding/7B-fp8-inference_time.png?raw=true" width="400">
 
-> 图 5 延迟口径是inference_time
+> 图8 延迟口径是inference_time
 
 - simple_async 和 async-1，几乎没有性能提升，甚至有性能下降
 - max_num_batched_tokens = 32 时，async-2 对比 sync QPS高22%
 - max_num_batched_tokens = 1536 时, async-2 对比 sync QPS几乎相同，这时GPU饱和
 - 所以提高GPU利用率最好的办法是加大 batchsize
 
-<img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/0.2.3/decoding/7B-fp8-latency.png?raw=true" width="400">
+<img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/0.3.0/decoding/7B-fp8-latency.png?raw=true" width="400">
 
-> 图 6 延迟口径是latency
+> 图9 延迟口径是latency
 - async-2 延迟是 sync 的两倍
 - async-3 对比 async-2 几乎没有QPS提升，但延迟是sync的两倍
 
-##### 7B-bf16
+<img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/0.3.0/decoding/7B-fp8-qps.png?raw=true" width="400">
 
-<img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/0.2.3/decoding/7B-bf16-inference_time.png?raw=true" width="400">
+> 图10 与其他系统 QPS对比 
 
-> 图 7 延迟口径是inference_time 
-
-<img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/0.2.3/decoding/7B-bf16-latency.png?raw=true" width="400">
-
-
-> 图8 延迟口径是latency
-
-- max_num_batched_tokens = 32 时，async-2 对比 sync QPS高10%
-- max_num_batched_tokens = 768 时 对比 sync QPS高2%
-- max_num_batched_tokens = 1024 时出现抢占
-- max_num_batched_tokens = 1536 时 oom
-- 7B-fp8 qps 几乎是 7B-bf16 的两倍，fp8 是性价比最高的推理精度
+7B-fp8 QPS 几乎是 bf16 的两倍，所有测评显示fp8推理对性能没有损失，fp8是最佳的推理选择
 
 ##### 3B-bf16
 
-<img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/0.2.3/decoding/3B-bf16-inference_time.png?raw=true" width="400">
+<img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/0.3.0/decoding/3B-bf16-inference_time.png?raw=true" width="400">
 
-> 图 9 延迟口径是inference_time 
+> 图11 延迟口径是inference_time 
 
-<img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/0.2.3/decoding/3B-bf16-latency.png?raw=true" width="400">
+<img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/0.3.0/decoding/3B-bf16-latency.png?raw=true" width="400">
 
+> 图12 延迟口径是latency
 
-> 图10 延迟口径是latency
-> 
-- max_num_batched_tokens = 32 时，async-2 对比 sync QPS高23%
-- max_num_batched_tokens = 768 时 对比 sync QPS高3%
+<img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/0.3.0/decoding/3B-bf16-qps.png?raw=true" width="400">
+
+> 图13 与其他系统 QPS对比 
+
+- max_num_batched_tokens = 32 时，async-2 对比 sync QPS 高 23%
+- max_num_batched_tokens = 768 时，async-2 对比 sync QPS 高 5%
+- max_num_batched_tokens = 1024 时，async-2 与 sync 相同
+- max_num_batched_tokens = 1536 时，async-2 对比 sync QPS 低 2%
 
 
 ### 总结
