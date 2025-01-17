@@ -60,35 +60,37 @@ class DecodingSchedulableRequest(SchedulableRequest):
     output_token_ids: List[int] = field(default_factory=list)
     output_text: str = ""
 
-    cached_all_token_ids: List[int] = field(default_factory=list)
-
     prompt_logprobs: Optional["PromptLogprobs"] = None
     output_logprobs: "SampleLogprobs" = field(default_factory=list)
     cumulative_logprob: float = 0.0
 
     # status
-    status: RequestStatus = RequestStatus.WAITING
-    stop_reason: Union[int, str, None] = None
     busy: bool = False
     vblock: Optional["VirtualBlockTable"] = None
+    cached_all_token_ids: List[int] = field(default_factory=list)
+
+    token_chunk_size: int = 0
     num_actual_computed_tokens = 0
     num_preempted = 0
 
-    # intermediate variable
+    status: RequestStatus = RequestStatus.WAITING
+    stop_reason: Union[int, str, None] = None
+
+    # cached intermediate variable, c for cached
     # for model input
-    input_tokens: List[int] = field(default_factory=list)
-    input_positions: List[int] = field(default_factory=list)
+    c_input_tokens: List[int] = field(default_factory=list)
+    c_input_positions: List[int] = field(default_factory=list)
 
     # for attention metadata
-    is_prefill_cached: bool = True
-    token_chunk_size: int = 0
-    seq_len: int = 0
-    query_len: int = 0
-    context_len: int = 0
-    physical_block_ids: List[int] = field(default_factory=list)
+    c_is_prefill: bool = True
+    c_seq_len: int = 0
+    c_query_len: int = 0
+    c_context_len: int = 0
+    c_physical_block_ids: List[int] = field(default_factory=list)
 
     # for sampling metadata
-    do_sample: bool = False
+    c_is_prompt: bool = True
+    c_do_sample: bool = False
     generator: Optional[torch.Generator] = None
     prompt_logprobs_indices: Optional[List[int]] = None
     sample_logprobs_indices: Optional[List[int]] = None
@@ -108,11 +110,37 @@ class DecodingSchedulableRequest(SchedulableRequest):
             self.metrics.first_scheduled_ts = scheduled_ts
 
     @property
+    def num_new_tokens(self):
+        num_uncomputed_tokens = self.num_uncomputed_tokens
+
+        if num_uncomputed_tokens == 0:
+            return 1
+        else:
+            return num_uncomputed_tokens
+
+    @property
     def finished(self):
         return RequestStatus.is_finished(self.status)
 
-    def get_len(self):
+    ################################
+    # start prepare intermediate results
+
+    def get_token_len(self):
         return len(self.prompt_token_ids) + len(self.output_token_ids)
+
+    def get_physical_block_ids(self):
+        if self.vblock is None:
+            # profile_run
+            return []
+
+        return self.vblock.physical_block_ids
+
+    def get_is_prefill(self):
+        return self.num_computed_tokens == 0 or self.num_computed_tokens < self.get_token_len(
+        ) - 1
+
+    def get_is_prompt(self):
+        return self.num_computed_tokens < self.num_prompt_token_ids
 
     @property
     def num_computed_tokens(self):
@@ -123,29 +151,14 @@ class DecodingSchedulableRequest(SchedulableRequest):
 
     @property
     def num_uncomputed_tokens(self) -> int:
-        return self.get_len() - self.num_computed_tokens
-
-    @property
-    def num_new_tokens(self):
-        num_uncomputed_tokens = self.num_uncomputed_tokens
-
-        if num_uncomputed_tokens == 0:
-            return 1
-        else:
-            return num_uncomputed_tokens
+        return self.get_token_len() - self.num_computed_tokens
 
     @property
     def num_prompt_token_ids(self):
         return len(self.prompt_token_ids)
 
-    @property
-    def is_prefill(self):
-        return self.num_computed_tokens == 0 or self.num_computed_tokens < self.get_len(
-        ) - 1
-
-    @property
-    def is_prompt(self):
-        return self.num_computed_tokens < self.num_prompt_token_ids
+    # end prepare intermediate results
+    ################################
 
     def get_output_text_to_return(self, buffer_length: int):
         truncate = buffer_length and not self.finished

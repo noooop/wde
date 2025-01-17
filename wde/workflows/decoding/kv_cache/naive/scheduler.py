@@ -230,7 +230,8 @@ class NaiveDecodingScheduler(Scheduler):
             num_new_tokens = request.num_new_tokens
             assert num_new_tokens > 0
 
-            if request.is_prefill and self.kv_cache_manager.high_watermark():
+            if request.get_is_prefill(
+            ) and self.kv_cache_manager.high_watermark():
                 break
 
             # 1. chunked prefill
@@ -266,7 +267,7 @@ class NaiveDecodingScheduler(Scheduler):
 
                 self.kv_cache_manager.allocate(request)
 
-                if request.is_prefill:
+                if request.get_is_prefill():
                     prefill_requests.append(request)
                 else:
                     decode_requests.append(request)

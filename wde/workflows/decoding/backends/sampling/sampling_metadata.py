@@ -99,8 +99,8 @@ class SamplingMetadata:
         num_prompts = 0
 
         for i, request in enumerate(scheduled_requests):
-            do_sample = request.do_sample
-            is_prompt = request.is_prompt
+            do_sample = request.c_do_sample
+            is_prompt = request.c_is_prompt
             sampling_params = request.sampling_params
 
             if request.generator is None and request.sampling_params.seed is not None:
@@ -112,13 +112,13 @@ class SamplingMetadata:
                 num_prefill_sample = 1
                 assert num_prefill_sample == 1
 
-                prompt_logprob_len = (request.query_len - num_prefill_sample
-                                      if do_sample else request.query_len)
+                prompt_logprob_len = (request.c_query_len - num_prefill_sample
+                                      if do_sample else request.c_query_len)
                 sample_len = num_prefill_sample if do_sample else 0
             else:
                 prompt_logprob_len = 0
 
-                sample_len = request.query_len if do_sample else 0
+                sample_len = request.c_query_len if do_sample else 0
 
             # Update indices to select from the model output.
             """
@@ -218,7 +218,7 @@ class SamplingMetadata:
                                      or abs(r - 1.0) >= _SAMPLING_EPS):
                 do_penalties = True
 
-            is_prompt = request.is_prompt
+            is_prompt = request.c_is_prompt
 
             if is_prompt and sampling_params.prompt_logprobs is not None:
                 # For tokens in the prompt that we only need to get
@@ -234,7 +234,7 @@ class SamplingMetadata:
                 frequency_penalties += [0] * prefill_len
                 repetition_penalties += [1] * prefill_len
 
-            if request.do_sample:
+            if request.c_do_sample:
                 sample_lens = len(request.sample_logprobs_indices)
                 temperatures += [temperature] * sample_lens
                 top_ps += [top_p] * sample_lens
@@ -248,7 +248,7 @@ class SamplingMetadata:
             for request in scheduled_requests:
                 sampling_params = request.sampling_params
 
-                if (request.is_prompt
+                if (request.c_is_prompt
                         and sampling_params.prompt_logprobs is not None):
                     prefill_len = len(request.prompt_logprobs_indices)
                     prompt_tokens.extend(

@@ -214,17 +214,17 @@ class DecodeOnlyFlashAttentionMetadataBuilder(
         self.block_size = block_size
 
     def __call__(self, scheduled_requests: List[DecodingSchedulableRequest]):
-        seq_lens = [request.seq_len for request in scheduled_requests]
+        seq_lens = [request.c_seq_len for request in scheduled_requests]
 
         block_tables = make_tensor_with_pad(
-            [request.physical_block_ids for request in scheduled_requests],
+            [request.c_physical_block_ids for request in scheduled_requests],
             pad=0,
             dtype=torch.int,
             device="cpu",
             pin_memory=pin_memory)
 
         context_lens_tensor = torch.tensor(
-            [request.context_len for request in scheduled_requests],
+            [request.c_context_len for request in scheduled_requests],
             dtype=torch.int,
             device="cpu",
             pin_memory=pin_memory)
@@ -235,7 +235,7 @@ class DecodeOnlyFlashAttentionMetadataBuilder(
                                        pin_memory=pin_memory)
 
         query_lens_tensor = torch.tensor(
-            [request.query_len for request in scheduled_requests],
+            [request.c_query_len for request in scheduled_requests],
             dtype=torch.long,
             device="cpu",
             pin_memory=pin_memory)
@@ -263,9 +263,10 @@ class DecodeOnlyFlashAttentionMetadataBuilder(
             is_profile_run = block_tables.nelement() == 0
             start_idx = 0
 
-            compute_slot_mapping(is_profile_run, slot_mapping, request.seq_len,
-                                 request.context_len, start_idx,
-                                 self.block_size, request.physical_block_ids)
+            compute_slot_mapping(is_profile_run, slot_mapping,
+                                 request.c_seq_len, request.c_context_len,
+                                 start_idx, self.block_size,
+                                 request.c_physical_block_ids)
 
         slot_mapping_tensor = torch.tensor(slot_mapping,
                                            dtype=torch.long,
@@ -273,28 +274,28 @@ class DecodeOnlyFlashAttentionMetadataBuilder(
                                            pin_memory=pin_memory)
 
         max_query_len = max(
-            [request.query_len for request in scheduled_requests])
+            [request.c_query_len for request in scheduled_requests])
 
         max_prefill_seq_len = max([
-            request.seq_len
-            for request in scheduled_requests if request.is_prefill_cached
+            request.c_seq_len
+            for request in scheduled_requests if request.c_is_prefill
         ],
                                   default=0)
 
         num_prefills = sum(1 for request in scheduled_requests
-                           if request.is_prefill_cached)
+                           if request.c_is_prefill)
         num_prefill_tokens = sum([
             request.token_chunk_size for request in scheduled_requests
-            if request.is_prefill_cached
+            if request.c_is_prefill
         ])
 
         max_decode_seq_len = max([
-            request.seq_len
-            for request in scheduled_requests if not request.is_prefill_cached
+            request.c_seq_len
+            for request in scheduled_requests if not request.c_is_prefill
         ],
                                  default=0)
         num_decode_tokens = sum(1 for request in scheduled_requests
-                                if not request.is_prefill_cached)
+                                if not request.c_is_prefill)
 
         return DecodeOnlyFlashAttentionMetadata(
             num_prefills=num_prefills,

@@ -44,13 +44,13 @@ class DecodingModelInputBuilder(ModelInputBuilder):
     def _prepare_model_tensor_input(
             self, scheduled_requests: List[DecodingSchedulableRequest]):
         input_tokens_tensor = torch.tensor(flatten_2d_lists(
-            [request.input_tokens for request in scheduled_requests]),
+            [request.c_input_tokens for request in scheduled_requests]),
                                            dtype=torch.long,
                                            device="cpu",
                                            pin_memory=pin_memory)
 
         input_positions_tensor = torch.tensor(flatten_2d_lists(
-            [request.input_positions for request in scheduled_requests]),
+            [request.c_input_positions for request in scheduled_requests]),
                                               dtype=torch.long,
                                               device="cpu",
                                               pin_memory=pin_memory)
@@ -59,28 +59,28 @@ class DecodingModelInputBuilder(ModelInputBuilder):
     def _prepare_intermediate_results(self,
                                       request: DecodingSchedulableRequest):
 
-        token_len = request.get_len()
+        token_len = request.get_token_len()
         token_chunk_size = request.token_chunk_size
-        request.is_prefill_cached = request.is_prefill
-        request.context_len = request.num_computed_tokens
-        request.seq_len = min(token_len,
-                              request.context_len + token_chunk_size)
-        request.query_len = token_chunk_size
 
-        if request.is_prefill_cached:
-            request.input_tokens = request.get_token_ids(
-            )[request.context_len:request.seq_len]
-        else:
-            request.input_tokens = [request.get_last_token_id()]
+        request.c_is_prefill = request.get_is_prefill()
+        request.c_is_prompt = request.get_is_prompt()
 
-        request.input_positions = list(
-            range(request.context_len, request.seq_len))
-        if request.vblock is None:
-            # profile_run
-            request.physical_block_ids = []
+        request.c_context_len = request.num_computed_tokens
+        request.c_seq_len = min(token_len,
+                                request.c_context_len + token_chunk_size)
+        request.c_query_len = token_chunk_size
+
+        if request.c_is_prefill:
+            request.c_input_tokens = request.get_token_ids(
+            )[request.c_context_len:request.c_seq_len]
         else:
-            request.physical_block_ids = request.vblock.physical_block_ids
-        request.do_sample = token_len == request.context_len + token_chunk_size
+            request.c_input_tokens = [request.get_last_token_id()]
+
+        request.c_input_positions = list(
+            range(request.c_context_len, request.c_seq_len))
+
+        request.c_physical_block_ids = request.get_physical_block_ids()
+        request.c_do_sample = token_len == request.c_context_len + token_chunk_size
 
     @torch.inference_mode
     def prepare_model_input(
@@ -90,18 +90,16 @@ class DecodingModelInputBuilder(ModelInputBuilder):
         prefills = []
         decodes = []
         for request in scheduled_requests:
-            if request.is_prefill:
+            self._prepare_intermediate_results(request)
+
+            if request.c_is_prefill:
                 prefills.append(request)
             else:
                 decodes.append(request)
 
         # attn_metadata
-        # | < ----- num_prefill_tokens - ---> | < ------- num_decode_tokens - --------> |
-        # | < -prefill_0-> | ... | < -prefill_N - 1-> | < --decode_0 --> | ... | < --decode_M - 1 --> |
+        # prefills first
         scheduled_requests = prefills + decodes
-
-        for request in scheduled_requests:
-            self._prepare_intermediate_results(request)
 
         input_tokens_tensor, input_positions_tensor = self._prepare_model_tensor_input(
             scheduled_requests)

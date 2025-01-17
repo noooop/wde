@@ -395,8 +395,7 @@ class YOCOPrefixCachingBlockAllocator(BlockAllocator):
         self._full_blocks_map: Dict[PrefixHash, Block] = {}
         self._portion_blocks_tries: Dict[PrefixHash, Trie] = {}
 
-        self._free_full_blocks = LRUEvictor()
-        self._free_portion_blocks = LRUEvictor()
+        self._free_blocks = LRUEvictor()
         self._free_physical_block_ids: Deque[BlockId] = deque(block_ids)
 
         self._cow_thread = CopyOnWrite(kv_cache)
@@ -407,8 +406,7 @@ class YOCOPrefixCachingBlockAllocator(BlockAllocator):
 
     @property
     def num_free_blocks(self) -> int:
-        return len(self._free_physical_block_ids) + len(
-            self._free_full_blocks) + len(self._free_portion_blocks)
+        return len(self._free_physical_block_ids) + len(self._free_blocks)
 
     def allocate(self, block: Block):
         if block.physical_block_id is not None:
@@ -432,7 +430,7 @@ class YOCOPrefixCachingBlockAllocator(BlockAllocator):
         if block.is_full_block():
             if block.physical_block_id is not None:
                 assert self._full_blocks_map[block.self_prefix_hash] is block
-                self._free_full_blocks.add(block)
+                self._free_blocks.add(block)
             else:
                 self._full_blocks_map.pop(block.self_prefix_hash, None)
                 trie = self._get_or_create_portion_blocks_trie(
@@ -442,11 +440,15 @@ class YOCOPrefixCachingBlockAllocator(BlockAllocator):
             trie = self._get_or_create_portion_blocks_trie(block.prefix_hash)
             hit, candidates = trie.find(block.delta_token_ids)
             if len(candidates) == 1:
-                self._free_full_blocks.add(block)
+                if block.physical_block_id is not None:
+                    self._free_blocks.add(block)
             else:
                 # There's no need to keep so many candidates
                 trie.delete(block.delta_token_ids, block)
-                self._free_physical_block_ids.append(block.physical_block_id)
+
+                if block.physical_block_id is not None:
+                    self._free_physical_block_ids.append(
+                        block.physical_block_id)
 
     def update(self, block: Block, trie=None):
         block = self._maybe_update_full_block(block, trie=trie)
@@ -566,17 +568,17 @@ class YOCOPrefixCachingBlockAllocator(BlockAllocator):
 
     def _free(self, block: Block, trie=None):
         assert block.ref_count == 1
-        assert block not in self._free_full_blocks
+        assert block not in self._free_blocks
 
         if trie is None:
             trie = self._get_or_create_portion_blocks_trie(block.prefix_hash)
 
         trie.delete(block.delta_token_ids, block)
 
-        self._free_physical_block_ids.append(block.physical_block_id)
+        if block.physical_block_id is not None:
+            self._free_physical_block_ids.append(block.physical_block_id)
 
     def _free_block_and_get_physical_block_id(self, block: Block):
-        assert block.physical_block_id is not None
         assert block.ref_count == 0
 
         if block.is_full_block():
@@ -595,20 +597,11 @@ class YOCOPrefixCachingBlockAllocator(BlockAllocator):
         except IndexError:
             pass
 
-        try:
-            block = self._free_portion_blocks.evict()
-            return self._free_block_and_get_physical_block_id(block)
-        except NoFreeBlocksError:
-            pass
-
-        block = self._free_full_blocks.evict()
+        block = self._free_blocks.evict()
         return self._free_block_and_get_physical_block_id(block)
 
     def _remove_from_free_blocks(self, block):
         if block is None:
             return
 
-        self._free_portion_blocks.remove(block)
-
-        if block.is_full_block():
-            self._free_full_blocks.remove(block)
+        self._free_blocks.remove(block)

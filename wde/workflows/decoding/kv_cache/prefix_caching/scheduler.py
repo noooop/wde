@@ -178,7 +178,8 @@ class PrefixCachingDecodingScheduler(Scheduler):
             num_new_tokens = request.num_new_tokens
             assert num_new_tokens > 0
 
-            if request.is_prefill and self.kv_cache_manager.high_watermark():
+            if request.get_is_prefill(
+            ) and self.kv_cache_manager.high_watermark():
                 break
 
             # 3. chunked prefill
@@ -216,7 +217,7 @@ class PrefixCachingDecodingScheduler(Scheduler):
 
                 request.vblock.acquire()
 
-                if request.is_prefill:
+                if request.get_is_prefill():
                     prefill_requests.append(request)
                 else:
                     decode_requests.append(request)

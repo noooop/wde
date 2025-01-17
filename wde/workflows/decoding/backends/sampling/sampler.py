@@ -204,14 +204,14 @@ def get_sampler_output(execute_output: SamplerOutput):
 
 
 def _greedy_sample(
-    requests2sample,
+    requests2sample: List[DecodingSchedulableRequest],
     samples: torch.Tensor,
 ):
     samples_lst = samples.tolist()
     sample_idx = 0
     results = []
     for request in requests2sample:
-        if not request.do_sample:
+        if not request.c_do_sample:
             continue
 
         next_token_id = samples_lst[sample_idx]
@@ -221,7 +221,7 @@ def _greedy_sample(
 
 
 def _random_sample(
-    requests2sample,
+    requests2sample: List[DecodingSchedulableRequest],
     random_samples: torch.Tensor,
 ):
     samples_lst = random_samples[:, 0].tolist()
@@ -229,7 +229,7 @@ def _random_sample(
     sample_idx = 0
     results = []
     for request in requests2sample:
-        if not request.do_sample:
+        if not request.c_do_sample:
             continue
 
         next_token_id = samples_lst[sample_idx]
@@ -238,9 +238,9 @@ def _random_sample(
     return results
 
 
-def get_sample(request, output_token, logprobs):
+def get_sample(request: DecodingSchedulableRequest, output_token, logprobs):
     sampling_params = request.sampling_params
-    if (request.is_prefill and sampling_params.prompt_logprobs is not None):
+    if request.c_is_prompt and sampling_params.prompt_logprobs is not None:
         assert False, "prompt_logprobs not supported "
 
     if sampling_params.logprobs is None:

@@ -537,7 +537,7 @@ class DisablePrefixCachingBlockAllocator(BlockAllocator):
     def free(self, block: Block):
         ref_count = block.decr()
 
-        if ref_count == 0:
+        if ref_count == 0 and block.physical_block_id is not None:
             self._free_physical_block_ids.append(block.physical_block_id)
 
     def get_full_block(self, prefix_hash, self_prefix_hash, delta_token_ids):

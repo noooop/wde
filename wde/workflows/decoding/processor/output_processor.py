@@ -49,7 +49,7 @@ class DecodingModelOutputProcessor(OutputProcessor):
         for request in scheduled_requests:
             request.update_num_computed_tokens()
 
-            if not request.do_sample:
+            if not request.c_do_sample:
                 continue
 
             output_token = output_token_dict[request.request_id]

@@ -61,7 +61,7 @@ class StopChecker:
             return
 
         # Check if the sequence has reached max_model_len.
-        if request.get_len() > self.max_model_len:
+        if request.get_token_len() > self.max_model_len:
             request.status = RequestStatus.FINISHED_LENGTH_CAPPED
             return
 
