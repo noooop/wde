@@ -9,6 +9,7 @@
 - [对 prefill only models 推理性能调优](./docs/performance_tuning_for_prefill_only_models.md)
 - [对 Decoding (chat) models 推理性能调优](./docs/performance_tuning_for_decoding_models.md)
 - [实现 prefix caching](./docs/gpu_prefix_caching.md)
+- [实现 offloading prefix caching](./docs/offloading_KV_cache.md)
 
 # 应用
 - [快速入门](./docs/quickstart.md)

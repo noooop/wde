@@ -136,7 +136,7 @@ if __name__ == '__main__':
     args = edict()
 
     args.input_len = 1024 * 2
-    args.output_len = 2
+    args.output_len = 16
     args.num_prompts = 4
 
     args.seed = 0
