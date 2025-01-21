@@ -148,6 +148,8 @@ def benchmark_blockwise_to_blockwise_transfer_blocks(N, max_num_batched_tokens,
             print("correctness_test ok!")
 
     def test_naive():
+        to_kv_cache.zero_()
+
         start = time.perf_counter()
 
         for from_ids, to_ids in tasks:
@@ -161,6 +163,7 @@ def benchmark_blockwise_to_blockwise_transfer_blocks(N, max_num_batched_tokens,
         print("b2b naive elapsed time: ", elapsed_time)
 
     def test_fancy_index():
+        to_kv_cache.zero_()
 
         start = time.perf_counter()
 
@@ -174,6 +177,7 @@ def benchmark_blockwise_to_blockwise_transfer_blocks(N, max_num_batched_tokens,
         print("b2b fancy index elapsed time: ", elapsed_time)
 
     def test_index_copy_():
+        to_kv_cache.zero_()
 
         start = time.perf_counter()
 
@@ -189,10 +193,31 @@ def benchmark_blockwise_to_blockwise_transfer_blocks(N, max_num_batched_tokens,
         correctness_test()
         print("b2b index_copy_ elapsed time: ", elapsed_time)
 
+    def test_cython_memcpy():
+        import numpy as np
+        import pyximport
+
+        pyximport.install(setup_args={"include_dirs": np.get_include()})
+
+        from benchmarks.remote_kv_cache.baseline.memcpy import cython_memcpy
+
+        to_kv_cache.zero_()
+
+        start = time.perf_counter()
+
+        cython_memcpy(from_kv_cache, to_kv_cache, tasks)
+
+        end = time.perf_counter()
+        elapsed_time = end - start
+
+        correctness_test()
+        print("b2b cython memcpy elapsed time: ", elapsed_time)
+
     test_correctness_test()
     test_naive()
     test_fancy_index()
     test_index_copy_()
+    test_cython_memcpy()
 
 
 if __name__ == '__main__':
@@ -228,3 +253,11 @@ if __name__ == '__main__':
             head_size,
             cache_dtype,
             pin_memory=False)
+"""
+Qwen/Qwen2.5-7B-Instruct
+l2l naive elapsed time:  0.09583292100001017
+b2b naive elapsed time:  0.02980895799987593
+b2b fancy index elapsed time:  0.06963724499996715
+b2b index_copy_ elapsed time:  0.06992117400000097
+b2b cython memcpy elapsed time:  0.03565353500016499
+"""
