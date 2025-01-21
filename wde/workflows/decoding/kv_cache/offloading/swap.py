@@ -12,19 +12,6 @@ if TYPE_CHECKING:
         PrefixCachingBlockAllocator
 
 
-def swap_layer(
-    src_kv_cache: torch.Tensor,
-    dst_kv_cache: torch.Tensor,
-    src_to_dst: torch.Tensor,
-) -> None:
-    src_key_cache = src_kv_cache[0]
-    dst_key_cache = dst_kv_cache[0]
-    ops.swap_blocks(src_key_cache, dst_key_cache, src_to_dst)
-    src_value_cache = src_kv_cache[1]
-    dst_value_cache = dst_kv_cache[1]
-    ops.swap_blocks(src_value_cache, dst_value_cache, src_to_dst)
-
-
 class SwapTask:
 
     def __init__(self, swap_manager, need_swap=None):
@@ -36,19 +23,9 @@ class SwapTask:
         self.need_swap.extend(items)
 
     def swap_blocks(self):
-        num_attention_layers = self.swap_manager.num_attention_layers
-        from_cache = self.swap_manager.from_cache
-        to_cache = self.swap_manager.to_cache
-
-        block_mapping = [(b1.physical_block_id, b2.physical_block_id)
-                         for b1, b2 in self.need_swap]
-
-        blocks_to_swap = torch.tensor(block_mapping,
-                                      device="cpu",
-                                      dtype=torch.int64).view(-1, 2)
-
-        for i in range(num_attention_layers):
-            swap_layer(from_cache[i], to_cache[i], blocks_to_swap)
+        swap_blocks(from_cache=self.swap_manager.from_cache,
+                    to_cache=self.swap_manager.to_cache,
+                    need_swap=self.need_swap)
 
     def swap(self):
         stream = self.swap_manager.offloading_manager.stream_pool.get()
@@ -79,11 +56,9 @@ class SwapOutManager:
                  offloading_manager: "OffloadingManager"):
         assert cpu_cache is not None
         assert gpu_cache is not None
-        assert len(cpu_cache) == len(gpu_cache)
 
         self.from_cache = gpu_cache
         self.to_cache = cpu_cache
-        self.num_attention_layers = len(gpu_cache)
 
         self.gpu_block_allocator = gpu_block_allocator
         self.cpu_block_allocator = cpu_block_allocator
@@ -144,7 +119,6 @@ class SwapInManager:
                  offloading_manager: "OffloadingManager"):
         assert cpu_cache is not None
         assert gpu_cache is not None
-        assert len(cpu_cache) == len(gpu_cache)
 
         self.from_cache = cpu_cache
         self.to_cache = gpu_cache
@@ -206,3 +180,45 @@ class SwapInManager:
             gpu_block.release()
             self.cpu_block_allocator.free(cpu_block)
             self.gpu_block_allocator.free(gpu_block)
+
+
+def swap_blocks(from_cache, to_cache, need_swap):
+    n = 2
+
+    if isinstance(from_cache, list):
+        # from gpu to cpu
+        num_attention_layers = len(from_cache)
+        index = 1
+        blocks_to_swap = torch.tensor(need_swap,
+                                      device="cpu",
+                                      dtype=torch.int64).view(-1, 2)
+
+        blocks_to_swap[:, index] *= num_attention_layers * n
+
+        for i in range(num_attention_layers):
+            ops.swap_blocks(from_cache[i][0], to_cache, blocks_to_swap)
+
+            blocks_to_swap[:, index] += 1
+
+            ops.swap_blocks(from_cache[i][1], to_cache, blocks_to_swap)
+
+            blocks_to_swap[:, index] += 1
+
+    else:
+        # from cpu to gpu
+        num_attention_layers = len(to_cache)
+        index = 0
+        blocks_to_swap = torch.tensor(need_swap,
+                                      device="cpu",
+                                      dtype=torch.int64).view(-1, 2)
+
+        blocks_to_swap[:, index] *= num_attention_layers * n
+
+        for i in range(num_attention_layers):
+            ops.swap_blocks(from_cache, to_cache[i][0], blocks_to_swap)
+
+            blocks_to_swap[:, index] += 1
+
+            ops.swap_blocks(from_cache, to_cache[i][1], blocks_to_swap)
+
+            blocks_to_swap[:, index] += 1

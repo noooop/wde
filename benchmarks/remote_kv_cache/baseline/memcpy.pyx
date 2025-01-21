@@ -1,7 +1,7 @@
 import cython
 import numpy as np
-cimport numpy as cnp
 
+cimport numpy as cnp
 from libc.stdint cimport uintptr_t
 from libc.string cimport memcpy
 

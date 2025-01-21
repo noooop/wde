@@ -88,26 +88,32 @@ class PhysicalGPUKVCacheManager:
         num_attention_layers = model_config.get_num_attention_layers()
         num_kv_heads = model_config.get_num_kv_heads()
 
-        kv_cache_shape = self.attn_backend.get_kv_cache_shape(
-            num_blocks, block_size, num_kv_heads, head_size)
-
         if cache_config.cache_dtype == "auto":
             dtype = model_config.dtype
         else:
             dtype = STR_DTYPE_TO_TORCH_DTYPE[cache_config.cache_dtype]
 
-        logger.info(
-            f"Device: {device}, KV cache shape:{(num_attention_layers, num_blocks, block_size, num_kv_heads, head_size, dtype)}."
-        )
+        pin_memory = is_pin_memory_available()
 
-        pin_memory = is_pin_memory_available() if device == "cpu" else False
-        kv_cache: List[torch.Tensor] = []
-        for _ in range(num_attention_layers):
-            kv_cache.append(
-                torch.zeros(kv_cache_shape,
-                            dtype=dtype,
-                            pin_memory=pin_memory,
-                            device=device))
+        if device == "cpu":
+            kv_cache = allocate_blockwise_kv_cache(num_blocks,
+                                                   num_attention_layers,
+                                                   block_size, num_kv_heads,
+                                                   head_size, dtype,
+                                                   pin_memory)
+            logger.info(f"Device: {device}, KV cache shape:{kv_cache.shape}.")
+        else:
+            kv_cache = allocate_layerwise_kv_cache(num_blocks,
+                                                   num_attention_layers,
+                                                   block_size,
+                                                   num_kv_heads,
+                                                   head_size,
+                                                   dtype,
+                                                   device,
+                                                   pin_memory=False)
+            logger.info(
+                f"Device: {device}, KV cache shape:{len(kv_cache)} X {kv_cache[0].shape}."
+            )
         return kv_cache
 
     def _get_cache_block_size_bytes(self) -> int:
@@ -241,3 +247,34 @@ def raise_if_cache_size_invalid(num_gpu_blocks, block_size,
             f"stored in KV cache ({max_seq_len}). Try increasing "
             "`gpu_memory_utilization` or decreasing `max_model_len` when "
             "initializing the engine.")
+
+
+def allocate_layerwise_kv_cache(num_blocks, num_attention_layers, block_size,
+                                num_kv_heads, head_size, cache_dtype, device,
+                                pin_memory):
+
+    kv_cache_shape = (2, num_blocks, block_size, num_kv_heads, head_size)
+
+    kv_cache: List[torch.Tensor] = []
+    for _ in range(num_attention_layers):
+        kv_cache.append(
+            torch.randn(kv_cache_shape,
+                        dtype=cache_dtype,
+                        pin_memory=pin_memory,
+                        device=device))
+    return kv_cache
+
+
+def allocate_blockwise_kv_cache(num_blocks, num_attention_layers, block_size,
+                                num_kv_heads, head_size, cache_dtype,
+                                pin_memory):
+
+    kv_cache_shape = (num_blocks, num_attention_layers, 2, block_size,
+                      num_kv_heads, head_size)
+
+    kv_cache = torch.empty(kv_cache_shape,
+                           dtype=cache_dtype,
+                           pin_memory=pin_memory,
+                           device="cpu")
+
+    return kv_cache

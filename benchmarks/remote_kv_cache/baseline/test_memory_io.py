@@ -1,39 +1,10 @@
 import random
 import time
-from typing import List
 
 import torch
 
-
-def allocate_layerwise_kv_cache(num_blocks, num_attention_layers, block_size,
-                                num_kv_heads, head_size, cache_dtype, device,
-                                pin_memory):
-
-    kv_cache_shape = (2, num_blocks, block_size, num_kv_heads, head_size)
-
-    kv_cache: List[torch.Tensor] = []
-    for _ in range(num_attention_layers):
-        kv_cache.append(
-            torch.randn(kv_cache_shape,
-                        dtype=cache_dtype,
-                        pin_memory=pin_memory,
-                        device=device))
-    return kv_cache
-
-
-def allocate_blockwise_kv_cache(num_blocks, num_attention_layers, block_size,
-                                num_kv_heads, head_size, cache_dtype,
-                                pin_memory):
-
-    kv_cache_shape = (num_blocks, num_attention_layers, 2, block_size,
-                      num_kv_heads, head_size)
-
-    kv_cache = torch.randn(kv_cache_shape,
-                           dtype=cache_dtype,
-                           pin_memory=pin_memory,
-                           device="cpu")
-
-    return kv_cache
+from wde.workflows.decoding.kv_cache.physical_manager import (
+    allocate_blockwise_kv_cache, allocate_layerwise_kv_cache)
 
 
 @torch.no_grad()
@@ -126,6 +97,8 @@ def benchmark_blockwise_to_blockwise_transfer_blocks(N, max_num_batched_tokens,
         head_size=head_size,
         cache_dtype=cache_dtype,
         pin_memory=pin_memory)
+
+    from_kv_cache.random_()
 
     block_ids = list(range(num_blocks))
 
@@ -255,9 +228,9 @@ if __name__ == '__main__':
             pin_memory=False)
 """
 Qwen/Qwen2.5-7B-Instruct
-l2l naive elapsed time:  0.09583292100001017
-b2b naive elapsed time:  0.02980895799987593
-b2b fancy index elapsed time:  0.06963724499996715
-b2b index_copy_ elapsed time:  0.06992117400000097
-b2b cython memcpy elapsed time:  0.03565353500016499
+l2l naive elapsed time:  0.08631483400040452
+b2b naive elapsed time:  0.030394221999813453
+b2b fancy index elapsed time:  0.06969807499990566
+b2b index_copy_ elapsed time:  0.06978143000014825
+b2b cython memcpy elapsed time:  0.03572655500011024
 """
