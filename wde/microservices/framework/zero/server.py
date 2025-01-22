@@ -139,7 +139,7 @@ class ZeroServer(object):
                     return
 
                 if socks.get(self.socket) == zmq.POLLIN:
-                    msg = self.socket.recv_multipart()
+                    msg = self.socket.recv_multipart(copy=False)
                     yield msg
 
         p = Pool(self.pool_size)
@@ -185,6 +185,8 @@ class Z_MethodZeroServer(ZeroServer):
         except Exception:
             traceback.print_exc()
             return
+
+        uuid, req_id, data = uuid.bytes, req_id.bytes, data.bytes
 
         try:
             msg = ZeroMSQ.unload(data, payload)

@@ -132,6 +132,7 @@ class ZeroMSQ:
                     d[m.name[i]] = {}
                 d = d[m.name[i]]
 
-            d[m.name[-1]] = np.frombuffer(p, dtype=m.dtype).reshape(m.shape)
+            d[m.name[-1]] = np.frombuffer(p.buffer,
+                                          dtype=m.dtype).reshape(m.shape)
 
         return msg

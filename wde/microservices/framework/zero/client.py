@@ -24,10 +24,10 @@ class Socket(object):
         self.socket.send_multipart(data, copy=False)
 
     def recv(self):
-        return self.socket.recv()
+        return self.socket.recv(copy=False)
 
     def recv_multipart(self):
-        return self.socket.recv_multipart()
+        return self.socket.recv_multipart(copy=False)
 
     def close(self):
         self.socket.setsockopt(zmq.LINGER, 0)
@@ -105,6 +105,10 @@ class Client(object):
                 continue
 
             rep_id, msg, *payload = out
+            rep_id = rep_id.bytes
+            msg = msg.bytes
+
+            out = [rep_id, msg] + payload
 
             if len(rep_id) == 22:
                 socket_pool.put(socket)
@@ -121,7 +125,13 @@ class Client(object):
                         try:
                             with gevent.Timeout(_timeout):
                                 out = socket.recv_multipart()
-                                rep_id = out[0]
+                                rep_id, msg, *payload = out
+
+                                rep_id = rep_id.bytes
+                                msg = msg.bytes
+
+                                out = [rep_id, msg] + payload
+
                                 rcv_more = rep_id[22:23]
                                 yield out
                         except gevent.timeout.Timeout:
