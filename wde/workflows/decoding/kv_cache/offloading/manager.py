@@ -62,6 +62,9 @@ class CPUBlockAllocator:
     def __contains__(self, self_prefix_hash):
         return self_prefix_hash in self._full_blocks_map
 
+    def __len__(self):
+        return len(self._full_blocks_map)
+
     def get(self, self_prefix_hash):
         block = self._full_blocks_map.get(self_prefix_hash, None)
 
@@ -87,6 +90,24 @@ class CPUBlockAllocator:
                              physical_block_id=physical_block_id)
 
         self._full_blocks_map[new_block.self_prefix_hash] = new_block
+        return new_block
+
+    def create_block(self, block_hash):
+        block = self._full_blocks_map.get(block_hash, None)
+
+        if block is not None:
+            return block
+
+        try:
+            physical_block_id = self._get_free_physical_block_id()
+        except NoFreeBlocksError:
+            return
+
+        new_block = CPUBlock(self_prefix_hash=block_hash,
+                             physical_block_id=physical_block_id)
+
+        self._full_blocks_map[new_block.self_prefix_hash] = new_block
+
         return new_block
 
     def hold(self, block: CPUBlock):
