@@ -65,8 +65,10 @@ default_nameserver_client = NameServerClient()
 
 class ZeroClient(object):
 
-    def __init__(self, protocol, nameserver_port=None):
-        self.protocol = protocol
+    def __init__(self, protocol=None, nameserver_port=None):
+        if protocol is not None:
+            self.protocol = protocol
+
         if nameserver_port is not None:
             self.nameserver_client = NameServerClient(nameserver_port)
         else:

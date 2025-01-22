@@ -54,6 +54,13 @@ class Server:
             h.terminate()
 
 
+def setup_and_run():
+    server = Server()
+    server.setup()
+    server.run(waiting=False)
+    return server
+
+
 if __name__ == '__main__':
     server = Server()
     server.setup()
