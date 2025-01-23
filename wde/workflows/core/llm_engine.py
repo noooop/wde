@@ -236,3 +236,6 @@ class LLMEngine:
 
     def shutdown_execute_loop(self):
         self.executor.shutdown_execute_loop()
+
+    def join(self):
+        self.scheduler.join()

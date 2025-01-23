@@ -10,6 +10,7 @@ YOCO_BLOCK_ALLOCATOR = "wde.workflows.decoding.kv_cache.yoco.allocator:YOCOPrefi
 NAIVE_SCHEDULER = "wde.workflows.decoding.kv_cache.naive.scheduler:NaiveDecodingScheduler"
 PREFIX_CACHING_SCHEDULER = "wde.workflows.decoding.kv_cache.prefix_caching.scheduler:PrefixCachingDecodingScheduler"
 OFFLOADING_SCHEDULER = "wde.workflows.decoding.kv_cache.offloading.scheduler:OffloadingKVCachingDecodingScheduler"
+REMOTE_KV_CACHR_SCHEDULER = "wde.workflows.decoding.kv_cache.remote.scheduler:RemoteKVCachingDecodingScheduler"
 
 BLOCK_ALLOCATOR_MAP = {
     "naive": NAIVE_BLOCK_ALLOCATOR,
@@ -20,6 +21,14 @@ BLOCK_ALLOCATOR_MAP = {
 
 
 def get_scheduler_and_block_allocator(engine_config: DecodingEngineConfig):
+    if engine_config.cache_config.remote_kv_cache_server_name is not None:
+        assert engine_config.cache_config.swap_space_bytes > 0
+
+        if engine_config.cache_config.enable_prefix_caching:
+            return REMOTE_KV_CACHR_SCHEDULER, PREFIX_CACHING_BLOCK_ALLOCATOR
+        else:
+            return REMOTE_KV_CACHR_SCHEDULER, DISABLE_PREFIX_CACHING_BLOCK_ALLOCATOR
+
     if engine_config.cache_config.block_allocator is not None:
         block_allocator = engine_config.cache_config.block_allocator
 

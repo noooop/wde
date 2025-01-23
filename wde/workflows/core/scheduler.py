@@ -93,3 +93,6 @@ class Scheduler(ABC):
         self.waiting.clear()
         self.requests.clear()
         self.aborted_requests.clear()
+
+    def join(self):
+        pass

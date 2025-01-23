@@ -141,6 +141,7 @@ class CacheConfig:
         enable_prefix_caching: bool = False,
         block_allocator: Optional[str] = None,
         cpu_offload_gb: float = 0,
+        remote_kv_cache_server_name: Optional[str] = None,
         watermark: float = 0.01,
     ) -> None:
         self.block_size = block_size
@@ -153,6 +154,7 @@ class CacheConfig:
         self.cpu_offload_gb = cpu_offload_gb
         self.watermark = watermark
         self.block_allocator = block_allocator
+        self.remote_kv_cache_server_name = remote_kv_cache_server_name
 
         self._verify_args()
         self._verify_cache_dtype()
@@ -509,11 +511,13 @@ class SYSConfig:
                  frieren_executor_max_workers: int = 1,
                  zero_server_pool_size: int = None,
                  record_metrics: bool = False,
-                 kv_cache_offloading_max_workers: int = 1):
+                 kv_cache_offloading_max_workers: int = 1,
+                 kv_cache_transfer_max_workers: int = 2):
         self.gevent_engine_threadpool_size = gevent_engine_threadpool_size or 4
         self.frieren_executor_max_workers = frieren_executor_max_workers
         self.zero_server_pool_size = zero_server_pool_size or max_num_requests * 4
         self.kv_cache_offloading_max_workers = kv_cache_offloading_max_workers
+        self.kv_cache_transfer_max_workers = kv_cache_transfer_max_workers
         self.record_metrics = record_metrics
 
         self._verify_args()
@@ -532,6 +536,10 @@ class SYSConfig:
                 "gevent_engine_threadpool_size Must be greater than 0.")
 
         if self.kv_cache_offloading_max_workers <= 0:
+            raise RuntimeError(
+                "kv_cache_offloading_max_workers Must be greater than 0.")
+
+        if self.kv_cache_transfer_max_workers <= 0:
             raise RuntimeError(
                 "kv_cache_offloading_max_workers Must be greater than 0.")
 

@@ -32,6 +32,7 @@ class DecodingEngineArgs(EngineArgs):
     cpu_offload_gb: int = 0  # GiB
     gpu_memory_utilization: float = 0.90
     num_gpu_blocks_override: Optional[int] = None
+    remote_kv_cache_server_name: Optional[str] = None
     watermark: float = 0.01
 
     # scheduler_config
@@ -81,6 +82,7 @@ class DecodingEngineArgs(EngineArgs):
             num_gpu_blocks_override=self.num_gpu_blocks_override,
             sliding_window=engine_config.model_config.get_sliding_window(),
             enable_prefix_caching=self.enable_prefix_caching,
+            remote_kv_cache_server_name=self.remote_kv_cache_server_name,
             block_allocator=self.block_allocator,
             cpu_offload_gb=self.cpu_offload_gb,
             watermark=self.watermark)
