@@ -17,7 +17,7 @@ def benchmark_layerwise_to_blockwise_transfer_blocks(N, max_num_batched_tokens,
     n = max_num_batched_tokens // block_size
     num_blocks = N * n
 
-    from_kv_cache = allocate_layerwise_kv_cache(
+    gpu_kv_cache = allocate_layerwise_kv_cache(
         num_blocks=num_blocks,
         num_attention_layers=num_attention_layers,
         block_size=block_size,
@@ -27,7 +27,7 @@ def benchmark_layerwise_to_blockwise_transfer_blocks(N, max_num_batched_tokens,
         pin_memory=False,
         device="cuda")
 
-    to_kv_cache = allocate_blockwise_kv_cache(
+    cpu_kv_cache = allocate_blockwise_kv_cache(
         num_blocks=num_blocks,
         num_attention_layers=num_attention_layers,
         block_size=block_size,
@@ -44,63 +44,99 @@ def benchmark_layerwise_to_blockwise_transfer_blocks(N, max_num_batched_tokens,
         to_ids = random.sample(block_ids, n)
         tasks.append((from_ids, to_ids))
 
-    def correctness_test():
-        from_ids, to_ids = tasks[-1]
+    def random_(t):
+        if isinstance(t, list):
+            for layer in t:
+                layer.random_()
+        else:
+            t.random_()
 
-        num_attention_layers = len(from_kv_cache)
+    def zero_(t):
+        if isinstance(t, list):
+            for layer in t:
+                layer.zero_()
+        else:
+            t.zero_()
 
-        for i in range(num_attention_layers):
-            if not torch.all(
-                    torch.isclose(
-                        from_kv_cache[i][:, from_ids].cuda(),
-                        to_kv_cache[to_ids, i].permute(1, 0, 2, 3, 4).cuda())):
-                assert False
+    def test(from_kv_cache, to_kv_cache):
+        if isinstance(from_kv_cache, list):
+            name = "gpu to cpu"
+        else:
+            name = "cpu to gpu"
 
-    def test_correctness_test():
-        try:
-            correctness_test()
-        except AssertionError:
-            print("correctness_test ok!")
+        random_(from_kv_cache)
 
-    def test_naive():
-        to_kv_cache.zero_()
-        num_attention_layers = len(from_kv_cache)
+        def correctness_test():
+            from_ids, to_ids = tasks[-1]
 
-        start = time.perf_counter()
-
-        for from_ids, to_ids in tasks:
             for i in range(num_attention_layers):
-                for f, t in zip(from_ids, to_ids):
-                    to_kv_cache[t, i, ...] = from_kv_cache[i][:, f, ...]
+                if isinstance(from_kv_cache, list):
+                    a = from_kv_cache[i][:, from_ids].cuda()
+                    b = to_kv_cache[to_ids, i].permute(1, 0, 2, 3, 4).cuda()
+                else:
+                    a = from_kv_cache[from_ids, i].permute(1, 0, 2, 3,
+                                                           4).cuda()
+                    b = to_kv_cache[i][:, to_ids].cuda()
 
-        end = time.perf_counter()
-        elapsed_time = end - start
+                if not torch.all(torch.isclose(a, b)):
+                    assert False
 
-        correctness_test()
-        print("b2b naive elapsed time: ", elapsed_time)
+        def test_correctness_test():
+            try:
+                correctness_test()
+            except AssertionError:
+                print("correctness_test ok!")
 
-    def test_ops():
-        from wde.workflows.decoding.kv_cache.offloading.swap import swap_blocks
+        def test_naive():
+            zero_(to_kv_cache)
 
-        to_kv_cache.zero_()
+            start = time.perf_counter()
+            if isinstance(from_kv_cache, list):
+                for from_ids, to_ids in tasks:
+                    for i in range(num_attention_layers):
+                        for f, t in zip(from_ids, to_ids):
+                            to_kv_cache[t, i, ...] = from_kv_cache[i][:, f,
+                                                                      ...]
+            else:
+                for from_ids, to_ids in tasks:
+                    for i in range(num_attention_layers):
+                        for f, t in zip(from_ids, to_ids):
+                            to_kv_cache[i][:, t] = from_kv_cache[f, i]
 
-        start = time.perf_counter()
+            torch.cuda.synchronize()
 
-        for from_ids, to_ids in tasks:
-            need_swap = list(zip(from_ids, to_ids))
-            swap_blocks(from_kv_cache, to_kv_cache, need_swap)
+            end = time.perf_counter()
+            elapsed_time = end - start
 
-        torch.cuda.synchronize()
+            correctness_test()
+            print(f"{name} b2b naive elapsed time: ", elapsed_time)
 
-        end = time.perf_counter()
-        elapsed_time = end - start
+        def test_ops():
+            from wde.workflows.decoding.kv_cache.offloading.swap import \
+                swap_blocks
 
-        correctness_test()
-        print("b2b ops.swap_blocks elapsed time: ", elapsed_time)
+            zero_(to_kv_cache)
 
-    test_correctness_test()
-    test_naive()
-    test_ops()
+            start = time.perf_counter()
+
+            for from_ids, to_ids in tasks:
+                need_swap = list(zip(from_ids, to_ids))
+                swap_blocks(from_kv_cache, to_kv_cache, need_swap)
+
+            torch.cuda.synchronize()
+
+            end = time.perf_counter()
+            elapsed_time = end - start
+
+            correctness_test()
+            print(f"{name} b2b ops.swap_blocks elapsed time: ", elapsed_time)
+
+        test_correctness_test()
+        test_naive()
+        test_ops()
+
+    test(from_kv_cache=gpu_kv_cache, to_kv_cache=cpu_kv_cache)
+    test(from_kv_cache=cpu_kv_cache, to_kv_cache=gpu_kv_cache)
 
 
 if __name__ == '__main__':
@@ -128,6 +164,8 @@ if __name__ == '__main__':
             pin_memory=True)
 """
 Qwen/Qwen2.5-7B-Instruct
-b2b naive elapsed time:  0.4283024550004484
-b2b ops.swap_blocks elapsed time:  0.08925844799978222
+gpu to cpu b2b naive elapsed time:  0.3089604969991342
+gpu to cpu b2b ops.swap_blocks elapsed time:  0.07835619599973143
+cpu to gpu b2b naive elapsed time:  0.18914010299886286
+cpu to gpu b2b ops.swap_blocks elapsed time:  0.07765093099988007
 """

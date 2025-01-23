@@ -18,22 +18,43 @@ class SwapTask:
         self.swap_manager = swap_manager
         self.need_swap = need_swap or []
         self.future = None
+        self.callbacks = []
 
     def add(self, items):
         self.need_swap.extend(items)
 
+    def add_callback(self, callback):
+        self.callbacks.append(callback)
+
     def swap_blocks(self):
+        block_mapping = [(b1.physical_block_id, b2.physical_block_id)
+                         for b1, b2 in self.need_swap]
+
         swap_blocks(from_cache=self.swap_manager.from_cache,
                     to_cache=self.swap_manager.to_cache,
-                    need_swap=self.need_swap)
+                    block_mapping=block_mapping)
 
     def swap(self):
         stream = self.swap_manager.offloading_manager.stream_pool.get()
-        with torch.cuda.stream(stream):
-            self.swap_blocks()
-        stream.synchronize()
-        self.swap_manager.offloading_manager.stream_pool.put(stream)
-        self.swap_manager.offloading_manager.finishd_task.put(self)
+
+        try:
+            with torch.cuda.stream(stream):
+                self.swap_blocks()
+            stream.synchronize()
+
+            for from_block, to_block in self.need_swap:
+                to_block.release()
+
+            for callback in self.callbacks:
+                callback()
+
+        except Exception:
+            import traceback
+            traceback.print_exc()
+
+        finally:
+            self.swap_manager.offloading_manager.stream_pool.put(stream)
+            self.swap_manager.offloading_manager.finishd_task.put(self)
 
     def submit(self):
         self.future = self.swap_manager.offloading_manager.threads.submit(
@@ -106,7 +127,6 @@ class SwapOutManager:
 
     def finish_callback(self, need_swap_out):
         for gpu_block, cpu_block in need_swap_out:
-            cpu_block.release()
             self.gpu_block_allocator.free(gpu_block)
             self.cpu_block_allocator.free(cpu_block)
 
@@ -177,23 +197,25 @@ class SwapInManager:
     def finish_callback(self, need_swap_out):
         for cpu_block, gpu_block in need_swap_out:
             gpu_block.num_computed_tokens = gpu_block._block_size
-            gpu_block.release()
             self.cpu_block_allocator.free(cpu_block)
             self.gpu_block_allocator.free(gpu_block)
 
 
-def swap_blocks(from_cache, to_cache, need_swap):
+def swap_blocks(from_cache, to_cache, block_mapping):
     n = 2
 
     if isinstance(from_cache, list):
         # from gpu to cpu
         num_attention_layers = len(from_cache)
         index = 1
-        blocks_to_swap = torch.tensor(need_swap,
+        blocks_to_swap = torch.tensor(block_mapping,
                                       device="cpu",
                                       dtype=torch.int64).view(-1, 2)
 
         blocks_to_swap[:, index] *= num_attention_layers * n
+
+        shape = tuple(to_cache.shape)
+        to_cache = to_cache.view((-1, ) + shape[3:])
 
         for i in range(num_attention_layers):
             ops.swap_blocks(from_cache[i][0], to_cache, blocks_to_swap)
@@ -208,11 +230,14 @@ def swap_blocks(from_cache, to_cache, need_swap):
         # from cpu to gpu
         num_attention_layers = len(to_cache)
         index = 0
-        blocks_to_swap = torch.tensor(need_swap,
+        blocks_to_swap = torch.tensor(block_mapping,
                                       device="cpu",
                                       dtype=torch.int64).view(-1, 2)
 
         blocks_to_swap[:, index] *= num_attention_layers * n
+
+        shape = tuple(from_cache.shape)
+        from_cache = from_cache.view((-1, ) + shape[3:])
 
         for i in range(num_attention_layers):
             ops.swap_blocks(from_cache, to_cache[i][0], blocks_to_swap)
