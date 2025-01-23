@@ -37,6 +37,7 @@ def benchmark_remote_kv_cache_server(name, N, max_num_batched_tokens,
     num_blocks = N * n
 
     client = ZeroRemoteKVCacheClient()
+    client.wait_service_available(server_name)
 
     from_kv_cache = allocate_blockwise_kv_cache(
         num_blocks=num_blocks,
@@ -57,7 +58,6 @@ def benchmark_remote_kv_cache_server(name, N, max_num_batched_tokens,
         pin_memory=pin_memory)
 
     from_kv_cache.random_()
-    to_kv_cache.zero_()
 
     from_kv_cache_np = get_share_memory_np(from_kv_cache)
     to_kv_cache_np = get_share_memory_np(to_kv_cache)
@@ -88,7 +88,6 @@ def benchmark_remote_kv_cache_server(name, N, max_num_batched_tokens,
         if not torch.all(
                 torch.isclose(from_kv_cache[from_ids], to_kv_cache[to_ids])):
             assert False
-        print("correct!")
 
     def test_set():
 
@@ -116,6 +115,16 @@ def benchmark_remote_kv_cache_server(name, N, max_num_batched_tokens,
 
         print("set elapsed time: ", elapsed_time)
 
+    def test_contains():
+        for i in range(N):
+            from_ids, to_ids = tasks[i]
+            from_block_hashs = block_hashs[from_ids]
+
+            response = client.contains(server_name, name, from_block_hashs)
+
+            assert len(response.hit) == n
+            assert len(response.miss) == 0
+
     def test_get():
         # warming up
         for i in range(N):
@@ -123,6 +132,8 @@ def benchmark_remote_kv_cache_server(name, N, max_num_batched_tokens,
             from_block_hashs = block_hashs[from_ids]
 
             client.get(server_name, name, from_block_hashs)
+
+        to_kv_cache.zero_()
 
         start = time.perf_counter()
 
@@ -142,23 +153,45 @@ def benchmark_remote_kv_cache_server(name, N, max_num_batched_tokens,
         end = time.perf_counter()
         elapsed_time = end - start
 
+        correctness_test()
+
         print("get elapsed time: ", elapsed_time)
 
-    def test_contains():
+    def test_stream_get():
+        to_kv_cache.zero_()
+
+        start = time.perf_counter()
+
         for i in range(N):
             from_ids, to_ids = tasks[i]
             from_block_hashs = block_hashs[from_ids]
 
-            response = client.contains(server_name, name, from_block_hashs)
+            response = client.get(server_name,
+                                  name,
+                                  from_block_hashs,
+                                  stream=True)
 
-            assert len(response.block_hashs) == n
+            count = 0
+
+            for t, rep in zip(to_ids, response):
+                data = rep.block
+                to_kv_cache_np[t] = data
+                count += 1
+
+            assert count == n
+
+        end = time.perf_counter()
+        elapsed_time = end - start
+
+        correctness_test()
+
+        print("stream_get elapsed time: ", elapsed_time)
 
     try:
         test_set()
-        test_get()
         test_contains()
-
-        correctness_test()
+        test_get()
+        test_stream_get()
     except Exception:
         import traceback
         traceback.print_exc()
@@ -194,6 +227,7 @@ if __name__ == '__main__':
         time.sleep(10)
 """
 Qwen/Qwen2.5-7B-Instruct
-set elapsed time:  0.12329445799878158
-get elapsed time:  0.2599176589992567
+set elapsed time:  0.12471285799983889
+get elapsed time:  0.16931634599950485
+stream_get elapsed time:  0.0733827679996466
 """

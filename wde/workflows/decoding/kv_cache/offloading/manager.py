@@ -78,6 +78,25 @@ class CPUBlockAllocator:
 
         return block
 
+    def create(self, block_hash):
+        block = self._full_blocks_map.get(block_hash, None)
+
+        if block is not None:
+            return block
+
+        try:
+            physical_block_id = self._get_free_physical_block_id()
+        except NoFreeBlocksError:
+            return
+
+        new_block = CPUBlock(block_hash=block_hash,
+                             physical_block_id=physical_block_id,
+                             lock=True)
+
+        self._full_blocks_map[new_block.block_hash] = new_block
+
+        return new_block
+
     def copy_block(self, block):
         assert block.block_hash is not None
 
@@ -92,24 +111,6 @@ class CPUBlockAllocator:
         self._full_blocks_map[new_block.block_hash] = new_block
         return new_block
 
-    def create_block(self, block_hash):
-        block = self._full_blocks_map.get(block_hash, None)
-
-        if block is not None:
-            return block
-
-        try:
-            physical_block_id = self._get_free_physical_block_id()
-        except NoFreeBlocksError:
-            return
-
-        new_block = CPUBlock(block_hash=block_hash,
-                             physical_block_id=physical_block_id)
-
-        self._full_blocks_map[new_block.block_hash] = new_block
-
-        return new_block
-
     def hold(self, block: CPUBlock):
         ref_count = block.incr()
 
@@ -122,6 +123,9 @@ class CPUBlockAllocator:
         if ref_count == 0:
             assert self._full_blocks_map[block.block_hash] is block
             self._free_full_blocks.add(block)
+
+    def refresh(self, block: CPUBlock):
+        self._free_full_blocks.update(block)
 
     def _remove_from_free_blocks(self, block: CPUBlock):
         if block is None:

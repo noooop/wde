@@ -43,26 +43,20 @@ class RemoteMemoryKVCache:
     def get(self, block_hash):
         block = self.block_allocator.get(block_hash)
 
-        if block is None:
-            return
+        return block
 
-        self.block_allocator.hold(block)
-        self.block_allocator.free(block)
+    def get_or_create(self, block_hash):
+        block = self.block_allocator.create(block_hash)
+        return block
 
-        return self.kv_cache[block.physical_block_id]
+    def contains(self, block_hash, refresh):
+        o = block_hash in self.block_allocator
 
-    def set(self, block_hash, data):
-        block = self.block_allocator.create_block(block_hash)
+        if o and refresh:
+            block = self.block_allocator.get(block_hash)
+            self.block_allocator.refresh(block)
 
-        if block is None:
-            return
-
-        self.block_allocator.hold(block)
-        self.kv_cache[block.physical_block_id] = data
-        self.block_allocator.free(block)
-
-    def exist(self):
-        pass
+        return o
 
     def _get_cache_shape(self):
         num_attention_layers, num_heads, head_size, dtype = process_warp(

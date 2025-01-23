@@ -5,12 +5,18 @@ from pydantic import BaseModel
 
 class GetRequest(BaseModel):
     model: str
+    stream: bool
     block_hashs: Any
 
 
 class GetResponse(BaseModel):
     block_hashs: Any
     blocks: Any
+
+
+class GetResponseStream(BaseModel):
+    block_hash: Any
+    block: Any
 
 
 class SetRequest(BaseModel):
@@ -27,8 +33,10 @@ class SetResponse(BaseModel):
 
 class ContainsRequest(BaseModel):
     model: str
+    refresh: bool
     block_hashs: Any
 
 
 class ContainsResponse(BaseModel):
-    block_hashs: Any
+    hit: Any
+    miss: Any
