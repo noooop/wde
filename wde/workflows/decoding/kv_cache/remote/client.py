@@ -27,9 +27,11 @@ class ZeroRemoteKVCacheClient(ZeroClient):
         if not inspect.isgenerator(response):
             return self.check_response(name, response, GetResponse)
         else:
+
             def generator():
                 for rep in response:
                     yield self.check_response(name, rep, GetResponseStream)
+
             return generator()
 
     def set(self, name, model, block_hashs, blocks, force=False):
