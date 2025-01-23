@@ -23,10 +23,10 @@ class Block:
     # Previous block prefix_hash
     prefix_hash: Optional[PrefixHash] = None
 
-    # self_prefix_hash = hash((prefix_hash, delta_token_ids))
+    # block_hash = hash((prefix_hash, delta_token_ids))
     # this block prefix_hash if is_full_block
-    # full blocks map use self_prefix_hash
-    self_prefix_hash: Optional[PrefixHash] = None
+    # full blocks map use block_hash
+    block_hash: Optional[PrefixHash] = None
 
     physical_block_id: Optional[BlockId] = None
     num_computed_tokens: int = 0
@@ -74,10 +74,9 @@ class Block:
     def num_empty_slots(self):
         return self._block_size - len(self.delta_token_ids)
 
-    def ensure_self_prefix_hash(self):
-        if self.self_prefix_hash is None:
-            self.self_prefix_hash = hash(
-                (self.prefix_hash, self.delta_token_ids))
+    def ensure_block_hash(self):
+        if self.block_hash is None:
+            self.block_hash = hash((self.prefix_hash, self.delta_token_ids))
 
 
 class PrefixCachingVirtualBlockTable(VirtualBlockTable):
@@ -186,7 +185,7 @@ class PrefixCachingVirtualBlockTable(VirtualBlockTable):
             self._num_token_ids = num_token_ids
             return
 
-        prefix_hash = self._blocks[-1].self_prefix_hash
+        prefix_hash = self._blocks[-1].block_hash
 
         offset = len(self._blocks) * self._block_size
         token_ids = token_ids[offset:]
@@ -201,17 +200,16 @@ class PrefixCachingVirtualBlockTable(VirtualBlockTable):
             if len(delta_token_ids) == block_size:
                 # full_block
                 delta_token_ids = tuple(delta_token_ids)
-                self_prefix_hash = hash((prefix_hash, delta_token_ids))
+                block_hash = hash((prefix_hash, delta_token_ids))
 
-                block = block_allocator.get_full_block(prefix_hash,
-                                                       self_prefix_hash,
+                block = block_allocator.get_full_block(prefix_hash, block_hash,
                                                        delta_token_ids)
-                prefix_hash = self_prefix_hash
+                prefix_hash = block_hash
             else:
                 # last portion block
                 block = Block(delta_token_ids=delta_token_ids,
                               prefix_hash=prefix_hash,
-                              self_prefix_hash=None,
+                              block_hash=None,
                               _block_size=block_size)
             self._allocator.hold(block)
             self._blocks.append(block)
@@ -406,17 +404,17 @@ class PrefixCachingBlockAllocator(BlockAllocator):
         physical_block_id = self._get_free_physical_block_id()
         block.physical_block_id = physical_block_id
 
-    def get_full_block(self, prefix_hash, self_prefix_hash, delta_token_ids):
+    def get_full_block(self, prefix_hash, block_hash, delta_token_ids):
         assert len(delta_token_ids) == self._block_size
 
-        block = self._full_blocks_map.get(self_prefix_hash, None)
+        block = self._full_blocks_map.get(block_hash, None)
 
         if block is None:
             block = Block(delta_token_ids=delta_token_ids,
                           prefix_hash=prefix_hash,
-                          self_prefix_hash=self_prefix_hash,
+                          block_hash=block_hash,
                           _block_size=self._block_size)
-            self._full_blocks_map[self_prefix_hash] = block
+            self._full_blocks_map[block_hash] = block
         else:
             self._free_full_blocks.remove(block)
         return block
@@ -438,10 +436,10 @@ class PrefixCachingBlockAllocator(BlockAllocator):
                 self._free_physical_block_ids.append(block.physical_block_id)
         else:
             if block.physical_block_id is not None:
-                assert self._full_blocks_map[block.self_prefix_hash] is block
+                assert self._full_blocks_map[block.block_hash] is block
                 self._free_full_blocks.add(block)
             else:
-                self._full_blocks_map.pop(block.self_prefix_hash, None)
+                self._full_blocks_map.pop(block.block_hash, None)
 
     def update(self, block: Block):
         return self._maybe_update_full_block(block)
@@ -452,14 +450,14 @@ class PrefixCachingBlockAllocator(BlockAllocator):
 
         full_block = block
 
-        full_block.ensure_self_prefix_hash()
-        self_prefix_hash = full_block.self_prefix_hash
+        full_block.ensure_block_hash()
+        block_hash = full_block.block_hash
 
-        block = self._full_blocks_map.get(self_prefix_hash, None)
+        block = self._full_blocks_map.get(block_hash, None)
         if block is full_block:
             return block
         elif block is None:
-            self._full_blocks_map[self_prefix_hash] = full_block
+            self._full_blocks_map[block_hash] = full_block
 
             return full_block
         else:
@@ -480,7 +478,7 @@ class PrefixCachingBlockAllocator(BlockAllocator):
             pass
 
         full_blocks = self._free_full_blocks.evict()
-        self._full_blocks_map.pop(full_blocks.self_prefix_hash, None)
+        self._full_blocks_map.pop(full_blocks.block_hash, None)
         return full_blocks.physical_block_id
 
     def _remove_from_free_blocks(self, block):
@@ -540,12 +538,12 @@ class DisablePrefixCachingBlockAllocator(BlockAllocator):
         if ref_count == 0 and block.physical_block_id is not None:
             self._free_physical_block_ids.append(block.physical_block_id)
 
-    def get_full_block(self, prefix_hash, self_prefix_hash, delta_token_ids):
+    def get_full_block(self, prefix_hash, block_hash, delta_token_ids):
         assert len(delta_token_ids) == self._block_size
 
         block = Block(delta_token_ids=delta_token_ids,
                       prefix_hash=prefix_hash,
-                      self_prefix_hash=self_prefix_hash,
+                      block_hash=block_hash,
                       _block_size=self._block_size)
 
         return block

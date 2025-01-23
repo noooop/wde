@@ -245,7 +245,7 @@ class YOCOVirtualBlockTable(VirtualBlockTable):
             # No need to create new blocks
             return
 
-        prefix_hash = self._blocks[-1].self_prefix_hash
+        prefix_hash = self._blocks[-1].block_hash
         offset = len(self._blocks) * self._block_size
         token_ids = token_ids[offset:]
         self._create_blocks(token_ids, prefix_hash=prefix_hash)
@@ -264,8 +264,8 @@ class YOCOVirtualBlockTable(VirtualBlockTable):
 
             if len(delta_token_ids) == block_size:
                 # full_block
-                self_prefix_hash = hash((prefix_hash, delta_token_ids))
-                block = block_allocator.get_full_block(self_prefix_hash,
+                block_hash = hash((prefix_hash, delta_token_ids))
+                block = block_allocator.get_full_block(block_hash,
                                                        delta_token_ids)
 
                 if block is not None:
@@ -278,7 +278,7 @@ class YOCOVirtualBlockTable(VirtualBlockTable):
                     if num_tokens < block_size:
                         # wait at this block, until being computed
                         stop = True
-                prefix_hash = self_prefix_hash
+                prefix_hash = block_hash
             else:
                 # last portion block
                 block, num_tokens = block_allocator.get_portion_block(
@@ -429,10 +429,10 @@ class YOCOPrefixCachingBlockAllocator(BlockAllocator):
 
         if block.is_full_block():
             if block.physical_block_id is not None:
-                assert self._full_blocks_map[block.self_prefix_hash] is block
+                assert self._full_blocks_map[block.block_hash] is block
                 self._free_blocks.add(block)
             else:
-                self._full_blocks_map.pop(block.self_prefix_hash, None)
+                self._full_blocks_map.pop(block.block_hash, None)
                 trie = self._get_or_create_portion_blocks_trie(
                     block.prefix_hash)
                 trie.delete(block.delta_token_ids, block)
@@ -462,10 +462,10 @@ class YOCOPrefixCachingBlockAllocator(BlockAllocator):
     def join(self):
         self._cow_thread.join()
 
-    def get_full_block(self, self_prefix_hash, delta_token_ids):
+    def get_full_block(self, block_hash, delta_token_ids):
         assert len(delta_token_ids) == self._block_size
 
-        block = self._full_blocks_map.get(self_prefix_hash, None)
+        block = self._full_blocks_map.get(block_hash, None)
         return block
 
     def get_portion_block(self, prefix_hash, delta_token_ids):
@@ -552,15 +552,15 @@ class YOCOPrefixCachingBlockAllocator(BlockAllocator):
 
         full_block = block
 
-        full_block.ensure_self_prefix_hash()
+        full_block.ensure_block_hash()
 
-        self_prefix_hash = full_block.self_prefix_hash
+        block_hash = full_block.block_hash
 
-        block = self._full_blocks_map.get(self_prefix_hash, None)
+        block = self._full_blocks_map.get(block_hash, None)
         if block is full_block:
             return full_block
         elif block is None:
-            self._full_blocks_map[self_prefix_hash] = full_block
+            self._full_blocks_map[block_hash] = full_block
             return full_block
         else:
             self._free(full_block)
@@ -582,8 +582,8 @@ class YOCOPrefixCachingBlockAllocator(BlockAllocator):
         assert block.ref_count == 0
 
         if block.is_full_block():
-            assert block.self_prefix_hash is not None
-            del self._full_blocks_map[block.self_prefix_hash]
+            assert block.block_hash is not None
+            del self._full_blocks_map[block.block_hash]
 
         trie = self._get_or_create_portion_blocks_trie(block.prefix_hash)
         trie.delete(block.delta_token_ids, block)

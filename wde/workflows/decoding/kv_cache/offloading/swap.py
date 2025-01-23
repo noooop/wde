@@ -73,17 +73,17 @@ class SwapOutManager:
             new_full_blocks = request.vblock.new_full_blocks()
 
             for gpu_block in new_full_blocks:
-                gpu_block.ensure_self_prefix_hash()
+                gpu_block.ensure_block_hash()
 
-                self_prefix_hash = gpu_block.self_prefix_hash
+                block_hash = gpu_block.block_hash
 
-                if self_prefix_hash in self.cpu_block_allocator:
+                if block_hash in self.cpu_block_allocator:
                     continue
 
-                if self_prefix_hash in remove_duplicates:
+                if block_hash in remove_duplicates:
                     continue
 
-                remove_duplicates.add(self_prefix_hash)
+                remove_duplicates.add(block_hash)
 
                 cpu_block = self.cpu_block_allocator.copy_block(gpu_block)
 
@@ -142,11 +142,11 @@ class SwapInManager:
             if gpu_block.lock:
                 continue
 
-            gpu_block.ensure_self_prefix_hash()
+            gpu_block.ensure_block_hash()
 
-            self_prefix_hash = gpu_block.self_prefix_hash
+            block_hash = gpu_block.block_hash
 
-            cpu_block = self.cpu_block_allocator.get(self_prefix_hash)
+            cpu_block = self.cpu_block_allocator.get(block_hash)
 
             if cpu_block is not None:
                 need_swap_in_blocks.append((cpu_block, gpu_block))

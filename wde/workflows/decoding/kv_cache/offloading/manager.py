@@ -17,7 +17,7 @@ from wde.workflows.decoding.schema.engine_io import DecodingSchedulerOutput
 
 @dataclass
 class CPUBlock:
-    self_prefix_hash: Optional[PrefixHash] = None
+    block_hash: Optional[PrefixHash] = None
     physical_block_id: Optional[BlockId] = None
     ref_count: int = 0
     lock: bool = False
@@ -59,14 +59,14 @@ class CPUBlockAllocator:
         self._free_physical_block_ids: Deque[BlockId] = deque(
             range(num_blocks))
 
-    def __contains__(self, self_prefix_hash):
-        return self_prefix_hash in self._full_blocks_map
+    def __contains__(self, block_hash):
+        return block_hash in self._full_blocks_map
 
     def __len__(self):
         return len(self._full_blocks_map)
 
-    def get(self, self_prefix_hash):
-        block = self._full_blocks_map.get(self_prefix_hash, None)
+    def get(self, block_hash):
+        block = self._full_blocks_map.get(block_hash, None)
 
         if block is None:
             return None
@@ -79,17 +79,17 @@ class CPUBlockAllocator:
         return block
 
     def copy_block(self, block):
-        assert block.self_prefix_hash is not None
+        assert block.block_hash is not None
 
         try:
             physical_block_id = self._get_free_physical_block_id()
         except NoFreeBlocksError:
             return
 
-        new_block = CPUBlock(self_prefix_hash=block.self_prefix_hash,
+        new_block = CPUBlock(block_hash=block.block_hash,
                              physical_block_id=physical_block_id)
 
-        self._full_blocks_map[new_block.self_prefix_hash] = new_block
+        self._full_blocks_map[new_block.block_hash] = new_block
         return new_block
 
     def create_block(self, block_hash):
@@ -103,10 +103,10 @@ class CPUBlockAllocator:
         except NoFreeBlocksError:
             return
 
-        new_block = CPUBlock(self_prefix_hash=block_hash,
+        new_block = CPUBlock(block_hash=block_hash,
                              physical_block_id=physical_block_id)
 
-        self._full_blocks_map[new_block.self_prefix_hash] = new_block
+        self._full_blocks_map[new_block.block_hash] = new_block
 
         return new_block
 
@@ -120,7 +120,7 @@ class CPUBlockAllocator:
         ref_count = block.decr()
 
         if ref_count == 0:
-            assert self._full_blocks_map[block.self_prefix_hash] is block
+            assert self._full_blocks_map[block.block_hash] is block
             self._free_full_blocks.add(block)
 
     def _remove_from_free_blocks(self, block: CPUBlock):
@@ -137,7 +137,7 @@ class CPUBlockAllocator:
             pass
 
         full_blocks = self._free_full_blocks.evict()
-        self._full_blocks_map.pop(full_blocks.self_prefix_hash, None)
+        self._full_blocks_map.pop(full_blocks.block_hash, None)
         return full_blocks.physical_block_id
 
 
