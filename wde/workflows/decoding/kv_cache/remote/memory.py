@@ -40,6 +40,10 @@ class RemoteMemoryKVCache:
     def __len__(self):
         return len(self.block_allocator)
 
+    @property
+    def info(self):
+        return self.block_allocator.info
+
     def get(self, block_hash):
         block = self.block_allocator.get(block_hash)
 

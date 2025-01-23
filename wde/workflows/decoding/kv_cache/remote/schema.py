@@ -40,3 +40,11 @@ class ContainsRequest(BaseModel):
 class ContainsResponse(BaseModel):
     hit: Any
     miss: Any
+
+
+class InfoResponse(BaseModel):
+    block_size: int
+    num_blocks: int
+    num_full_blocks: int
+    num_free_full_blocks: int
+    num_free_physical_block_ids: int

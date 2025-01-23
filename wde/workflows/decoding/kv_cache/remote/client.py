@@ -4,7 +4,7 @@ from wde.logger import init_logger
 from wde.microservices.framework.nameserver.client import ZeroClient
 from wde.workflows.decoding.kv_cache.remote.schema import (
     ContainsRequest, ContainsResponse, GetRequest, GetResponse,
-    GetResponseStream, SetRequest, SetResponse)
+    GetResponseStream, InfoResponse, SetRequest, SetResponse)
 
 logger = init_logger(__name__)
 
@@ -60,3 +60,9 @@ class ZeroRemoteKVCacheClient(ZeroClient):
 
         rep = self.query(name, method, data)
         return self.check_response(name, rep, ContainsResponse)
+
+    def info(self, name):
+        method = "info"
+
+        rep = self.query(name, method)
+        return self.check_response(name, rep, InfoResponse)

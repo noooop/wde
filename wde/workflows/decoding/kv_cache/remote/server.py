@@ -2,14 +2,15 @@ import numpy as np
 from gevent.threadpool import ThreadPoolExecutor
 
 from wde.logger import init_logger
-from wde.microservices.framework.zero.schema import (ZeroServerResponseOk,
+from wde.microservices.framework.zero.schema import (ZeroServerRequest,
+                                                     ZeroServerResponseOk,
                                                      ZeroServerStreamResponseOk
                                                      )
 from wde.microservices.framework.zero.server import Z_MethodZeroServer
 from wde.workflows.decoding.kv_cache.remote.memory import RemoteMemoryKVCache
 from wde.workflows.decoding.kv_cache.remote.schema import (
     ContainsRequest, ContainsResponse, GetRequest, GetResponse,
-    GetResponseStream, SetRequest, SetResponse)
+    GetResponseStream, InfoResponse, SetRequest, SetResponse)
 
 logger = init_logger(__name__)
 
@@ -171,4 +172,8 @@ class ZeroRemoteKVCacheServer(Z_MethodZeroServer):
 
         rep = ZeroServerResponseOk(
             msg=ContainsResponse(hit=hit, miss=miss).dict())
+        self.zero_send(req, rep)
+
+    def z_info(self, req: ZeroServerRequest):
+        rep = ZeroServerResponseOk(msg=InfoResponse(**self._cache.info))
         self.zero_send(req, rep)

@@ -65,6 +65,16 @@ class CPUBlockAllocator:
     def __len__(self):
         return len(self._full_blocks_map)
 
+    @property
+    def info(self):
+        return {
+            "block_size": self._block_size,
+            "num_blocks": self._num_blocks,
+            "num_full_blocks": len(self._full_blocks_map),
+            "num_free_full_blocks": len(self._free_full_blocks),
+            "num_free_physical_block_ids": len(self._free_physical_block_ids),
+        }
+
     def get(self, block_hash):
         block = self._full_blocks_map.get(block_hash, None)
 
@@ -203,3 +213,6 @@ class OffloadingManager:
             except queue.Empty:
                 break
             task.do_callback()
+
+    def join(self):
+        self.threads.shutdown()
