@@ -155,8 +155,9 @@ def get_kv_cache_shape(model, cache_dtype):
 
 
 def process_warp(fn, /, *args, **kwargs):
+    import multiprocessing as mp
     from concurrent.futures import ProcessPoolExecutor
 
-    with ProcessPoolExecutor(1) as executor:
+    with ProcessPoolExecutor(1, mp.get_context("spawn")) as executor:
         f = executor.submit(fn, *args, **kwargs)
         return f.result()

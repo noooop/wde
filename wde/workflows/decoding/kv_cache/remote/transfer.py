@@ -2,8 +2,6 @@ from typing import TYPE_CHECKING, List
 
 import numpy as np
 
-from wde.workflows.decoding.kv_cache.remote.client import \
-    ZeroRemoteKVCacheClient
 from wde.workflows.decoding.kv_cache.remote.memory import get_share_memory_np
 
 if TYPE_CHECKING:
@@ -56,13 +54,16 @@ class TransferOutManager:
                  cpu_block_allocator: "CPUBlockAllocator"):
         self.name = name
         self.server_name = server_name
-        self.client = ZeroRemoteKVCacheClient()
         self.cpu_cache = get_share_memory_np(cpu_cache)
 
         self.remote_manager = remote_manager
         self.cpu_block_allocator = cpu_block_allocator
 
     def transfer(self, task: TransferTask):
+        from wde.workflows.decoding.kv_cache.remote.client import \
+            ZeroRemoteKVCacheClient
+        client = ZeroRemoteKVCacheClient()
+
         try:
             block_hashs = []
             hash2block = {}
@@ -72,8 +73,8 @@ class TransferOutManager:
 
             block_hashs = np.array(block_hashs, dtype=np.int64)
 
-            response = self.client.contains(self.server_name, self.name,
-                                            block_hashs)
+            response = client.contains(self.server_name, self.name,
+                                       block_hashs)
 
             need_to_transfer_block_hashs = []
             need_to_transfer_blocks = []
@@ -85,12 +86,14 @@ class TransferOutManager:
 
             need_to_transfer_block_hashs = np.array(
                 need_to_transfer_block_hashs, dtype=np.int64)
-            self.client.set(self.server_name, self.name,
-                            need_to_transfer_block_hashs,
-                            need_to_transfer_blocks)
+            client.set(self.server_name, self.name,
+                       need_to_transfer_block_hashs, need_to_transfer_blocks)
         except Exception:
             import traceback
             traceback.print_exc()
+
+        finally:
+            self.remote_manager.finishd_task.put(task)
 
     def submit(self, task: TransferTask):
         return self.remote_manager.threads.submit(self.transfer, task)

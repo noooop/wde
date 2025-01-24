@@ -86,8 +86,7 @@ class ZeroRemoteKVCacheServer(Z_MethodZeroServer):
                     block_hashs=block_hashs_np, blocks=data).dict())
                 self.zero_send(req, rep)
 
-        f = self.threads.submit(send)
-        f.result()
+        send()
 
         for block in blocks:
             self._cache.block_allocator.free(block)
@@ -134,12 +133,12 @@ class ZeroRemoteKVCacheServer(Z_MethodZeroServer):
             for block, data in blocks:
                 self._cache.kv_cache[block.physical_block_id] = data
 
-            rep = ZeroServerResponseOk(
-                msg=SetResponse(total=total, exist=exist).dict())
-            self.zero_send(req, rep)
-
         f = self.threads.submit(memcpy)
         f.result()
+
+        rep = ZeroServerResponseOk(
+            msg=SetResponse(total=total, exist=exist).dict())
+        self.zero_send(req, rep)
 
         for block, data in blocks:
             block.release()

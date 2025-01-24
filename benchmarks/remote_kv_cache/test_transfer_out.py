@@ -4,6 +4,7 @@ import time
 import numpy as np
 
 from wde.workflows.decoding.kv_cache.remote.memory import process_warp
+from wde.workflows.decoding.scheduler import BLOCK_ALLOCATOR_MAP
 
 
 def start_remote_kv_cache(args):
@@ -206,11 +207,46 @@ if __name__ == '__main__':
     args.frieren_executor_max_workers = 1
     args.hit_rate = 0.
 
-    args.max_num_batched_tokens = 1024
-    args.scheduling = "sync"
-    args.block_allocator = None
-    args.enable_prefix_caching = True
     args.remote_kv_cache_server_name = "kv_cache_server"
     args.swap_space = 10
 
-    process_warp(benchmark, args)
+    def test_vary_max_num_batched_tokens(args):
+        max_num_batched_tokens_list = [1024, 768, 512, 384, 256, 128, 64, 32]
+
+        for max_num_batched_tokens in max_num_batched_tokens_list:
+            args.max_num_batched_tokens = max_num_batched_tokens
+            process_warp(benchmark, args)
+
+    def test_vary_scheduling(args):
+        for scheduling in ["sync", "simple_async"]:
+            print(f"scheduling: {scheduling}")
+            args.scheduling = scheduling
+            print()
+
+            test_vary_max_num_batched_tokens(args)
+
+        for scheduling in ["async"]:
+            for max_workers in [1, 2, 3]:
+                print(f"scheduling: {scheduling}-{max_workers}")
+                args.frieren_executor_max_workers = max_workers
+                args.scheduling = scheduling
+                print()
+
+                test_vary_max_num_batched_tokens(args)
+
+    def test_vary_block_allocator(args):
+        args.swap_space = 0
+        for block_allocator in list(BLOCK_ALLOCATOR_MAP.keys()):
+            print("block_allocator", block_allocator)
+            args.block_allocator = block_allocator
+            # test_vary_scheduling(args)
+
+        args.swap_space = 40
+        for enable_prefix_caching in [True, False]:
+            print("kv_cache_manager", "OffloadingKVCaching",
+                  "enable_prefix_caching", enable_prefix_caching)
+            args.block_allocator = None
+            args.enable_prefix_caching = enable_prefix_caching
+            test_vary_scheduling(args)
+
+    test_vary_block_allocator(args)

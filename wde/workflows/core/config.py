@@ -512,7 +512,7 @@ class SYSConfig:
                  zero_server_pool_size: int = None,
                  record_metrics: bool = False,
                  kv_cache_offloading_max_workers: int = 1,
-                 kv_cache_transfer_max_workers: int = 2):
+                 kv_cache_transfer_max_workers: int = 1):
         self.gevent_engine_threadpool_size = gevent_engine_threadpool_size or 4
         self.frieren_executor_max_workers = frieren_executor_max_workers
         self.zero_server_pool_size = zero_server_pool_size or max_num_requests * 4
