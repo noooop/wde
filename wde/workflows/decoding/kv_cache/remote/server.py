@@ -104,27 +104,35 @@ class ZeroRemoteKVCacheServer(Z_MethodZeroServer):
                               f"[{len(request.block_hashs)}] != "
                               f"len(request.blocks)! [{len(request.blocks)}]")
 
-        force = request.force
+        block_shape = self._cache.block_shape
 
+        force = request.force
         total = len(request.block_hashs)
         exist = 0
 
         blocks = []
         for i in range(total):
-            block_hash = request.block_hashs[i]
-            block = self._cache.get_or_create(block_hash)
             data = request.blocks[i]
+
+            assert data.shape == block_shape
+
+            block_hash = request.block_hashs[i]
+
+            block = self._cache.get_or_create(block_hash)
 
             # NoFreeBlocksError
             if block is None:
-                break
+                continue
 
-            # block has been written
-            if not block.lock and not force:
+            if not force:
                 exist += 1
                 continue
 
-            block.lock = True
+            if block.lock:
+                exist += 1
+                continue
+
+            block.acquire()
 
             self._cache.block_allocator.hold(block)
             blocks.append((block, data))
@@ -133,12 +141,12 @@ class ZeroRemoteKVCacheServer(Z_MethodZeroServer):
             for block, data in blocks:
                 self._cache.kv_cache[block.physical_block_id] = data
 
-        f = self.threads.submit(memcpy)
-        f.result()
-
         rep = ZeroServerResponseOk(
             msg=SetResponse(total=total, exist=exist).dict())
         self.zero_send(req, rep)
+
+        f = self.threads.submit(memcpy)
+        f.result()
 
         for block, data in blocks:
             block.release()

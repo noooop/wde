@@ -100,8 +100,7 @@ class CPUBlockAllocator:
             return
 
         new_block = CPUBlock(block_hash=block_hash,
-                             physical_block_id=physical_block_id,
-                             lock=True)
+                             physical_block_id=physical_block_id)
 
         self._full_blocks_map[new_block.block_hash] = new_block
 

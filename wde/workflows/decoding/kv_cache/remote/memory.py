@@ -29,6 +29,7 @@ class RemoteMemoryKVCache:
         self.kv_cache = self._allocate_kv_cache()
         self.block_allocator = CPUBlockAllocator(num_blocks=self.num_blocks,
                                                  block_size=self.block_size)
+        self.block_shape = self.kv_cache.shape[1:]
 
         logger.info(
             f"KV cache shape:{self.kv_cache.shape}. KV cache size {self.cache_block_size / _MB} MB."

@@ -227,7 +227,7 @@ if __name__ == '__main__':
         time.sleep(10)
 """
 Qwen/Qwen2.5-7B-Instruct
-set elapsed time:  0.12471285799983889
-get elapsed time:  0.16931634599950485
-stream_get elapsed time:  0.0733827679996466
+set elapsed time:  0.09858915899894782
+get elapsed time:  0.15591372200287879
+stream_get elapsed time:  0.07319663000089349
 """
