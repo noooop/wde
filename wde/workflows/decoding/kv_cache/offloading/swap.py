@@ -201,6 +201,7 @@ class SwapInManager:
             self.gpu_block_allocator.free(gpu_block)
 
 
+@torch.inference_mode
 def swap_blocks(from_cache, to_cache, block_mapping):
     n = 2
 
@@ -218,11 +219,11 @@ def swap_blocks(from_cache, to_cache, block_mapping):
         to_cache = to_cache.view((-1, ) + shape[3:])
 
         for i in range(num_attention_layers):
-            ops.swap_blocks(from_cache[i][0], to_cache, blocks_to_swap)
+            ops.swap_blocks(from_cache[i][0], to_cache, blocks_to_swap.clone())
 
             blocks_to_swap[:, index] += 1
 
-            ops.swap_blocks(from_cache[i][1], to_cache, blocks_to_swap)
+            ops.swap_blocks(from_cache[i][1], to_cache, blocks_to_swap.clone())
 
             blocks_to_swap[:, index] += 1
 
@@ -240,10 +241,10 @@ def swap_blocks(from_cache, to_cache, block_mapping):
         from_cache = from_cache.view((-1, ) + shape[3:])
 
         for i in range(num_attention_layers):
-            ops.swap_blocks(from_cache, to_cache[i][0], blocks_to_swap)
+            ops.swap_blocks(from_cache, to_cache[i][0], blocks_to_swap.clone())
 
             blocks_to_swap[:, index] += 1
 
-            ops.swap_blocks(from_cache, to_cache[i][1], blocks_to_swap)
+            ops.swap_blocks(from_cache, to_cache[i][1], blocks_to_swap.clone())
 
             blocks_to_swap[:, index] += 1

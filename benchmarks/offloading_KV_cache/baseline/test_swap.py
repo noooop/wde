@@ -162,10 +162,11 @@ if __name__ == '__main__':
             head_size,
             cache_dtype,
             pin_memory=True)
+
 """
 Qwen/Qwen2.5-7B-Instruct
-gpu to cpu b2b naive elapsed time:  0.3089604969991342
-gpu to cpu b2b ops.swap_blocks elapsed time:  0.07835619599973143
-cpu to gpu b2b naive elapsed time:  0.18914010299886286
-cpu to gpu b2b ops.swap_blocks elapsed time:  0.07765093099988007
+gpu to cpu b2b naive elapsed time:  0.31198898499997085
+gpu to cpu b2b ops.swap_blocks elapsed time:  0.05481810399999176
+cpu to gpu b2b naive elapsed time:  0.18868168899996363
+cpu to gpu b2b ops.swap_blocks elapsed time:  0.06347318299992821
 """
