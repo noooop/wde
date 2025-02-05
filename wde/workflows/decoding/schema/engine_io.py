@@ -25,6 +25,13 @@ class DecodingSchedulerOutput(SchedulerOutput):
     def is_empty(self) -> bool:
         return not self.scheduled_requests
 
+    @classmethod
+    def create_empty(cls) -> "DecodingSchedulerOutput":
+        return DecodingSchedulerOutput(scheduled_requests=[],
+                                       ignored_requests=[],
+                                       num_batched_tokens=0,
+                                       num_requests=0)
+
 
 @dataclass
 class CompletionOutput:

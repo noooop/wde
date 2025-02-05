@@ -128,21 +128,19 @@ class NaiveDecodingScheduler(Scheduler):
         return cls(engine.engine_config, engine.request_processor,
                    kv_cache_manager)
 
-    def _schedule_waiting(
-        self,
-        budget: DecodingSchedulingBudget,
-    ) -> SchedulerWaitingOutputs:
+    def _schedule_waiting(self, ) -> SchedulerWaitingOutputs:
         ignored_requests: List[DecodingSchedulableRequest] = []
         scheduled_requests: List[DecodingSchedulableRequest] = []
 
         waiting_queue = self.waiting
-        while waiting_queue:
-            if budget.full():
-                break
+        running_queue = self.running
+        num_running_requests = len(running_queue)
+        max_num_requests = self.scheduler_config.max_num_requests
+        max_num_on_the_fly = self.scheduler_config.max_num_on_the_fly
+        max_min_requests_in_running_queue = max_num_requests * (
+            max_num_on_the_fly + 1)
 
-            if self.kv_cache_manager.high_watermark():
-                break
-
+        while waiting_queue and num_running_requests < max_min_requests_in_running_queue:
             request = waiting_queue[0]
 
             if self.record_metrics:
@@ -173,42 +171,21 @@ class NaiveDecodingScheduler(Scheduler):
                 waiting_queue.popleft()
                 continue
 
-            # 4. chunked prefill
-            budget_bound_token_chunk_size = min(
-                num_new_tokens, budget.remaining_token_budget())
-
-            if budget_bound_token_chunk_size == 0:
-                # No budget => Stop
-                break
+            # 4. Can schedule this request.
+            waiting_queue.popleft()
 
             # 5. create vblock
             self.kv_cache_manager.create(request)
 
-            # 6. try allocate
-            memory_bound_token_chunk_size = self.kv_cache_manager.can_allocate(
-                request, budget_bound_token_chunk_size)
-
-            if memory_bound_token_chunk_size == 0:
-                # No free gpu blocks => Stop
-                break
-
-            # Can schedule this request.
-            waiting_queue.popleft()
-            request.token_chunk_size = memory_bound_token_chunk_size
-
-            # 7. Allocate kv cache
-            self.kv_cache_manager.allocate(request)
-
-            # 8. set running
+            # 6. set running
             request.status = RequestStatus.RUNNING
-
-            scheduled_requests.append(request)
-            budget.add_num_batched_tokens(request.request_id,
-                                          request.token_chunk_size)
-            budget.add_num_requests(request.request_id, 1)
 
             if self.record_metrics:
                 request.set_scheduled_ts(scheduled_ts)
+
+            # add to scheduled_requests
+            num_running_requests += 1
+            scheduled_requests.append(request)
 
         return SchedulerWaitingOutputs(scheduled_requests=scheduled_requests,
                                        ignored_requests=ignored_requests)
@@ -284,46 +261,41 @@ class NaiveDecodingScheduler(Scheduler):
                                        preempted=preempted)
 
     def _schedule(self) -> DecodingSchedulerOutput:
+        if not self.waiting and not self.running:
+            return DecodingSchedulerOutput.create_empty()
+
+        # schedule waiting
+        waiting_scheduled = self._schedule_waiting()
+        self.running.extend(waiting_scheduled.scheduled_requests)
+
+        running_queue, busy_requests = self._filter_out_busy_requests()
+
+        if not running_queue:
+            return DecodingSchedulerOutput.create_empty()
+
+        # schedule running
         budget = DecodingSchedulingBudget(
             token_budget=self.scheduler_config.max_num_batched_tokens,
             max_num_requests=self.scheduler_config.max_num_requests,
         )
 
+        running_scheduled = self._schedule_running(budget, running_queue)
+
+        self.running = running_queue
+
+        self.running.extend(running_scheduled.decode_requests)
+        self.running.extend(running_scheduled.prefill_requests)
+
+        self.running.extend(busy_requests)
+        self.running.extend(running_scheduled.preempted)
+
         scheduled_requests = []
-
-        if self.running:
-            running_queue, busy_requests = self._split_running_queue()
-
-            if running_queue:
-                running_scheduled = self._schedule_running(
-                    budget, running_queue)
-
-                self.running = running_queue
-
-                self.running.extend(running_scheduled.decode_requests)
-                self.running.extend(running_scheduled.prefill_requests)
-
-                self.running.extend(busy_requests)
-                self.running.extend(running_scheduled.preempted)
-
-                scheduled_requests.extend(running_scheduled.decode_requests)
-                scheduled_requests.extend(running_scheduled.prefill_requests)
-
-            else:
-                self.running = deque(busy_requests)
+        scheduled_requests.extend(running_scheduled.decode_requests)
+        scheduled_requests.extend(running_scheduled.prefill_requests)
 
         assert (budget.num_batched_tokens
                 <= self.scheduler_config.max_num_batched_tokens)
         assert budget.num_curr_requests <= self.scheduler_config.max_num_requests
-
-        waiting_scheduled = self._schedule_waiting(budget)
-
-        assert (budget.num_batched_tokens
-                <= self.scheduler_config.max_num_batched_tokens)
-        assert budget.num_curr_requests <= self.scheduler_config.max_num_requests
-
-        self.running.extend(waiting_scheduled.scheduled_requests)
-        scheduled_requests.extend(waiting_scheduled.scheduled_requests)
 
         return DecodingSchedulerOutput(
             scheduled_requests=scheduled_requests,
@@ -370,7 +342,7 @@ class NaiveDecodingScheduler(Scheduler):
 
         self.running = remaining
 
-    def _split_running_queue(self):
+    def _filter_out_busy_requests(self):
         busy_requests = []
         running_queue = []
         for request in self.running:
@@ -384,8 +356,9 @@ class NaiveDecodingScheduler(Scheduler):
 
             if request.busy:
                 busy_requests.append(request)
-            else:
-                running_queue.append(request)
+                continue
+
+            running_queue.append(request)
 
         running_queue: Deque[DecodingSchedulableRequest] = deque(
             sorted(running_queue, key=lambda request: request.arrival_time))

@@ -2,7 +2,8 @@ from dataclasses import dataclass, fields
 from typing import Optional, Union
 
 from wde.logger import init_logger
-from wde.workflows.core.config import CacheConfig, EngineConfig, ModelConfig
+from wde.workflows.core.config import (CacheConfig, EngineConfig, ModelConfig,
+                                       SchedulerConfig)
 
 logger = init_logger(__name__)
 
@@ -16,7 +17,7 @@ class DecodingModelConfig(ModelConfig):
         self.max_logprobs = max_logprobs
 
 
-class DecodingSchedulerConfig:
+class DecodingSchedulerConfig(SchedulerConfig):
     supported_scheduling = ["sync", "simple_async", "async"]
 
     def __init__(self,
