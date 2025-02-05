@@ -173,12 +173,18 @@ def benchmark_blockwise_to_blockwise_transfer_blocks(N, max_num_batched_tokens,
         pyximport.install(setup_args={"include_dirs": np.get_include()})
 
         from benchmarks.remote_kv_cache.baseline.memcpy import cython_memcpy
+        from wde.workflows.decoding.kv_cache.remote.memory import \
+            get_share_memory_np
 
         to_kv_cache.zero_()
 
         start = time.perf_counter()
 
-        cython_memcpy(from_kv_cache, to_kv_cache, tasks)
+        tasks_np = np.array(tasks, dtype=np.int32)
+        from_kv_cache_np = get_share_memory_np(from_kv_cache)
+        to_kv_cache_np = get_share_memory_np(to_kv_cache)
+
+        cython_memcpy(from_kv_cache_np, to_kv_cache_np, tasks_np)
 
         end = time.perf_counter()
         elapsed_time = end - start
@@ -228,9 +234,9 @@ if __name__ == '__main__':
             pin_memory=False)
 """
 Qwen/Qwen2.5-7B-Instruct
-l2l naive elapsed time:  0.08631483400040452
-b2b naive elapsed time:  0.030394221999813453
-b2b fancy index elapsed time:  0.06969807499990566
-b2b index_copy_ elapsed time:  0.06978143000014825
-b2b cython memcpy elapsed time:  0.03572655500011024
+l2l naive elapsed time:  0.08620247100043343
+b2b naive elapsed time:  0.029708318000302825
+b2b fancy index elapsed time:  0.07098750899967854
+b2b index_copy_ elapsed time:  0.07137100100044336
+b2b cython memcpy elapsed time:  0.035842751000018325
 """
