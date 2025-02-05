@@ -162,7 +162,6 @@ if __name__ == '__main__':
             head_size,
             cache_dtype,
             pin_memory=True)
-
 """
 Qwen/Qwen2.5-7B-Instruct
 gpu to cpu b2b naive elapsed time:  0.31198898499997085

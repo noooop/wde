@@ -24,6 +24,7 @@ class SetRequest(BaseModel):
     block_hashs: Any
     blocks: Any
     force: bool
+    deferred: bool
 
 
 class SetResponse(BaseModel):

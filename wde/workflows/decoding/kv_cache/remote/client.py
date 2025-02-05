@@ -34,14 +34,21 @@ class ZeroRemoteKVCacheClient(ZeroClient):
 
             return generator()
 
-    def set(self, name, model, block_hashs, blocks, force=False):
+    def set(self,
+            name,
+            model,
+            block_hashs,
+            blocks,
+            force=False,
+            deferred=True):
         method = "set"
 
         data = {
             "model": model,
             "block_hashs": block_hashs,
             "blocks": blocks,
-            "force": force
+            "force": force,
+            "deferred": deferred
         }
 
         if CLIENT_VALIDATION:

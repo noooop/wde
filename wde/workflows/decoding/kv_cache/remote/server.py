@@ -107,6 +107,7 @@ class ZeroRemoteKVCacheServer(Z_MethodZeroServer):
         block_shape = self._cache.block_shape
 
         force = request.force
+        deferred = request.deferred
         total = len(request.block_hashs)
         exist = 0
 
@@ -141,16 +142,28 @@ class ZeroRemoteKVCacheServer(Z_MethodZeroServer):
             for block, data in blocks:
                 self._cache.kv_cache[block.physical_block_id] = data
 
-        rep = ZeroServerResponseOk(
-            msg=SetResponse(total=total, exist=exist).dict())
-        self.zero_send(req, rep)
+        if deferred:
+            rep = ZeroServerResponseOk(
+                msg=SetResponse(total=total, exist=exist).dict())
+            self.zero_send(req, rep)
 
-        f = self.threads.submit(memcpy)
-        f.result()
+            f = self.threads.submit(memcpy)
+            f.result()
 
-        for block, data in blocks:
-            block.release()
-            self._cache.block_allocator.free(block)
+            for block, data in blocks:
+                block.release()
+                self._cache.block_allocator.free(block)
+        else:
+            f = self.threads.submit(memcpy)
+            f.result()
+
+            for block, data in blocks:
+                block.release()
+                self._cache.block_allocator.free(block)
+
+            rep = ZeroServerResponseOk(
+                msg=SetResponse(total=total, exist=exist).dict())
+            self.zero_send(req, rep)
 
     def z_contains(self, req):
         request = ContainsRequest(**req.data)

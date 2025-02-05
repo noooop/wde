@@ -89,7 +89,7 @@ def benchmark_remote_kv_cache_server(name, N, max_num_batched_tokens,
                 torch.isclose(from_kv_cache[from_ids], to_kv_cache[to_ids])):
             assert False
 
-    def test_set():
+    def test_set(deferred):
 
         # warming up
         for i in range(N):
@@ -98,7 +98,12 @@ def benchmark_remote_kv_cache_server(name, N, max_num_batched_tokens,
             from_block_hashs = block_hashs[from_ids]
             blocks = [from_kv_cache_np[f] for f in from_ids]
 
-            client.set(server_name, name, from_block_hashs, blocks, force=True)
+            client.set(server_name,
+                       name,
+                       from_block_hashs,
+                       blocks,
+                       force=True,
+                       deferred=deferred)
 
         start = time.perf_counter()
 
@@ -108,12 +113,17 @@ def benchmark_remote_kv_cache_server(name, N, max_num_batched_tokens,
             from_block_hashs = block_hashs[from_ids]
             blocks = [from_kv_cache_np[f] for f in from_ids]
 
-            client.set(server_name, name, from_block_hashs, blocks, force=True)
+            client.set(server_name,
+                       name,
+                       from_block_hashs,
+                       blocks,
+                       force=True,
+                       deferred=deferred)
 
         end = time.perf_counter()
         elapsed_time = end - start
 
-        print("set elapsed time: ", elapsed_time)
+        print(f"set deferred={deferred} elapsed time: ", elapsed_time)
 
     def test_contains():
         for i in range(N):
@@ -188,7 +198,8 @@ def benchmark_remote_kv_cache_server(name, N, max_num_batched_tokens,
         print("stream_get elapsed time: ", elapsed_time)
 
     try:
-        test_set()
+        test_set(deferred=False)
+        test_set(deferred=True)
         test_contains()
         test_get()
         test_stream_get()
@@ -227,7 +238,8 @@ if __name__ == '__main__':
         time.sleep(10)
 """
 Qwen/Qwen2.5-7B-Instruct
-set elapsed time:  0.09858915899894782
-get elapsed time:  0.15591372200287879
-stream_get elapsed time:  0.07319663000089349
+set deferred=False elapsed time:  0.12489648599989778
+set deferred=True elapsed time:  0.0894639969999389
+get elapsed time:  0.2792327990000558
+stream_get elapsed time:  0.07935212699999283
 """
