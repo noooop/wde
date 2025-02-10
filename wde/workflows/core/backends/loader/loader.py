@@ -25,6 +25,8 @@ from wde.workflows.core.backends.loader.weight_utils import (
     filter_duplicate_safetensors_files, filter_files_not_needed_for_inference,
     get_quant_config, np_cache_weights_iterator, pt_weights_iterator,
     safetensors_weights_iterator)
+from wde.workflows.core.backends.models.transformers_utils.config import \
+    model_overwrite
 from wde.workflows.core.backends.quantization import QuantizationConfig
 from wde.workflows.core.backends.utils import set_weight_attrs
 from wde.workflows.core.config import (CacheConfig, DeviceConfig, EngineConfig,
@@ -177,6 +179,7 @@ class DefaultModelLoader(BaseModelLoader):
         """Prepare weights for the model.
 
         If the model is not local, it will be downloaded."""
+
         model_name_or_path = self._maybe_download_from_modelscope(
             model_name_or_path, revision) or model_name_or_path
 
@@ -245,6 +248,7 @@ class DefaultModelLoader(BaseModelLoader):
         fall_back_to_pt: bool
     ) -> Generator[Tuple[str, torch.Tensor], None, None]:
         """Get an iterator for the model weights based on the load format."""
+
         hf_folder, hf_weights_files, use_safetensors = self._prepare_weights(
             model_name_or_path, revision, fall_back_to_pt)
         if self.load_config.load_format == LoadFormat.NPCACHE:
@@ -267,10 +271,13 @@ class DefaultModelLoader(BaseModelLoader):
                    device_config: DeviceConfig,
                    scheduler_config: Optional[SchedulerConfig] = None,
                    cache_config: Optional[CacheConfig] = None) -> nn.Module:
+
+        model_name_or_path = model_overwrite(model_config.model)
+
         target_device = torch.device(device_config.device)
         with set_default_torch_dtype(model_config.dtype):
             model.load_weights(
-                self._get_weights_iterator(model_config.model,
+                self._get_weights_iterator(model_name_or_path,
                                            model_config.revision,
                                            fall_back_to_pt=getattr(
                                                model,
