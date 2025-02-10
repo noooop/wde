@@ -2,6 +2,8 @@ from vllm.transformers_utils.detokenizer import (convert_prompt_ids_to_tokens,
                                                  detokenize_incrementally)
 from vllm.transformers_utils.tokenizer import get_tokenizer
 
+from wde.workflows.core.backends.models.transformers_utils.config import \
+    model_overwrite
 from wde.workflows.decoding import SamplingParams
 from wde.workflows.decoding.schema.request import DecodingSchedulableRequest
 
@@ -11,6 +13,7 @@ INVALID_TOKEN_ID = -1
 class Tokenizer(object):
 
     def __init__(self, tokenizer_name: str, **kwargs):
+        tokenizer_name = model_overwrite(tokenizer_name)
         self.tokenizer = get_tokenizer(tokenizer_name=tokenizer_name, **kwargs)
 
     @classmethod

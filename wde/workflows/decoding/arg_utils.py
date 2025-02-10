@@ -44,10 +44,6 @@ class DecodingEngineArgs(EngineArgs):
     max_num_swap_in_blocks: Optional[int] = None
     max_num_swap_in_requests: Optional[int] = None
 
-    def __post_init__(self):
-        if self.tokenizer is None:
-            self.tokenizer = self.model
-
     def create_engine_config(self, ) -> EngineConfig:
         engine_config = super().create_engine_config()
 

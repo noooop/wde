@@ -34,6 +34,26 @@ for name, cls in _CONFIG_REGISTRY.items():
         AutoConfig.register(name, cls)
 
 
+def model_overwrite(model):
+    import pathlib
+
+    model_overwrite_name = ".model.overwrite"
+    model_overwrite_path = pathlib.Path.home() / model_overwrite_name
+    model_overwrite_dict = {}
+
+    if model_overwrite_path.exists():
+        for line in open(model_overwrite_path).readlines():
+            model_name, overwrite_name = line.split("\t")
+            model_overwrite_dict[model_name] = overwrite_name.strip()
+
+    if model in model_overwrite_dict:
+        new_model = model_overwrite_dict[model]
+        logger.info(f"model overwrite: [{model}] -> [{new_model}]")
+        model = new_model
+
+    return model
+
+
 def get_config(model: str,
                trust_remote_code: bool,
                revision: Optional[str] = None,
@@ -42,7 +62,7 @@ def get_config(model: str,
                rope_theta: Optional[float] = None) -> PretrainedConfig:
     try:
         config = AutoConfig.from_pretrained(
-            model,
+            model_overwrite(model),
             trust_remote_code=trust_remote_code,
             revision=revision,
             code_revision=code_revision)

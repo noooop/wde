@@ -29,10 +29,6 @@ class DecodeOnlyOutputLastHiddenStatesEngineArgs(EngineArgs):
     # parallel_config
     data_parallel_size: int = 0
 
-    def __post_init__(self):
-        if self.tokenizer is None:
-            self.tokenizer = self.model
-
     def create_engine_config(self) -> DecodeOnlyEngineConfig:
         engine_config = super().create_engine_config()
 

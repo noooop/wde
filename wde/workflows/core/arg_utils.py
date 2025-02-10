@@ -48,6 +48,10 @@ class EngineArgs:
     zero_server_pool_size: int = None
     record_metrics: bool = False
 
+    def __post_init__(self):
+        if self.tokenizer is None:
+            self.tokenizer = self.model
+
     def create_engine_config(self):
         device_config = DeviceConfig(device=self.device)
         model_config = ModelConfig(
