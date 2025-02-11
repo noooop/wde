@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Optional
 
 from pydantic import BaseModel
 
@@ -10,8 +10,11 @@ class GetRequest(BaseModel):
 
 
 class GetResponse(BaseModel):
-    block_hashs: Any
-    blocks: Any
+    total: int
+    hit: int
+    miss: int
+    block_hashs: Optional[Any] = None
+    blocks: Optional[Any] = None
 
 
 class GetResponseStream(BaseModel):

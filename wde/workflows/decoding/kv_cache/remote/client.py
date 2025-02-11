@@ -30,7 +30,11 @@ class ZeroRemoteKVCacheClient(ZeroClient):
 
             def generator():
                 for rep in response:
-                    yield self.check_response(name, rep, GetResponseStream)
+                    if "total" in rep.msg:
+                        # first response is metadata
+                        yield self.check_response(name, rep, GetResponse)
+                    else:
+                        yield self.check_response(name, rep, GetResponseStream)
 
             return generator()
 

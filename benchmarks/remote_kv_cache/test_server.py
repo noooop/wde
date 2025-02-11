@@ -180,6 +180,7 @@ def benchmark_remote_kv_cache_server(name, N, max_num_batched_tokens,
                                   name,
                                   from_block_hashs,
                                   stream=True)
+            metadata = next(response)
 
             count = 0
 
@@ -189,6 +190,7 @@ def benchmark_remote_kv_cache_server(name, N, max_num_batched_tokens,
                 count += 1
 
             assert count == n
+            assert metadata.hit == n
 
         end = time.perf_counter()
         elapsed_time = end - start

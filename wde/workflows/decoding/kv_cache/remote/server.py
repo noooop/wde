@@ -44,19 +44,30 @@ class ZeroRemoteKVCacheServer(Z_MethodZeroServer):
         stream = request.stream
         total = len(request.block_hashs)
 
+        hit = 0
+        miss = 0
+
         blocks = []
         block_hashs = []
+        block_hashs_set = set()
         for i in range(total):
             block_hash = request.block_hashs[i]
+
+            if block_hash in block_hashs_set:
+                continue
 
             block = self._cache.get(block_hash)
 
             if block is None:
+                miss += 1
                 continue
 
             self._cache.block_allocator.hold(block)
 
+            hit += 1
+
             block_hashs.append(block_hash)
+            block_hashs_set.add(block_hash)
             blocks.append(block)
 
         def send():
@@ -64,12 +75,20 @@ class ZeroRemoteKVCacheServer(Z_MethodZeroServer):
                                       dtype=request.block_hashs.dtype)
 
             if stream:
-                total = len(blocks)
-                for i in range(total):
+                rep = ZeroServerStreamResponseOk(rep_id=0,
+                                                 snd_more=hit > 0,
+                                                 msg=GetResponse(
+                                                     total=total,
+                                                     hit=hit,
+                                                     miss=miss).dict())
+
+                self.zero_send(req, rep)
+
+                for i in range(hit):
                     block_hash = block_hashs_np[i:i + 1]
                     data = self._cache.kv_cache[blocks[i].physical_block_id]
 
-                    rep = ZeroServerStreamResponseOk(rep_id=i,
+                    rep = ZeroServerStreamResponseOk(rep_id=i + 1,
                                                      snd_more=not i == total,
                                                      msg=GetResponseStream(
                                                          block_hash=block_hash,
@@ -82,8 +101,12 @@ class ZeroRemoteKVCacheServer(Z_MethodZeroServer):
                     for block in blocks
                 ]
 
-                rep = ZeroServerResponseOk(msg=GetResponse(
-                    block_hashs=block_hashs_np, blocks=data).dict())
+                rep = ZeroServerResponseOk(
+                    msg=GetResponse(total=total,
+                                    hit=hit,
+                                    miss=miss,
+                                    block_hashs=block_hashs_np,
+                                    blocks=data).dict())
                 self.zero_send(req, rep)
 
         send()
@@ -121,15 +144,16 @@ class ZeroRemoteKVCacheServer(Z_MethodZeroServer):
 
             block = self._cache.get_or_create(block_hash)
 
-            # NoFreeBlocksError
             if block is None:
-                continue
-
-            if not force:
-                exist += 1
+                # NoFreeBlocksError
                 continue
 
             if block.lock:
+                # doing write
+                continue
+
+            if block.lock is not None and not force:
+                # has been written
                 exist += 1
                 continue
 
