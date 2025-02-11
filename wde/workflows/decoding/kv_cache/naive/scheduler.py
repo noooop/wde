@@ -137,10 +137,16 @@ class NaiveDecodingScheduler(Scheduler):
         num_running_requests = len(running_queue)
         max_num_requests = self.scheduler_config.max_num_requests
         max_num_on_the_fly = self.scheduler_config.max_num_on_the_fly
-        max_min_requests_in_running_queue = max_num_requests * (
+        min_requests_in_running_queue = max_num_requests * (
             max_num_on_the_fly + 1)
 
-        while waiting_queue and num_running_requests < max_min_requests_in_running_queue:
+        for i in range(max_num_requests):
+            if not waiting_queue:
+                break
+
+            if num_running_requests >= min_requests_in_running_queue:
+                break
+
             request = waiting_queue[0]
 
             if self.record_metrics:
