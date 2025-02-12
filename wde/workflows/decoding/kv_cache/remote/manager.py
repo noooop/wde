@@ -1,12 +1,16 @@
 import queue
 from concurrent.futures import ThreadPoolExecutor
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Dict, List, Optional
 
+from wde.workflows.decoding.kv_cache.offloading.manager import CPUBlock
 from wde.workflows.decoding.kv_cache.remote.transfer import (
-    TransferOutManager, TransferTask)
+    TransferInManager, TransferOutManager, TransferOutTask)
 
 if TYPE_CHECKING:
+    from wde.workflows.decoding.kv_cache.logic_manager import PrefixHash
     from wde.workflows.decoding.kv_cache.offloading.swap import SwapTask
+    from wde.workflows.decoding.schema.request import \
+        DecodingSchedulableRequest
 
 
 class RemoteManager:
@@ -23,6 +27,14 @@ class RemoteManager:
             remote_manager=self,
         )
 
+        self.transfer_in_manager = TransferInManager(
+            name=engine_config.model_config.model,
+            server_name=engine_config.cache_config.remote_kv_cache_server_name,
+            cpu_cache=cpu_cache,
+            cpu_block_allocator=cpu_block_allocator,
+            remote_manager=self,
+        )
+
         self.threads = ThreadPoolExecutor(
             max_workers=self.engine_config.sys_config.
             kv_cache_transfer_max_workers)
@@ -32,16 +44,36 @@ class RemoteManager:
         if swap_out_task is None:
             return
 
-        return TransferTask.from_swap_out_task(
+        return TransferOutTask.from_swap_out_task(
             swap_out_task=swap_out_task,
             transfer_manager=self.transfer_out_manager)
+
+    def get_transfer_in_blocks(self, request):
+        return self.transfer_in_manager.get_transfer_in_blocks(request)
+
+    def get_transfer_in_task(
+            self, need_transfer_in_blocks: Dict["PrefixHash", "CPUBlock"],
+            need_transfer_in_requests: List["DecodingSchedulableRequest"]):
+        transfer_out_task = self.transfer_in_manager.get_transfer_in_task(
+            need_transfer_in_blocks, need_transfer_in_requests)
+
+        if transfer_out_task is not None:
+            transfer_out_task.submit()
+
+        return transfer_out_task
 
     def check_finishd_task(self):
         while True:
             try:
-                task = self.finishd_task.get(block=False)
+                task_or_exception = self.finishd_task.get(block=False)
             except queue.Empty:
                 break
+
+            if isinstance(task_or_exception, Exception):
+                exception = task_or_exception
+                raise exception
+
+            task = task_or_exception
             task.do_callback()
 
     def join(self):

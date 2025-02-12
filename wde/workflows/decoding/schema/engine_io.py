@@ -9,12 +9,41 @@ from .request import DecodingSchedulableRequest, RequestStatus
 
 
 @dataclass
+class SchedulerWaitingOutputs:
+    scheduled_requests: List[DecodingSchedulableRequest]
+    ignored_requests: List[DecodingSchedulableRequest]
+
+    @classmethod
+    def create_empty(cls) -> "SchedulerWaitingOutputs":
+        return cls(
+            scheduled_requests=[],
+            ignored_requests=[],
+        )
+
+
+@dataclass
+class SchedulerRunningOutputs:
+    decode_requests: List[DecodingSchedulableRequest]
+    prefill_requests: List[DecodingSchedulableRequest]
+    preempted: List[DecodingSchedulableRequest]
+
+    @classmethod
+    def create_empty(cls) -> "SchedulerRunningOutputs":
+        return SchedulerRunningOutputs(decode_requests=[],
+                                       prefill_requests=[],
+                                       preempted=[])
+
+
+@dataclass
 class DecodingSchedulerOutput(SchedulerOutput):
     scheduled_requests: List[DecodingSchedulableRequest]
     ignored_requests: List[DecodingSchedulableRequest]
 
     num_batched_tokens: int
     num_requests: int
+
+    waiting_scheduled: Optional[SchedulerWaitingOutputs] = None
+    running_scheduled: Optional[SchedulerRunningOutputs] = None
 
     def is_empty(self) -> bool:
         return not self.scheduled_requests

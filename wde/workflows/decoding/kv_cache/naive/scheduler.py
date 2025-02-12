@@ -11,7 +11,8 @@ from wde.workflows.core.scheduler import Scheduler
 from wde.workflows.core.schema.engine_io import RequestOutput
 from wde.workflows.decoding.kv_cache.logic_manager import LogicKVCacheManager
 from wde.workflows.decoding.schema.engine_io import (
-    DecodingSchedulableRequest, DecodingSchedulerOutput)
+    DecodingSchedulableRequest, DecodingSchedulerOutput,
+    SchedulerRunningOutputs, SchedulerWaitingOutputs)
 from wde.workflows.decoding.schema.request import RequestStatus
 
 logger = init_logger(__name__)
@@ -77,32 +78,6 @@ class DecodingSchedulingBudget:
             return True
 
         return False
-
-
-@dataclass
-class SchedulerRunningOutputs:
-    decode_requests: List[DecodingSchedulableRequest]
-    prefill_requests: List[DecodingSchedulableRequest]
-    preempted: List[DecodingSchedulableRequest]
-
-    @classmethod
-    def create_empty(cls) -> "SchedulerRunningOutputs":
-        return SchedulerRunningOutputs(decode_requests=[],
-                                       prefill_requests=[],
-                                       preempted=[])
-
-
-@dataclass
-class SchedulerWaitingOutputs:
-    scheduled_requests: List[DecodingSchedulableRequest]
-    ignored_requests: List[DecodingSchedulableRequest]
-
-    @classmethod
-    def create_empty(cls) -> "SchedulerWaitingOutputs":
-        return SchedulerWaitingOutputs(
-            scheduled_requests=[],
-            ignored_requests=[],
-        )
 
 
 class NaiveDecodingScheduler(Scheduler):

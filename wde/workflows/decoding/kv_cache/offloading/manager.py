@@ -83,9 +83,15 @@ class CPUBlockAllocator:
         block = self._full_blocks_map.get(block_hash, None)
 
         if block is None:
+            # cache missing
             return None
 
-        if not block.ready():
+        if block.lock is None:
+            # newly created, not written yet
+            return None
+
+        if block.lock:
+            # writing
             return None
 
         self._free_full_blocks.remove(block)

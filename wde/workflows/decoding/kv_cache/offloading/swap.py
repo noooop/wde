@@ -97,18 +97,20 @@ class SwapOutManager:
 
                 block_hash = gpu_block.block_hash
 
-                if block_hash in self.cpu_block_allocator:
-                    continue
-
                 if block_hash in remove_duplicates:
                     continue
 
-                remove_duplicates.add(block_hash)
-
-                cpu_block = self.cpu_block_allocator.copy_block(gpu_block)
+                cpu_block = self.cpu_block_allocator.create(block_hash)
 
                 if cpu_block is None:
+                    # NoFreeBlocksError
                     break
+
+                if cpu_block.lock is not None:
+                    # not newly created
+                    continue
+
+                remove_duplicates.add(block_hash)
 
                 # read from gpu_block
                 self.gpu_block_allocator.hold(gpu_block)
@@ -158,9 +160,6 @@ class SwapInManager:
         need_swap_in_blocks = []
 
         for gpu_block in maybe_swap_in_blocks:
-            if gpu_block.lock:
-                continue
-
             gpu_block.ensure_block_hash()
 
             block_hash = gpu_block.block_hash

@@ -158,7 +158,9 @@ class OffloadingKVCachingDecodingScheduler(PrefixCachingDecodingScheduler):
             num_batched_tokens=budget.num_batched_tokens,
             num_requests=budget.num_curr_requests,
             ignored_requests=waiting_scheduled.ignored_requests,
-            need_swap_in_blocks=swap_in_budget.need_swap_in_blocks)
+            need_swap_in_blocks=swap_in_budget.need_swap_in_blocks,
+            waiting_scheduled=waiting_scheduled,
+            running_scheduled=running_scheduled)
 
     def _schedule_swap_in_runnings(self, swap_in_budget):
         busy_requests = []
