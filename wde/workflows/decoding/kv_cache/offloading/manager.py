@@ -20,7 +20,11 @@ class CPUBlock:
     block_hash: Optional[PrefixHash] = None
     physical_block_id: Optional[BlockId] = None
     ref_count: int = 0
-    lock: bool = False
+
+    # newly created: lock = None
+    # write lock: lock = True
+    # write accomplished: lock = False
+    lock: Optional[bool] = None
 
     def incr(self):
         self.ref_count += 1
@@ -32,7 +36,7 @@ class CPUBlock:
         return self.ref_count
 
     def ready(self):
-        return not self.lock
+        return self.lock is None or not self.lock
 
     def acquire(self):
         if self.ready():

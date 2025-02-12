@@ -1,14 +1,11 @@
-from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, List, Optional, Sequence, Union
+from dataclasses import dataclass
+from typing import List, Optional, Sequence, Union
 
 from wde.workflows.core.schema.engine_io import (RequestMetrics, RequestOutput,
                                                  SchedulerOutput)
 
 from .execute_io import PromptLogprobs, SampleLogprobs
 from .request import DecodingSchedulableRequest, RequestStatus
-
-if TYPE_CHECKING:
-    from wde.workflows.decoding.kv_cache.offloading.swap import SwapTask
 
 
 @dataclass
@@ -19,18 +16,15 @@ class DecodingSchedulerOutput(SchedulerOutput):
     num_batched_tokens: int
     num_requests: int
 
-    need_swap_in_blocks: List = field(default_factory=list)
-    swap_out_task: Optional["SwapTask"] = None
-
     def is_empty(self) -> bool:
         return not self.scheduled_requests
 
     @classmethod
     def create_empty(cls) -> "DecodingSchedulerOutput":
-        return DecodingSchedulerOutput(scheduled_requests=[],
-                                       ignored_requests=[],
-                                       num_batched_tokens=0,
-                                       num_requests=0)
+        return cls(scheduled_requests=[],
+                   ignored_requests=[],
+                   num_batched_tokens=0,
+                   num_requests=0)
 
 
 @dataclass

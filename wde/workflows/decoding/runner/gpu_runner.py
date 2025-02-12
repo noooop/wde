@@ -81,7 +81,7 @@ class GPUDecodingRunner(GPURunner):
             model_input = model_input.to("cuda", non_blocking=True)
             model_input = model_input.deferred_to("cuda", non_blocking=True)
 
-        if execute_input.swap_out_task is not None:
+        if getattr(execute_input, "swap_out_task", None) is not None:
             main_stream.synchronize()
             execute_input.swap_out_task.submit()
 

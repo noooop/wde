@@ -126,7 +126,10 @@ class DecodingModelInputBuilder(ModelInputBuilder):
             return DecodingExecuteInput(worker_input=None, model_input=None)
 
         model_input = self.prepare_model_input(scheduled_requests)
-        return DecodingExecuteInput(
-            worker_input=None,
-            model_input=model_input,
-            swap_out_task=scheduler_output.swap_out_task)
+
+        execute_input = DecodingExecuteInput(worker_input=None,
+                                             model_input=model_input)
+
+        execute_input.swap_out_task = getattr(scheduler_output,
+                                              "swap_out_task", None)
+        return execute_input

@@ -1,6 +1,6 @@
 from collections import deque
 from dataclasses import dataclass, field
-from typing import Deque, List, Optional
+from typing import TYPE_CHECKING, Deque, List, Optional
 
 from wde.logger import init_logger
 from wde.utils import lazy_import
@@ -15,6 +15,9 @@ from wde.workflows.decoding.kv_cache.prefix_caching.scheduler import \
     PrefixCachingDecodingScheduler
 from wde.workflows.decoding.schema.engine_io import DecodingSchedulerOutput
 from wde.workflows.decoding.schema.request import DecodingSchedulableRequest
+
+if TYPE_CHECKING:
+    from wde.workflows.decoding.kv_cache.offloading.swap import SwapTask
 
 logger = init_logger(__name__)
 
@@ -61,6 +64,12 @@ class SchedulerSwapInRunningOutputs:
     running_queue: Deque[DecodingSchedulableRequest]
 
 
+@dataclass
+class DecodingSchedulerOutputWithSwapOutTask(DecodingSchedulerOutput):
+    need_swap_in_blocks: List = field(default_factory=list)
+    swap_out_task: Optional["SwapTask"] = None
+
+
 class OffloadingKVCachingDecodingScheduler(PrefixCachingDecodingScheduler):
     name = "Offloading KV Caching"
     support_scheduling = ["sync_scheduling", "async_scheduling"]
@@ -91,7 +100,7 @@ class OffloadingKVCachingDecodingScheduler(PrefixCachingDecodingScheduler):
                    kv_cache_manager=gpu_kv_cache_manager,
                    offloading_manager=offloading_manager)
 
-    def schedule(self) -> Optional[DecodingSchedulerOutput]:
+    def schedule(self) -> Optional[DecodingSchedulerOutputWithSwapOutTask]:
         self.offloading_manager.check_finishd_task()
 
         scheduler_outputs = super().schedule()
@@ -107,9 +116,9 @@ class OffloadingKVCachingDecodingScheduler(PrefixCachingDecodingScheduler):
 
         return scheduler_outputs
 
-    def _schedule(self) -> DecodingSchedulerOutput:
+    def _schedule(self) -> DecodingSchedulerOutputWithSwapOutTask:
         if not self.waiting and not self.running:
-            return DecodingSchedulerOutput.create_empty()
+            return DecodingSchedulerOutputWithSwapOutTask.create_empty()
 
         # schedule waiting
         waiting_scheduled = self._schedule_waiting()
@@ -144,7 +153,7 @@ class OffloadingKVCachingDecodingScheduler(PrefixCachingDecodingScheduler):
                 <= self.scheduler_config.max_num_batched_tokens)
         assert budget.num_curr_requests <= self.scheduler_config.max_num_requests
 
-        return DecodingSchedulerOutput(
+        return DecodingSchedulerOutputWithSwapOutTask(
             scheduled_requests=scheduled_requests,
             num_batched_tokens=budget.num_batched_tokens,
             num_requests=budget.num_curr_requests,
