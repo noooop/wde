@@ -212,9 +212,15 @@ class OffloadingManager:
     def check_finishd_task(self):
         while True:
             try:
-                task = self.finishd_task.get(block=False)
+                task_or_exception = self.finishd_task.get(block=False)
             except queue.Empty:
                 break
+
+            if isinstance(task_or_exception, Exception):
+                exception = task_or_exception
+                raise exception
+
+            task = task_or_exception
             task.do_callback()
 
     def join(self):

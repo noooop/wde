@@ -48,13 +48,12 @@ class SwapTask:
             for callback in self.callbacks:
                 callback()
 
-        except Exception:
-            import traceback
-            traceback.print_exc()
+        except Exception as e:
+            self.swap_manager.offloading_manager.finishd_task.put(e)
+            return
 
-        finally:
-            self.swap_manager.offloading_manager.stream_pool.put(stream)
-            self.swap_manager.offloading_manager.finishd_task.put(self)
+        self.swap_manager.offloading_manager.stream_pool.put(stream)
+        self.swap_manager.offloading_manager.finishd_task.put(self)
 
     def submit(self):
         self.future = self.swap_manager.offloading_manager.threads.submit(
