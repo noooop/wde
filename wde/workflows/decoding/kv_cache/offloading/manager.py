@@ -21,9 +21,11 @@ class CPUBlock:
     physical_block_id: Optional[BlockId] = None
     ref_count: int = 0
 
-    # newly created: lock = None
-    # write lock: lock = True
-    # write accomplished: lock = False
+    # In order to support remote kv cache
+    # rpc may succeed or fail, (╯‵□′)╯︵┻━┻
+    # newly created (fail): lock = None
+    # write lock (doing): lock = True
+    # write accomplished (succeed): lock = False
     lock: Optional[bool] = None
 
     def incr(self):
