@@ -165,36 +165,48 @@ class TransferInTask(TaskBase):
 
 class TransferInManager(BaseTransferManager):
 
-    def get_transfer_in_blocks(self, request):
-        maybe_transfer_in_blocks = request.vblock.get_maybe_swap_in_blocks()
-        need_transfer_in_blocks = []
-
-        for block in maybe_transfer_in_blocks:
-            block = self.cpu_block_allocator.create(block.block_hash)
-
-            if block is None:
-                # NoFreeBlocksError
-                continue
-
-            if block.lock is not None:
-                # block already exists
-                continue
-
-            need_transfer_in_blocks.append(block)
-
-        return need_transfer_in_blocks
-
     def get_transfer_in_task(
-        self, blocks: Dict["PrefixHash", "CPUBlock"],
-        requests: List["DecodingSchedulableRequest"]
+        self, scheduled_requests: List["DecodingSchedulableRequest"]
     ) -> Optional[TransferInTask]:
+        gpu_kv_cache_manager = self.remote_manager.gpu_kv_cache_manager
+        cpu_block_allocator = self.cpu_block_allocator
 
-        if not blocks:
-            return None
+        need_transfer_in_blocks = {}
+        need_transfer_in_requests = []
 
-        return TransferInTask(blocks=blocks,
-                              transfer_manager=self,
-                              requests=requests)
+        for request in scheduled_requests:
+            gpu_kv_cache_manager.update(request)
+
+            gpu_blocks = request.vblock.get_maybe_swap_in_blocks()
+
+            if len(gpu_blocks) > 0:
+                need_transfer_in_requests.append(request)
+
+            for gpu_block in gpu_blocks:
+                gpu_block.ensure_block_hash()
+
+                block_hash = gpu_block.block_hash
+
+                if block_hash in need_transfer_in_blocks:
+                    continue
+
+                cpu_block = cpu_block_allocator.create(block_hash)
+
+                if cpu_block is None:
+                    # NoFreeBlocksError
+                    break
+
+                if cpu_block.lock is not None:
+                    # not newly created
+                    continue
+
+                cpu_block.acquire()
+                cpu_block_allocator.hold(cpu_block)
+                need_transfer_in_blocks[block_hash] = cpu_block
+
+        return TransferInTask(blocks=need_transfer_in_blocks,
+                              requests=need_transfer_in_requests,
+                              transfer_manager=self)
 
     def transfer(self, task: TransferInTask):
         from wde.workflows.decoding.kv_cache.remote.client import \

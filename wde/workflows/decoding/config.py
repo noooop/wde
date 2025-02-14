@@ -38,7 +38,10 @@ class DecodingSchedulerConfig(SchedulerConfig):
             self.max_num_batched_tokens)
 
         if max_num_on_the_fly is None:
-            self.max_num_on_the_fly = max(frieren_executor_max_workers, 2)
+            if scheduling == "sync":
+                self.max_num_on_the_fly = 1
+            else:
+                self.max_num_on_the_fly = max(frieren_executor_max_workers, 2)
         else:
             self.max_num_on_the_fly = max_num_on_the_fly
 
@@ -55,10 +58,10 @@ class DecodingSchedulerConfig(SchedulerConfig):
                 "be greater than or equal to max_num_requests "
                 f"({self.max_num_requests}).")
 
-        if self.max_num_on_the_fly < 2:
+        if not self.max_num_on_the_fly > 0:
             raise ValueError(
                 f"max_num_on_the_fly {self.max_num_on_the_fly} must "
-                "be greater than 1")
+                "be greater than 0")
 
 
 class DecodingOffloadingSchedulerConfig(DecodingSchedulerConfig):

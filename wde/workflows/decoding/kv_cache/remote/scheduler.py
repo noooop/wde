@@ -58,7 +58,8 @@ class RemoteKVCachingDecodingScheduler(OffloadingKVCachingDecodingScheduler):
         remote_manager = RemoteManager(
             engine_config=engine_config,
             cpu_cache=cpu_cache,
-            cpu_block_allocator=offloading_manager.cpu_block_allocator)
+            cpu_block_allocator=offloading_manager.cpu_block_allocator,
+            gpu_kv_cache_manager=gpu_kv_cache_manager)
 
         return cls(engine_config,
                    engine.request_processor,
@@ -87,24 +88,8 @@ class RemoteKVCachingDecodingScheduler(OffloadingKVCachingDecodingScheduler):
         if not waiting_scheduled.scheduled_requests:
             return waiting_scheduled
 
-        need_transfer_in_blocks = {}
-        need_transfer_in_requests = []
-
-        for request in waiting_scheduled.scheduled_requests:
-            self.kv_cache_manager.update(request)
-            blocks = self.remote_manager.get_transfer_in_blocks(request)
-
-            if len(blocks) == 0:
-                continue
-
-            need_transfer_in_requests.append(request)
-
-            for block in blocks:
-                if block.block_hash not in need_transfer_in_blocks:
-                    need_transfer_in_blocks[block.block_hash] = block
-
         transfer_in_task = self.remote_manager.get_transfer_in_task(
-            need_transfer_in_blocks, need_transfer_in_requests)
+            waiting_scheduled.scheduled_requests)
 
         waiting_scheduled = SchedulerWaitingOutputsWithTransferInTask(
             scheduled_requests=waiting_scheduled.scheduled_requests,

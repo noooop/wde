@@ -1,13 +1,11 @@
 import queue
 from concurrent.futures import ThreadPoolExecutor
-from typing import TYPE_CHECKING, Dict, List, Optional
+from typing import TYPE_CHECKING, List, Optional
 
-from wde.workflows.decoding.kv_cache.offloading.manager import CPUBlock
 from wde.workflows.decoding.kv_cache.remote.transfer import (
     TransferInManager, TransferOutManager, TransferOutTask)
 
 if TYPE_CHECKING:
-    from wde.workflows.decoding.kv_cache.logic_manager import PrefixHash
     from wde.workflows.decoding.kv_cache.offloading.swap import SwapTask
     from wde.workflows.decoding.schema.request import \
         DecodingSchedulableRequest
@@ -15,9 +13,11 @@ if TYPE_CHECKING:
 
 class RemoteManager:
 
-    def __init__(self, engine_config, cpu_cache, cpu_block_allocator):
+    def __init__(self, engine_config, cpu_cache, cpu_block_allocator,
+                 gpu_kv_cache_manager):
         self.engine_config = engine_config
         self.cpu_block_allocator = cpu_block_allocator
+        self.gpu_kv_cache_manager = gpu_kv_cache_manager
 
         self.transfer_out_manager = TransferOutManager(
             name=engine_config.model_config.model,
@@ -52,15 +52,15 @@ class RemoteManager:
         return self.transfer_in_manager.get_transfer_in_blocks(request)
 
     def get_transfer_in_task(
-            self, need_transfer_in_blocks: Dict["PrefixHash", "CPUBlock"],
-            need_transfer_in_requests: List["DecodingSchedulableRequest"]):
-        transfer_out_task = self.transfer_in_manager.get_transfer_in_task(
-            need_transfer_in_blocks, need_transfer_in_requests)
+            self, scheduled_requests: List["DecodingSchedulableRequest"]):
 
-        if transfer_out_task is not None:
-            transfer_out_task.submit()
+        transfer_in_task = self.transfer_in_manager.get_transfer_in_task(
+            scheduled_requests)
 
-        return transfer_out_task
+        if transfer_in_task is not None:
+            transfer_in_task.submit()
+
+        return transfer_in_task
 
     def check_finishd_task(self):
         while True:

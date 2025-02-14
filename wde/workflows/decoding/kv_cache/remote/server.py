@@ -89,7 +89,7 @@ class ZeroRemoteKVCacheServer(Z_MethodZeroServer):
                     data = self._cache.kv_cache[blocks[i].physical_block_id]
 
                     rep = ZeroServerStreamResponseOk(rep_id=i + 1,
-                                                     snd_more=not i == total,
+                                                     snd_more=not i + 1 == hit,
                                                      msg=GetResponseStream(
                                                          block_hash=block_hash,
                                                          block=data).dict())
