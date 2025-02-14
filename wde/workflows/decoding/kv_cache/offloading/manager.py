@@ -77,8 +77,7 @@ class CPUBlockAllocator:
             "block_size": self._block_size,
             "num_blocks": self._num_blocks,
             "num_full_blocks": len(self._full_blocks_map),
-            "num_free_full_blocks": len(self._free_full_blocks),
-            "num_free_physical_block_ids": len(self._free_physical_block_ids),
+            "num_free_blocks": len(self._free_physical_block_ids),
         }
 
     def get(self, block_hash):
