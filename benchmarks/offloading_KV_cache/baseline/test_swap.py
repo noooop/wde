@@ -145,7 +145,7 @@ if __name__ == '__main__':
     N = 8
 
     for name, num_attention_layers, num_kv_heads, head_size, cache_dtype in [
-            # ("Qwen/Qwen2.5-32B-Instruct-GPTQ-Int4", 64, 8, 128, torch.float16),
+        ("Qwen/Qwen2.5-32B-Instruct-GPTQ-Int4", 64, 8, 128, torch.float16),
         ("Qwen/Qwen2.5-7B-Instruct", 28, 4, 128, torch.bfloat16),
         ("Qwen/Qwen2.5-3B-Instruct", 36, 2, 128, torch.bfloat16),
         ("THUDM/glm-4-9b-chat-1m", 40, 4, 128, torch.bfloat16),
