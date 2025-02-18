@@ -2,7 +2,7 @@ import inspect
 
 from wde.logger import init_logger
 from wde.microservices.framework.nameserver.client import ZeroClient
-from wde.workflows.decoding.kv_cache.remote.schema import (
+from wde.workflows.decoding.kv_cache_server.schema import (
     ContainsRequest, ContainsResponse, GetRequest, GetResponse,
     GetResponseStream, InfoResponse, SetRequest, SetResponse)
 

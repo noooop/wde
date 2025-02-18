@@ -1,5 +1,5 @@
 from benchmarks.offloading_KV_cache.util import get_requests, test
-from wde.workflows.decoding.kv_cache.remote.memory import process_warp
+from wde.utils import process_warp_with_exc
 
 
 def benchmark(args):
@@ -10,12 +10,7 @@ def benchmark(args):
     print(wde.__version__)
 
     requests = get_requests(args)
-
-    try:
-        process_warp(test, args, requests)
-    except Exception:
-        import traceback
-        traceback.print_exc()
+    process_warp_with_exc(test, args, requests)
 
 
 def test_disable_prefix_caching(args):
@@ -24,7 +19,7 @@ def test_disable_prefix_caching(args):
 
     print("test_naive")
     args.block_allocator = "naive"
-    process_warp(benchmark, args)
+    process_warp_with_exc(benchmark, args)
 
     # print("test_disable_prefix_caching")
     # args.block_allocator = "disable_prefix_caching"
@@ -37,7 +32,7 @@ def test_prefix_caching(args):
 
     print("test_prefix_caching")
     args.block_allocator = "prefix_caching"
-    process_warp(benchmark, args)
+    process_warp_with_exc(benchmark, args)
 
     # print("test_yoco")
     # args.block_allocator = "yoco"
@@ -50,11 +45,11 @@ def test_offloading(args):
 
     print("test_offloading+prefix_caching")
     args.block_allocator = "prefix_caching"
-    process_warp(benchmark, args)
+    process_warp_with_exc(benchmark, args)
 
     print("test_offloading+no_prefix_caching")
     args.block_allocator = "disable_prefix_caching"
-    process_warp(benchmark, args)
+    process_warp_with_exc(benchmark, args)
 
 
 if __name__ == '__main__':

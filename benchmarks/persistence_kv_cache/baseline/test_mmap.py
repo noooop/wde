@@ -4,11 +4,9 @@ import time
 import numpy as np
 import torch
 
-from benchmarks.remote_kv_cache.util import process_warp_with_exc
-from wde.workflows.decoding.kv_cache.persistence.mmap import \
-    allocate_blockwise_kv_cache_mmap
-from wde.workflows.decoding.kv_cache.remote.memory import \
-    allocate_blockwise_kv_cache_np
+from wde.utils import process_warp_with_exc
+from wde.workflows.decoding.kv_cache.remote.util import (
+    allocate_blockwise_kv_cache_mmap, allocate_blockwise_kv_cache_np)
 
 
 def benchmark_mmap_transfer_blocks(N, max_num_batched_tokens, block_size,

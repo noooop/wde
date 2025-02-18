@@ -7,8 +7,8 @@ from wde.microservices.framework.zero.schema import (ZeroServerRequest,
                                                      ZeroServerStreamResponseOk
                                                      )
 from wde.microservices.framework.zero.server import Z_MethodZeroServer
-from wde.workflows.decoding.kv_cache.remote.memory import RemoteMemoryKVCache
-from wde.workflows.decoding.kv_cache.remote.schema import (
+from wde.workflows.decoding.kv_cache_server.memory import RemoteMemoryKVCache
+from wde.workflows.decoding.kv_cache_server.schema import (
     ContainsRequest, ContainsResponse, GetRequest, GetResponse,
     GetResponseStream, InfoResponse, SetRequest, SetResponse)
 

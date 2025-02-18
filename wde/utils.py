@@ -20,3 +20,24 @@ def lazy_import(module):
     import importlib
     module = importlib.import_module(module_name)
     return getattr(module, class_name)
+
+
+def process_warp(fn, /, *args, **kwargs):
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+
+    with ProcessPoolExecutor(1, mp.get_context("spawn")) as executor:
+        f = executor.submit(fn, *args, **kwargs)
+        return f.result()
+
+
+def exception_handling(fn, /, *args, **kwargs):
+    try:
+        return fn(*args, **kwargs)
+    except Exception:
+        import traceback
+        traceback.print_exc()
+
+
+def process_warp_with_exc(fn, /, *args, **kwargs):
+    return process_warp(exception_handling, fn, *args, **kwargs)

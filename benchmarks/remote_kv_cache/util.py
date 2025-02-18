@@ -1,9 +1,6 @@
 import time
-import traceback
 
 import numpy as np
-
-from wde.workflows.decoding.kv_cache.remote.memory import process_warp
 
 
 def test(args, requests):
@@ -20,7 +17,7 @@ def test(args, requests):
         dtype=args.dtype,
         max_model_len=args.max_model_len,
         gpu_memory_utilization=args.gpu_memory_utilization,
-        kv_cache_dtype=args.kv_cache_dtype,
+        kv_cache_dtype=args.cache_dtype,
         quantization_param_path=args.quantization_param_path,
         device=args.device,
         max_num_batched_tokens=args.max_num_batched_tokens,
@@ -110,17 +107,22 @@ def start_remote_kv_cache(args):
     from wde.microservices.framework.zero.server import ZeroServerProcess
     from wde.microservices.standalone.server import setup_and_run
 
+    remote_server_class = "wde.workflows.decoding.kv_cache_server.server:ZeroRemoteKVCacheServer"
     server = setup_and_run()
     try:
-        kv_cache_server = ZeroServerProcess(
-            "wde.workflows.decoding.kv_cache.remote.server:ZeroRemoteKVCacheServer",
-            server_kwargs={
-                "model": args.model,
-                "name": args.get("server_name", None),
-                "block_size": args.block_size,
-                "memory_space": args.memory_space,
-                "cache_dtype": args.cache_dtype
-            })
+        kv_cache_server = ZeroServerProcess(server_class=remote_server_class,
+                                            server_kwargs={
+                                                "model":
+                                                args.model,
+                                                "name":
+                                                args.get("server_name", None),
+                                                "block_size":
+                                                args.block_size,
+                                                "memory_space":
+                                                args.memory_space,
+                                                "cache_dtype":
+                                                args.cache_dtype
+                                            })
 
         kv_cache_server.start()
     except Exception as e:
@@ -131,7 +133,7 @@ def start_remote_kv_cache(args):
 
 
 def wait_service_available(args):
-    from wde.workflows.decoding.kv_cache.remote.client import \
+    from wde.workflows.decoding.kv_cache_server.client import \
         ZeroRemoteKVCacheClient
 
     client = ZeroRemoteKVCacheClient()
@@ -139,19 +141,8 @@ def wait_service_available(args):
 
 
 def kv_cache_info(args):
-    from wde.workflows.decoding.kv_cache.remote.client import \
+    from wde.workflows.decoding.kv_cache_server.client import \
         ZeroRemoteKVCacheClient
 
     client = ZeroRemoteKVCacheClient()
     print(client.info(args.remote_kv_cache_server_name))
-
-
-def exception_handling(fn, /, *args, **kwargs):
-    try:
-        return fn(*args, **kwargs)
-    except Exception:
-        traceback.print_exc()
-
-
-def process_warp_with_exc(fn, /, *args, **kwargs):
-    return process_warp(exception_handling, fn, *args, **kwargs)

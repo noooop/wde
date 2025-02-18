@@ -7,8 +7,8 @@ import numpy as np
 import plyvel
 import torch
 
-from benchmarks.remote_kv_cache.util import process_warp_with_exc
-from wde.workflows.decoding.kv_cache.remote.memory import \
+from wde.utils import process_warp_with_exc
+from wde.workflows.decoding.kv_cache.remote.util import \
     allocate_blockwise_kv_cache_np
 """
 pip install plyvel

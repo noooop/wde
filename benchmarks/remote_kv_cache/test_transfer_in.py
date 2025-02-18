@@ -2,9 +2,9 @@ import random
 
 from benchmarks.offloading_KV_cache.util import get_requests
 from benchmarks.remote_kv_cache.util import (kv_cache_info,
-                                             process_warp_with_exc,
                                              start_remote_kv_cache, test,
                                              wait_service_available)
+from wde.utils import process_warp_with_exc
 
 
 def benchmark(args):
@@ -21,18 +21,14 @@ def benchmark(args):
 
     requests = get_requests(args)
 
-    try:
-        process_warp_with_exc(kv_cache_info, args)
-        process_warp_with_exc(test, args, requests)
-        process_warp_with_exc(kv_cache_info, args)
-        process_warp_with_exc(test, args, requests)
-        process_warp_with_exc(kv_cache_info, args)
-    except Exception:
-        import traceback
-        traceback.print_exc()
-    finally:
-        for s in server:
-            s.terminate()
+    process_warp_with_exc(kv_cache_info, args)
+    process_warp_with_exc(test, args, requests)
+    process_warp_with_exc(kv_cache_info, args)
+    process_warp_with_exc(test, args, requests)
+    process_warp_with_exc(kv_cache_info, args)
+
+    for s in server:
+        s.terminate()
 
 
 if __name__ == '__main__':
@@ -48,7 +44,6 @@ if __name__ == '__main__':
     args.model = "Qwen/Qwen2.5-3B-Instruct"
     args.quantization = None
     args.dtype = 'auto'
-    args.kv_cache_dtype = "auto"
     args.device = "cuda"
 
     args.max_model_len = 2000

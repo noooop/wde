@@ -2,7 +2,7 @@ from typing import TYPE_CHECKING, Dict, List, Optional
 
 import numpy as np
 
-from wde.workflows.decoding.kv_cache.remote.memory import get_share_memory_np
+from wde.workflows.decoding.kv_cache.remote.util import get_share_memory_np
 
 if TYPE_CHECKING:
     from wde.workflows.decoding.kv_cache.logic_manager import PrefixHash
@@ -101,7 +101,7 @@ class TransferOutTask(TaskBase):
 class TransferOutManager(BaseTransferManager):
 
     def transfer(self, task: TransferOutTask):
-        from wde.workflows.decoding.kv_cache.remote.client import \
+        from wde.workflows.decoding.kv_cache_server.client import \
             ZeroRemoteKVCacheClient
         client = ZeroRemoteKVCacheClient()
 
@@ -209,7 +209,7 @@ class TransferInManager(BaseTransferManager):
                               transfer_manager=self)
 
     def transfer(self, task: TransferInTask):
-        from wde.workflows.decoding.kv_cache.remote.client import \
+        from wde.workflows.decoding.kv_cache_server.client import \
             ZeroRemoteKVCacheClient
         client = ZeroRemoteKVCacheClient()
 

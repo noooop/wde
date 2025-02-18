@@ -1,5 +1,5 @@
 from benchmarks.offloading_KV_cache.util import get_requests, test
-from wde.workflows.decoding.kv_cache.remote.memory import process_warp
+from wde.utils import process_warp_with_exc
 
 
 def benchmark(args):
@@ -10,12 +10,7 @@ def benchmark(args):
     print(wde.__version__)
 
     requests = get_requests(args)
-
-    try:
-        process_warp(test, args, requests)
-    except Exception:
-        import traceback
-        traceback.print_exc()
+    process_warp_with_exc(test, args, requests)
 
 
 if __name__ == '__main__':
@@ -53,7 +48,7 @@ if __name__ == '__main__':
 
         for max_num_batched_tokens in max_num_batched_tokens_list:
             args.max_num_batched_tokens = max_num_batched_tokens
-            process_warp(benchmark, args)
+            process_warp_with_exc(benchmark, args)
 
     def test_vary_scheduling(args):
         for scheduling in ["sync"]:

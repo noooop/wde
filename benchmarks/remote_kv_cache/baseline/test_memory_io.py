@@ -173,7 +173,7 @@ def benchmark_blockwise_to_blockwise_transfer_blocks(N, max_num_batched_tokens,
         pyximport.install(setup_args={"include_dirs": np.get_include()})
 
         from benchmarks.remote_kv_cache.baseline.memcpy import cython_memcpy
-        from wde.workflows.decoding.kv_cache.remote.memory import \
+        from wde.workflows.decoding.kv_cache.remote.util import \
             get_share_memory_np
 
         to_kv_cache.zero_()

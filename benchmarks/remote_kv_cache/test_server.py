@@ -5,13 +5,13 @@ import numpy as np
 import torch
 from easydict import EasyDict as edict
 
-from benchmarks.remote_kv_cache.util import (process_warp_with_exc,
-                                             start_remote_kv_cache)
+from benchmarks.remote_kv_cache.util import start_remote_kv_cache
+from wde.utils import process_warp_with_exc
 from wde.workflows.decoding.kv_cache.physical_manager import \
     allocate_blockwise_kv_cache
-from wde.workflows.decoding.kv_cache.remote.client import \
+from wde.workflows.decoding.kv_cache.remote.util import get_share_memory_np
+from wde.workflows.decoding.kv_cache_server.client import \
     ZeroRemoteKVCacheClient
-from wde.workflows.decoding.kv_cache.remote.memory import get_share_memory_np
 
 
 def benchmark_remote_kv_cache_server(name, N, max_num_batched_tokens,

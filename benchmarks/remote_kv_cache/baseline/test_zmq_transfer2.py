@@ -8,7 +8,7 @@ import zmq
 
 from wde.workflows.decoding.kv_cache.physical_manager import \
     allocate_blockwise_kv_cache
-from wde.workflows.decoding.kv_cache.remote.memory import (
+from wde.workflows.decoding.kv_cache.remote.util import (
     allocate_blockwise_kv_cache_np, get_share_memory_np)
 
 
