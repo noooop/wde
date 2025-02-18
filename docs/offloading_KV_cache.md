@@ -110,7 +110,7 @@ python -m benchmarks.offloading_KV_cache.test_swap_out
 | 64                 | 0.58 | 0.75    | 0.56            | 0.74               | 0.96       | 0.98          |
 | 32                 | 0.30 | 0.39    | 0.29            | 0.38               | 0.96       | 0.98          |
 
-关闭 gpu_cache
+关闭 gpu_cache，模拟 gpu_cache 被击穿
 
 | num_batched_tokens | sync | async-2 | offloading-sync | offloading-async-2 | Delta-sync | Delta-async-2 |
 |--------------------|------|---------|-----------------|--------------------|------------|---------------|
@@ -183,15 +183,15 @@ python -m benchmarks.offloading_KV_cache.profiler.test_long_prefill
 
 > 表2
 > - 第1行 naive 为不使用 gpu cache，硬算的速度，作为比较的基线
-> - 第2~4行 为使用 prefix_caching，第2行需要计算，第3~4行 命中gpu_cache，速度有明显提升
-> - 第5~7行 为使用 offloading+prefix_caching，第5行需要计算，第3~4行 命中gpu_cache，速度跟prefix_caching几乎相同
-> - 第8~10行 offloading不使用prefix_caching，第8行需要计算, 第3~4行 命中cpu_cache，速度跟 gpu_cache 肯定是 没法比，但随着输出token的增加，Computation-Communication Overlap优化更明显，速度差异不是那么显著
+> - 第2-4行 为使用 prefix_caching，第2行需要计算，第3-4行 命中gpu_cache，速度有明显提升
+> - 第5-7行 为使用 offloading+prefix_caching，第5行需要计算，第3-4行 命中gpu_cache，速度跟prefix_caching几乎相同
+> - 第8-10行 offloading不使用gpu cache，模拟gpu cache被击穿的情况，第8行需要计算, 第3-4行 命中cpu_cache，速度跟 gpu_cache 肯定是 没法比，但随着输出token的增加，Computation-Communication Overlap优化更明显，速度差异不是那么显著
 > - 对比 naive、prefix_caching-1、offloading+prefix_caching-1、offloading+no_prefix_caching-1：prefix_caching 和 offloading 几乎没有 overhead
 > - 对比 prefix_caching-2 和 offloading+prefix_caching-2， 如果内命中gpu的prefix_caching，offloading 几乎没有 overhead
 > - 对比 offloading+prefix_caching-2 和 offloading+no_prefix_caching-2， 关闭 gpu 的 prefix_caching，也就是命中cache 需要 swap in，qps明显变低
 
 
-cpu cache 和 cpu cache 具体速度差异从哪里来?
+cpu cache 和 gpu cache 具体速度差异从哪里来?
 
 - 当第一轮没有命中cache时，计算同时 swap out 
 - input_len = 1024 * 10， max_num_batched_tokens = 1024， 一个请求需要10个 prefill step

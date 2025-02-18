@@ -112,7 +112,7 @@ python -m benchmarks.remote_kv_cache.test_transfer_out
 | 64                 | 0.56          | 0.74             | 0.55              | 0.73                 | 0.99       | 1.00          |
 | 32                 | 0.29          | 0.38             | 0.29              | 0.38                 | 0.99       | 0.99          |
 
-关闭 gpu_cache
+关闭 gpu_cache，模拟 gpu_cache 被击穿
 
 | num_batched_tokens | swap out-sync | swap out-async-2 | transfer_out-sync | transfer_out-async-2 | Delta-sync | Delta-async-2 |
 |--------------------|---------------|------------------|-------------------|----------------------|------------|---------------|
@@ -147,7 +147,7 @@ python -m benchmarks.remote_kv_cache.test_transfer_out
 运行两次，第一次将 kv cache 写入 remote，第二次可以从 remote 拉 kvcache
 
 <img src="https://github.com/noooop/noooop.github.io/blob/main/benchmarking/wde/0.3.1/remote_kv_cache/test_transfer_in-2.png?raw=true" width="400">
-> 图1 关闭 gpu_cache
+> 图1 关闭 gpu_cache，模拟 gpu_cache 被击穿
 
 
 
@@ -193,7 +193,7 @@ python -m benchmarks.remote_kv_cache.test_long_prefill
 > - remote+prefix_caching-4，从 remote_kv_cache 拉取 
 > - remote+prefix_caching-5、remote+prefix_caching-6 使用gpu cache
 
-> - 关闭 gpu_cache 场景
+> - 关闭 gpu_cache，模拟 gpu_cache 被击穿
 > - remote+no_prefix_caching-1-1 硬算， 填充 remote_kv_cache
 > - remote+no_prefix_caching-2、remote+no_prefix_caching-3 使用 cpu cache
 > - 重启 engine， 连上 remote_kv_cache
