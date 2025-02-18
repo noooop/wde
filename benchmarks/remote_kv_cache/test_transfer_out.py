@@ -1,8 +1,8 @@
 from benchmarks.offloading_KV_cache.util import get_requests
 from benchmarks.remote_kv_cache.util import (kv_cache_info,
+                                             process_warp_with_exc,
                                              start_remote_kv_cache, test,
                                              wait_service_available)
-from wde.workflows.decoding.kv_cache.remote.memory import process_warp
 from wde.workflows.decoding.scheduler import BLOCK_ALLOCATOR_MAP
 
 
@@ -14,14 +14,17 @@ def benchmark(args):
     print(wde.__version__)
 
     server = start_remote_kv_cache(args)
-    process_warp(wait_service_available, args)
+
+    args.remote_kv_cache_server_name = f"kv_cache:{args.model}:{args.block_size}"
+
+    process_warp_with_exc(wait_service_available, args)
 
     requests = get_requests(args)
 
     try:
-        process_warp(kv_cache_info, args)
-        process_warp(test, args, requests)
-        process_warp(kv_cache_info, args)
+        process_warp_with_exc(kv_cache_info, args)
+        process_warp_with_exc(test, args, requests)
+        process_warp_with_exc(kv_cache_info, args)
     except Exception:
         import traceback
         traceback.print_exc()
@@ -60,15 +63,15 @@ if __name__ == '__main__':
     args.hit_rate = 0.
 
     args.block_size = 16
-
-    args.remote_kv_cache_server_name = "kv_cache_server"
+    args.cache_dtype = "auto"
+    args.remote_kv_cache_server = True
 
     def test_vary_max_num_batched_tokens(args):
         max_num_batched_tokens_list = [1024, 768, 512, 384, 256, 128, 64, 32]
 
         for max_num_batched_tokens in max_num_batched_tokens_list:
             args.max_num_batched_tokens = max_num_batched_tokens
-            process_warp(benchmark, args)
+            process_warp_with_exc(benchmark, args)
 
     def test_vary_scheduling(args):
         for scheduling in ["sync"]:
@@ -89,14 +92,16 @@ if __name__ == '__main__':
 
     def test_vary_block_allocator(args):
         args.swap_space = 0
+        args.memory_space = 0
         for block_allocator in list(BLOCK_ALLOCATOR_MAP.keys()):
             print("block_allocator", block_allocator)
             args.block_allocator = block_allocator
             # test_vary_scheduling(args)
 
         args.swap_space = 40
+        args.memory_space = 40
         for enable_prefix_caching in [True, False]:
-            print("kv_cache_manager", "OffloadingKVCaching",
+            print("kv_cache_manager", "remote_kv_cache",
                   "enable_prefix_caching", enable_prefix_caching)
             args.block_allocator = None
             args.enable_prefix_caching = enable_prefix_caching

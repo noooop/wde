@@ -35,10 +35,12 @@ class LogicKVCacheManager:
 
         num_gpu_blocks = engine.engine_config.cache_config.num_gpu_blocks
         block_size = engine.engine_config.cache_config.block_size
+        model_name = engine.engine_config.model_config.model
 
         block_allocator = block_allocator_class(num_blocks=num_gpu_blocks,
                                                 block_size=block_size,
-                                                kv_cache=kv_cache)
+                                                kv_cache=kv_cache,
+                                                model_name=model_name)
 
         return cls(engine_config=engine.engine_config,
                    block_allocator=block_allocator)

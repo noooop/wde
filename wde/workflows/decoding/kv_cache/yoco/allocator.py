@@ -37,6 +37,7 @@ class YOCOVirtualBlockTable(VirtualBlockTable):
         self,
         block_size: int,
         block_allocator: "YOCOPrefixCachingBlockAllocator",
+        init_prefix_hash: PrefixHash,
         _blocks: Optional[List[Block]] = None,
     ):
         if _blocks is None:
@@ -47,6 +48,7 @@ class YOCOVirtualBlockTable(VirtualBlockTable):
         self._allocator = block_allocator
         self._num_token_ids = 0
         self._seq_len = 0
+        self._init_prefix_hash = init_prefix_hash
 
     #####################################
     # Some intermediate variables, as read-only properties
@@ -211,7 +213,7 @@ class YOCOVirtualBlockTable(VirtualBlockTable):
 
         if num_blocks_curr == 0:
             # Start from scratch
-            self._create_blocks(token_ids, prefix_hash=None)
+            self._create_blocks(token_ids, prefix_hash=self._init_prefix_hash)
             return
 
         # deal with last block
@@ -383,6 +385,7 @@ class YOCOPrefixCachingBlockAllocator(BlockAllocator):
         self,
         num_blocks: int,
         block_size: int,
+        model_name: str,
         kv_cache: List[torch.tensor],
         block_ids: Optional[Iterable[int]] = None,
     ):
@@ -397,12 +400,15 @@ class YOCOPrefixCachingBlockAllocator(BlockAllocator):
 
         self._free_blocks = LRUEvictor()
         self._free_physical_block_ids: Deque[BlockId] = deque(block_ids)
+        self._init_prefix_str = f"kv_cache:{model_name}:{self._block_size}"
+        self._init_prefix_hash = hash(self._init_prefix_str)
 
         self._cow_thread = CopyOnWrite(kv_cache)
 
     def create(self):
         return YOCOVirtualBlockTable(block_size=self._block_size,
-                                     block_allocator=self)
+                                     block_allocator=self,
+                                     init_prefix_hash=self._init_prefix_hash)
 
     @property
     def num_free_blocks(self) -> int:

@@ -18,15 +18,32 @@ logger = init_logger(__name__)
 class ZeroRemoteKVCacheServer(Z_MethodZeroServer):
     protocol = "remote_kv_cache"
 
-    def __init__(self, name, model, engine_args, max_workers=4, **kwargs):
+    def __init__(self,
+                 model,
+                 block_size,
+                 memory_space,
+                 cache_dtype="auto",
+                 name=None,
+                 max_workers=4,
+                 **kwargs):
+
+        if name is None:
+            name = f"kv_cache:{model}:{block_size}"
+
         super().__init__(name=name, port=None, do_register=True, **kwargs)
+
         self._cache = None
         self.model = model
-        self.engine_args = engine_args
+        self.engine_args = {
+            "model": model,
+            "block_size": block_size,
+            "memory_space": memory_space,
+            "cache_dtype": cache_dtype
+        }
         self.threads = ThreadPoolExecutor(max_workers)
 
     def init(self):
-        self._cache = RemoteMemoryKVCache(model=self.model, **self.engine_args)
+        self._cache = RemoteMemoryKVCache(**self.engine_args)
         logger.info("%s for %s running! port: %d", self.__class__.__name__,
                     self.name, self.port)
 

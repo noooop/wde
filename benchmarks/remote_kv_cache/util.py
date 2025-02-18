@@ -1,6 +1,9 @@
 import time
+import traceback
 
 import numpy as np
+
+from wde.workflows.decoding.kv_cache.remote.memory import process_warp
 
 
 def test(args, requests):
@@ -28,7 +31,7 @@ def test(args, requests):
         block_allocator=args.block_allocator,
         enable_prefix_caching=args.enable_prefix_caching,
         swap_space=args.swap_space,
-        remote_kv_cache_server_name=args.remote_kv_cache_server_name,
+        remote_kv_cache_server=args.remote_kv_cache_server,
         block_size=args.block_size)
 
     engine = LLMEngine.from_engine_args(engine_args)
@@ -108,20 +111,21 @@ def start_remote_kv_cache(args):
     from wde.microservices.standalone.server import setup_and_run
 
     server = setup_and_run()
-
-    kv_cache_server = ZeroServerProcess(
-        "wde.workflows.decoding.kv_cache.remote.server:ZeroRemoteKVCacheServer",
-        server_kwargs={
-            "name": args.remote_kv_cache_server_name,
-            "model": args.model,
-            "engine_args": {
+    try:
+        kv_cache_server = ZeroServerProcess(
+            "wde.workflows.decoding.kv_cache.remote.server:ZeroRemoteKVCacheServer",
+            server_kwargs={
+                "model": args.model,
+                "name": args.get("server_name", None),
                 "block_size": args.block_size,
-                "memory_space": args.swap_space,
-                "cache_dtype": "auto"
-            }
-        })
+                "memory_space": args.memory_space,
+                "cache_dtype": args.cache_dtype
+            })
 
-    kv_cache_server.start()
+        kv_cache_server.start()
+    except Exception as e:
+        server.terminate()
+        raise e
 
     return [server, kv_cache_server]
 
@@ -140,3 +144,14 @@ def kv_cache_info(args):
 
     client = ZeroRemoteKVCacheClient()
     print(client.info(args.remote_kv_cache_server_name))
+
+
+def exception_handling(fn, /, *args, **kwargs):
+    try:
+        return fn(*args, **kwargs)
+    except Exception:
+        traceback.print_exc()
+
+
+def process_warp_with_exc(fn, /, *args, **kwargs):
+    return process_warp(exception_handling, fn, *args, **kwargs)

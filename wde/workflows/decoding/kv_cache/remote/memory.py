@@ -149,8 +149,10 @@ def get_kv_cache_shape(model, cache_dtype):
 
     if cache_dtype == "auto":
         dtype = model_config.dtype
-    else:
+    elif isinstance(cache_dtype, str):
         dtype = STR_DTYPE_TO_TORCH_DTYPE[cache_dtype]
+    else:
+        dtype = cache_dtype
 
     return num_attention_layers, num_kv_heads, head_size, dtype
 

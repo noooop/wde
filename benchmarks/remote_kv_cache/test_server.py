@@ -2,9 +2,11 @@ import random
 import time
 
 import numpy as np
+import torch
+from easydict import EasyDict as edict
 
-from wde.microservices.framework.zero.server import ZeroServerProcess
-from wde.microservices.standalone.server import setup_and_run
+from benchmarks.remote_kv_cache.util import (process_warp_with_exc,
+                                             start_remote_kv_cache)
 from wde.workflows.decoding.kv_cache.physical_manager import \
     allocate_blockwise_kv_cache
 from wde.workflows.decoding.kv_cache.remote.client import \
@@ -16,22 +18,16 @@ def benchmark_remote_kv_cache_server(name, N, max_num_batched_tokens,
                                      block_size, num_attention_layers,
                                      num_kv_heads, head_size, cache_dtype,
                                      pin_memory):
-    server = setup_and_run()
-    server_name = "kv_cache_server"
+    server_name = "remote_kv_cache_server"
 
-    kv_cache_server = ZeroServerProcess(
-        "wde.workflows.decoding.kv_cache.remote.server:ZeroRemoteKVCacheServer",
-        server_kwargs={
-            "name": server_name,
-            "model": name,
-            "engine_args": {
-                "block_size": 16,
-                "memory_space": 10,
-                "cache_dtype": "auto"
-            }
-        })
+    args = edict()
+    args.model = name
+    args.server_name = server_name
+    args.block_size = block_size
+    args.cache_dtype = cache_dtype
+    args.memory_space = 40
 
-    kv_cache_server.start()
+    server = start_remote_kv_cache(args)
 
     n = max_num_batched_tokens // block_size
     num_blocks = N * n
@@ -209,13 +205,11 @@ def benchmark_remote_kv_cache_server(name, N, max_num_batched_tokens,
         import traceback
         traceback.print_exc()
     finally:
-        kv_cache_server.terminate()
-        server.terminate()
+        for s in server:
+            s.terminate()
 
 
 if __name__ == '__main__':
-    from concurrent.futures import ProcessPoolExecutor
-
     import torch
     max_num_batched_tokens = 1024
     block_size = 16
@@ -229,14 +223,11 @@ if __name__ == '__main__':
         ("NousResearch/Hermes-3-Llama-3.1-8B", 32, 8, 128, torch.bfloat16),
     ]:
         print(name)
-        with ProcessPoolExecutor(1) as executor:
-            f = executor.submit(
-                benchmark_remote_kv_cache_server,
-                *(name, N, max_num_batched_tokens, block_size,
-                  num_attention_layers, num_kv_heads, head_size, cache_dtype,
-                  False))
-            f.result()
-
+        process_warp_with_exc(
+            benchmark_remote_kv_cache_server,
+            *(name, N, max_num_batched_tokens, block_size,
+              num_attention_layers, num_kv_heads, head_size, cache_dtype,
+              False))
         time.sleep(10)
 """
 Qwen/Qwen2.5-7B-Instruct

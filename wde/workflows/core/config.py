@@ -136,12 +136,13 @@ class CacheConfig:
         gpu_memory_utilization: float,
         swap_space: int,
         cache_dtype: str,
+        model_name: str,
         num_gpu_blocks_override: Optional[int] = None,
         sliding_window: Optional[int] = None,
         enable_prefix_caching: bool = False,
         block_allocator: Optional[str] = None,
         cpu_offload_gb: float = 0,
-        remote_kv_cache_server_name: Optional[str] = None,
+        remote_kv_cache_server: Optional[Union[str, bool]] = None,
         watermark: float = 0.01,
     ) -> None:
         self.block_size = block_size
@@ -154,7 +155,8 @@ class CacheConfig:
         self.cpu_offload_gb = cpu_offload_gb
         self.watermark = watermark
         self.block_allocator = block_allocator
-        self.remote_kv_cache_server_name = remote_kv_cache_server_name
+        self.remote_kv_cache_server_name = self.get_remote_kv_cache_server_name(
+            remote_kv_cache_server, model_name)
 
         self._verify_args()
         self._verify_cache_dtype()
@@ -204,6 +206,20 @@ class CacheConfig:
             raise NotImplementedError(
                 "Prefix caching is not supported for fp8 cache_dtype. "
                 "Run with --kv-cache-dtype auto to use prefix caching.")
+
+    def get_remote_kv_cache_server_name(self, remote_kv_cache_server,
+                                        model_name):
+        if remote_kv_cache_server is None:
+            return None
+
+        if isinstance(remote_kv_cache_server, str):
+            return remote_kv_cache_server
+
+        if isinstance(remote_kv_cache_server, bool):
+            if remote_kv_cache_server:
+                return f"kv_cache:{model_name}:{self.block_size}"
+            else:
+                return None
 
 
 class ModelConfig:

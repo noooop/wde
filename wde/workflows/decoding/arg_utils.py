@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Union
 
 from wde.logger import init_logger
 from wde.workflows.core.arg_utils import EngineArgs
@@ -32,7 +32,7 @@ class DecodingEngineArgs(EngineArgs):
     cpu_offload_gb: int = 0  # GiB
     gpu_memory_utilization: float = 0.90
     num_gpu_blocks_override: Optional[int] = None
-    remote_kv_cache_server_name: Optional[str] = None
+    remote_kv_cache_server: Optional[Union[str, bool]] = None,
     watermark: float = 0.01
 
     # scheduler_config
@@ -72,13 +72,14 @@ class DecodingEngineArgs(EngineArgs):
 
         cache_config = CacheConfig(
             block_size=self.block_size,
+            model_name=self.model,
             gpu_memory_utilization=self.gpu_memory_utilization,
             swap_space=self.swap_space,
             cache_dtype=self.kv_cache_dtype,
             num_gpu_blocks_override=self.num_gpu_blocks_override,
             sliding_window=engine_config.model_config.get_sliding_window(),
             enable_prefix_caching=self.enable_prefix_caching,
-            remote_kv_cache_server_name=self.remote_kv_cache_server_name,
+            remote_kv_cache_server=self.remote_kv_cache_server,
             block_allocator=self.block_allocator,
             cpu_offload_gb=self.cpu_offload_gb,
             watermark=self.watermark)

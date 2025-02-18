@@ -96,6 +96,7 @@ class PrefixCachingVirtualBlockTable(VirtualBlockTable):
         self,
         block_size: int,
         block_allocator: "PrefixCachingBlockAllocator",
+        init_prefix_hash: PrefixHash,
         _blocks: Optional[List[Block]] = None,
     ):
         if _blocks is None:
@@ -106,6 +107,7 @@ class PrefixCachingVirtualBlockTable(VirtualBlockTable):
         self._allocator = block_allocator
         self._num_token_ids = 0
         self._seq_len = 0
+        self._init_prefix_hash = init_prefix_hash
 
     @property
     def num_token_ids(self):
@@ -157,7 +159,7 @@ class PrefixCachingVirtualBlockTable(VirtualBlockTable):
 
         if num_blocks_curr == 0:
             # Start from scratch
-            self._create_blocks(token_ids, prefix_hash=None)
+            self._create_blocks(token_ids, prefix_hash=self._init_prefix_hash)
             self._num_token_ids = len(token_ids)
             return
 
@@ -374,6 +376,7 @@ class PrefixCachingBlockAllocator(BlockAllocator):
     def __init__(self,
                  num_blocks: int,
                  block_size: int,
+                 model_name: str,
                  block_ids: Optional[Iterable[int]] = None,
                  *args,
                  **kwargs):
@@ -389,9 +392,14 @@ class PrefixCachingBlockAllocator(BlockAllocator):
         self._free_full_blocks = LRUEvictor()
         self._free_physical_block_ids: Deque[BlockId] = deque(block_ids)
 
+        self._init_prefix_str = f"kv_cache:{model_name}:{self._block_size}"
+        self._init_prefix_hash = hash(self._init_prefix_str)
+
     def create(self):
-        return PrefixCachingVirtualBlockTable(block_size=self._block_size,
-                                              block_allocator=self)
+        return PrefixCachingVirtualBlockTable(
+            block_size=self._block_size,
+            block_allocator=self,
+            init_prefix_hash=self._init_prefix_hash)
 
     @property
     def num_free_blocks(self) -> int:
@@ -502,6 +510,7 @@ class DisablePrefixCachingBlockAllocator(BlockAllocator):
     def __init__(self,
                  num_blocks: int,
                  block_size: int,
+                 model_name: str,
                  block_ids: Optional[Iterable[int]] = None,
                  *args,
                  **kwargs):
@@ -514,9 +523,14 @@ class DisablePrefixCachingBlockAllocator(BlockAllocator):
         self._num_blocks = num_blocks
         self._free_physical_block_ids: Deque[BlockId] = deque(block_ids)
 
+        self._init_prefix_str = f"kv_cache:{model_name}:{self._block_size}"
+        self._init_prefix_hash = hash(self._init_prefix_str)
+
     def create(self):
-        return PrefixCachingVirtualBlockTable(block_size=self._block_size,
-                                              block_allocator=self)
+        return PrefixCachingVirtualBlockTable(
+            block_size=self._block_size,
+            block_allocator=self,
+            init_prefix_hash=self._init_prefix_hash)
 
     @property
     def num_free_blocks(self) -> int:

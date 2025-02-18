@@ -2,9 +2,9 @@ import random
 
 from benchmarks.offloading_KV_cache.util import get_requests
 from benchmarks.remote_kv_cache.util import (kv_cache_info,
+                                             process_warp_with_exc,
                                              start_remote_kv_cache, test,
                                              wait_service_available)
-from wde.workflows.decoding.kv_cache.remote.memory import process_warp
 
 
 def benchmark(args):
@@ -14,16 +14,19 @@ def benchmark(args):
     print(wde.__version__)
 
     server = start_remote_kv_cache(args)
-    process_warp(wait_service_available, args)
+
+    args.remote_kv_cache_server_name = f"kv_cache:{args.model}:{args.block_size}"
+
+    process_warp_with_exc(wait_service_available, args)
 
     requests = get_requests(args)
 
     try:
-        process_warp(kv_cache_info, args)
-        process_warp(test, args, requests)
-        process_warp(kv_cache_info, args)
-        process_warp(test, args, requests)
-        process_warp(kv_cache_info, args)
+        process_warp_with_exc(kv_cache_info, args)
+        process_warp_with_exc(test, args, requests)
+        process_warp_with_exc(kv_cache_info, args)
+        process_warp_with_exc(test, args, requests)
+        process_warp_with_exc(kv_cache_info, args)
     except Exception:
         import traceback
         traceback.print_exc()
@@ -62,14 +65,16 @@ if __name__ == '__main__':
     args.max_num_requests = 32
     args.max_num_batched_tokens = 1024
 
-    args.remote_kv_cache_server_name = "kv_cache_server"
     args.swap_space = 40
+    args.memory_space = 40
+    args.cache_dtype = "auto"
+    args.remote_kv_cache_server = True
     args.block_allocator = None
 
     def test_vary_hit_rate(args):
         for hit_rate in [0.1 * x for x in range(0, 11)]:
             args.hit_rate = hit_rate
-            process_warp(benchmark, args)
+            process_warp_with_exc(benchmark, args)
 
     def test_vary_scheduling(args):
         for scheduling in ["sync"]:
