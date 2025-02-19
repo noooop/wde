@@ -117,6 +117,9 @@ class CPUBlockAllocator:
 
         return new_block
 
+    def get_or_create(self, block_hash):
+        return self.create(block_hash)
+
     def copy_block(self, block):
         assert block.block_hash is not None
 

@@ -121,7 +121,11 @@ def start_remote_kv_cache(args):
                                                 "memory_space":
                                                 args.memory_space,
                                                 "cache_dtype":
-                                                args.cache_dtype
+                                                args.cache_dtype,
+                                                "file_space":
+                                                args.get("file_space", None),
+                                                "file_dir":
+                                                args.get("file_dir", None),
                                             })
 
         kv_cache_server.start()

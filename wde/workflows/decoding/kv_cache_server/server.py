@@ -7,7 +7,7 @@ from wde.microservices.framework.zero.schema import (ZeroServerRequest,
                                                      ZeroServerStreamResponseOk
                                                      )
 from wde.microservices.framework.zero.server import Z_MethodZeroServer
-from wde.workflows.decoding.kv_cache_server.memory import RemoteMemoryKVCache
+from wde.utils import lazy_import
 from wde.workflows.decoding.kv_cache_server.schema import (
     ContainsRequest, ContainsResponse, GetRequest, GetResponse,
     GetResponseStream, InfoResponse, SetRequest, SetResponse)
@@ -18,10 +18,15 @@ logger = init_logger(__name__)
 class ZeroRemoteKVCacheServer(Z_MethodZeroServer):
     protocol = "remote_kv_cache"
 
+    RemoteMemoryKVCacheClass = "wde.workflows.decoding.kv_cache_server.memory:RemoteMemoryKVCache"
+    RemoteFilesystemKVCache = "wde.workflows.decoding.kv_cache_server.filesystem:RemoteFilesystemKVCache"
+
     def __init__(self,
                  model,
                  block_size,
-                 memory_space,
+                 memory_space=None,
+                 file_space=None,
+                 file_dir=None,
                  cache_dtype="auto",
                  name=None,
                  max_workers=4,
@@ -32,18 +37,44 @@ class ZeroRemoteKVCacheServer(Z_MethodZeroServer):
 
         super().__init__(name=name, port=None, do_register=True, **kwargs)
 
-        self._cache = None
         self.model = model
-        self.engine_args = {
-            "model": model,
-            "block_size": block_size,
-            "memory_space": memory_space,
-            "cache_dtype": cache_dtype
-        }
+        self.memory_space = memory_space
+        self.file_space = file_space
+        self.file_dir = file_dir
+        self.block_size = block_size
+        self.cache_dtype = cache_dtype
+
+        self._cache = None
         self.threads = ThreadPoolExecutor(max_workers)
 
     def init(self):
-        self._cache = RemoteMemoryKVCache(**self.engine_args)
+
+        def validate(n):
+            return isinstance(n, (float, int)) and n > 0.001
+
+        if validate(self.memory_space) and not validate(self.file_space):
+            remote_kv_cache_class = self.RemoteMemoryKVCacheClass
+            logger.info("remote_kv_cache use RemoteMemoryKVCache")
+        elif validate(self.file_space) and isinstance(
+                self.file_dir, str) and not validate(self.memory_space):
+            remote_kv_cache_class = self.RemoteFilesystemKVCache
+            logger.info("remote_kv_cache use RemoteFilesystemKVCache")
+        elif validate(self.file_space) and isinstance(
+                self.file_dir, str) and validate(self.memory_space):
+            pass
+        else:
+            raise ValueError("remote kv cache config not supported")
+
+        self._cache = lazy_import(remote_kv_cache_class)(
+            model=self.model,
+            memory_space=self.memory_space,
+            file_space=self.file_space,
+            file_dir=self.file_dir,
+            block_size=self.block_size,
+            cache_dtype=self.cache_dtype)
+
+        self._cache.init()
+
         logger.info("%s for %s running! port: %d", self.__class__.__name__,
                     self.name, self.port)
 
@@ -59,77 +90,41 @@ class ZeroRemoteKVCacheServer(Z_MethodZeroServer):
                 req=req, err_msg=f"model [{request.model}] not supported!")
 
         stream = request.stream
-        total = len(request.block_hashs)
 
-        hit = 0
-        miss = 0
+        info, blocks, callback, release = self._cache.get(request.block_hashs)
 
-        blocks = []
-        block_hashs = []
-        block_hashs_set = set()
-        for i in range(total):
-            block_hash = request.block_hashs[i]
+        info = GetResponse(**info)
 
-            if block_hash in block_hashs_set:
-                continue
+        if stream:
+            rep = ZeroServerStreamResponseOk(rep_id=0,
+                                             snd_more=info.hit > 0,
+                                             msg=info.dict())
+            self.zero_send(req, rep)
 
-            block = self._cache.get(block_hash)
+            for i, (block_hash, data) in enumerate(callback()):
+                rep = ZeroServerStreamResponseOk(
+                    rep_id=i + 1,
+                    snd_more=not i + 1 == info.hit,
+                    msg=GetResponseStream(block_hash=block_hash,
+                                          block=data).dict())
+                self.zero_send(req, rep)
+        else:
+            block_data = []
+            block_hashs = []
+            for block_hash, data in callback():
+                block_hashs.append(block_hash)
+                block_data.append(data)
 
-            if block is None:
-                miss += 1
-                continue
-
-            self._cache.block_allocator.hold(block)
-
-            hit += 1
-
-            block_hashs.append(block_hash)
-            block_hashs_set.add(block_hash)
-            blocks.append(block)
-
-        def send():
             block_hashs_np = np.array(block_hashs,
                                       dtype=request.block_hashs.dtype)
 
-            if stream:
-                rep = ZeroServerStreamResponseOk(rep_id=0,
-                                                 snd_more=hit > 0,
-                                                 msg=GetResponse(
-                                                     total=total,
-                                                     hit=hit,
-                                                     miss=miss).dict())
+            info.block_hashs = block_hashs_np
+            info.blocks = block_data
 
-                self.zero_send(req, rep)
+            rep = ZeroServerResponseOk(msg=info.dict())
+            self.zero_send(req, rep)
 
-                for i in range(hit):
-                    block_hash = block_hashs_np[i:i + 1]
-                    data = self._cache.kv_cache[blocks[i].physical_block_id]
-
-                    rep = ZeroServerStreamResponseOk(rep_id=i + 1,
-                                                     snd_more=not i + 1 == hit,
-                                                     msg=GetResponseStream(
-                                                         block_hash=block_hash,
-                                                         block=data).dict())
-                    self.zero_send(req, rep)
-
-            else:
-                data = [
-                    self._cache.kv_cache[block.physical_block_id]
-                    for block in blocks
-                ]
-
-                rep = ZeroServerResponseOk(
-                    msg=GetResponse(total=total,
-                                    hit=hit,
-                                    miss=miss,
-                                    block_hashs=block_hashs_np,
-                                    blocks=data).dict())
-                self.zero_send(req, rep)
-
-        send()
-
-        for block in blocks:
-            self._cache.block_allocator.free(block)
+        release()
 
     def z_set(self, req):
         request = SetRequest(**req.data)
@@ -144,66 +139,26 @@ class ZeroRemoteKVCacheServer(Z_MethodZeroServer):
                               f"[{len(request.block_hashs)}] != "
                               f"len(request.blocks)! [{len(request.blocks)}]")
 
-        block_shape = self._cache.block_shape
+        info, blocks, generator, release = self._cache.set(
+            block_hashs=request.block_hashs,
+            block_data=request.blocks,
+            force=request.force)
 
-        force = request.force
-        deferred = request.deferred
-        total = len(request.block_hashs)
-        exist = 0
-
-        blocks = []
-        for i in range(total):
-            data = request.blocks[i]
-
-            assert data.shape == block_shape
-
-            block_hash = request.block_hashs[i]
-
-            block = self._cache.get_or_create(block_hash)
-
-            if block is None:
-                # NoFreeBlocksError
-                continue
-
-            if block.lock:
-                # doing write
-                continue
-
-            if block.lock is not None and not force:
-                # has been written
-                exist += 1
-                continue
-
-            block.acquire()
-
-            self._cache.block_allocator.hold(block)
-            blocks.append((block, data))
-
-        def memcpy():
-            for block, data in blocks:
-                self._cache.kv_cache[block.physical_block_id] = data
-
-        if deferred:
-            rep = ZeroServerResponseOk(
-                msg=SetResponse(total=total, exist=exist).dict())
+        if request.deferred:
+            rep = ZeroServerResponseOk(msg=SetResponse(**info).dict())
             self.zero_send(req, rep)
 
-            f = self.threads.submit(memcpy)
+            f = self.threads.submit(generator)
             f.result()
 
-            for block, data in blocks:
-                block.release()
-                self._cache.block_allocator.free(block)
+            release()
         else:
-            f = self.threads.submit(memcpy)
+            f = self.threads.submit(generator)
             f.result()
 
-            for block, data in blocks:
-                block.release()
-                self._cache.block_allocator.free(block)
+            release()
 
-            rep = ZeroServerResponseOk(
-                msg=SetResponse(total=total, exist=exist).dict())
+            rep = ZeroServerResponseOk(msg=SetResponse(**info).dict())
             self.zero_send(req, rep)
 
     def z_contains(self, req):
@@ -213,23 +168,7 @@ class ZeroRemoteKVCacheServer(Z_MethodZeroServer):
             self.handle_error(
                 req=req, err_msg=f"model [{request.model}] not supported!")
 
-        refresh = request.refresh
-        total = len(request.block_hashs)
-        dtype = request.block_hashs.dtype
-
-        hit = []
-        miss = []
-
-        for i in range(total):
-            block_hash = request.block_hashs[i]
-
-            if self._cache.contains(block_hash, refresh):
-                hit.append(block_hash)
-            else:
-                miss.append(block_hash)
-
-        hit = np.array(hit, dtype=dtype)
-        miss = np.array(miss, dtype=dtype)
+        hit, miss = self._cache.contains(request.block_hashs, request.refresh)
 
         rep = ZeroServerResponseOk(
             msg=ContainsResponse(hit=hit, miss=miss).dict())

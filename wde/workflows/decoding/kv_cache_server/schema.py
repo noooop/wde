@@ -13,6 +13,7 @@ class GetResponse(BaseModel):
     total: int
     hit: int
     miss: int
+    duplicate: int
     block_hashs: Optional[Any] = None
     blocks: Optional[Any] = None
 
@@ -32,7 +33,11 @@ class SetRequest(BaseModel):
 
 class SetResponse(BaseModel):
     total: int
-    exist: int
+    error: int
+    existed: int
+    duplicated: int
+    created: int
+    forced: int
 
 
 class ContainsRequest(BaseModel):

@@ -5,7 +5,9 @@ import numpy as np
 import torch
 from easydict import EasyDict as edict
 
-from benchmarks.remote_kv_cache.util import start_remote_kv_cache
+from benchmarks.remote_kv_cache.util import (kv_cache_info,
+                                             start_remote_kv_cache,
+                                             wait_service_available)
 from wde.utils import process_warp_with_exc
 from wde.workflows.decoding.kv_cache.physical_manager import \
     allocate_blockwise_kv_cache
@@ -14,26 +16,9 @@ from wde.workflows.decoding.kv_cache_server.client import \
     ZeroRemoteKVCacheClient
 
 
-def benchmark_remote_kv_cache_server(name, N, max_num_batched_tokens,
-                                     block_size, num_attention_layers,
-                                     num_kv_heads, head_size, cache_dtype,
-                                     pin_memory):
-    server_name = "remote_kv_cache_server"
-
-    args = edict()
-    args.model = name
-    args.server_name = server_name
-    args.block_size = block_size
-    args.cache_dtype = cache_dtype
-    args.memory_space = 40
-
-    server = start_remote_kv_cache(args)
-
-    n = max_num_batched_tokens // block_size
-    num_blocks = N * n
-
+def test(server_name, name, N, n, num_blocks, block_size, num_attention_layers,
+         num_kv_heads, head_size, cache_dtype, pin_memory):
     client = ZeroRemoteKVCacheClient()
-    client.wait_service_available(server_name)
 
     from_kv_cache = allocate_blockwise_kv_cache(
         num_blocks=num_blocks,
@@ -94,12 +79,18 @@ def benchmark_remote_kv_cache_server(name, N, max_num_batched_tokens,
             from_block_hashs = block_hashs[from_ids]
             blocks = [from_kv_cache_np[f] for f in from_ids]
 
-            client.set(server_name,
-                       name,
-                       from_block_hashs,
-                       blocks,
-                       force=True,
-                       deferred=deferred)
+            response = client.set(server_name,
+                                  name,
+                                  from_block_hashs,
+                                  blocks,
+                                  force=True,
+                                  deferred=deferred)
+
+            assert response.error == 0
+            assert response.duplicated == 0
+            assert response.total == n
+            # assert response.existed == response.forced
+            assert response.existed + response.created == n
 
         start = time.perf_counter()
 
@@ -109,12 +100,18 @@ def benchmark_remote_kv_cache_server(name, N, max_num_batched_tokens,
             from_block_hashs = block_hashs[from_ids]
             blocks = [from_kv_cache_np[f] for f in from_ids]
 
-            client.set(server_name,
-                       name,
-                       from_block_hashs,
-                       blocks,
-                       force=True,
-                       deferred=deferred)
+            response = client.set(server_name,
+                                  name,
+                                  from_block_hashs,
+                                  blocks,
+                                  force=True,
+                                  deferred=deferred)
+
+            assert response.error == 0
+            assert response.duplicated == 0
+            assert response.total == n
+            # assert response.existed == response.forced
+            assert response.existed + response.created == n
 
         end = time.perf_counter()
         elapsed_time = end - start
@@ -195,28 +192,50 @@ def benchmark_remote_kv_cache_server(name, N, max_num_batched_tokens,
 
         print("stream_get elapsed time: ", elapsed_time)
 
-    try:
-        test_set(deferred=False)
-        test_set(deferred=True)
-        test_contains()
-        test_get()
-        test_stream_get()
-    except Exception:
-        import traceback
-        traceback.print_exc()
-    finally:
-        for s in server:
-            s.terminate()
+    test_set(deferred=False)
+    test_set(deferred=True)
+    test_contains()
+    test_get()
+    test_stream_get()
+
+
+def benchmark_remote_kv_cache_server(name, N, max_num_batched_tokens,
+                                     block_size, num_attention_layers,
+                                     num_kv_heads, head_size, cache_dtype,
+                                     pin_memory):
+    server_name = "remote_kv_cache_server"
+
+    args = edict()
+    args.model = name
+    args.server_name = server_name
+    args.block_size = block_size
+    args.cache_dtype = cache_dtype
+    args.memory_space = 40
+    args.remote_kv_cache_server_name = server_name
+
+    server = start_remote_kv_cache(args)
+    process_warp_with_exc(wait_service_available, args)
+
+    n = max_num_batched_tokens // block_size
+    num_blocks = N * n
+
+    process_warp_with_exc(kv_cache_info, args)
+    process_warp_with_exc(test, server_name, name, N, n, num_blocks,
+                          block_size, num_attention_layers, num_kv_heads,
+                          head_size, cache_dtype, pin_memory)
+    process_warp_with_exc(kv_cache_info, args)
+
+    for s in server:
+        s.terminate()
 
 
 if __name__ == '__main__':
-    import torch
     max_num_batched_tokens = 1024
     block_size = 16
     N = 8
 
     for name, num_attention_layers, num_kv_heads, head_size, cache_dtype in [
-            # ("Qwen/Qwen2.5-32B-Instruct-GPTQ-Int4", 64, 8, 128, torch.float16),
+        ("Qwen/Qwen2.5-32B-Instruct-GPTQ-Int4", 64, 8, 128, torch.float16),
         ("Qwen/Qwen2.5-7B-Instruct", 28, 4, 128, torch.bfloat16),
         ("Qwen/Qwen2.5-3B-Instruct", 36, 2, 128, torch.bfloat16),
         ("THUDM/glm-4-9b-chat-1m", 40, 4, 128, torch.bfloat16),
@@ -231,8 +250,8 @@ if __name__ == '__main__':
         time.sleep(10)
 """
 Qwen/Qwen2.5-7B-Instruct
-set deferred=False elapsed time:  0.12489648599989778
-set deferred=True elapsed time:  0.0894639969999389
-get elapsed time:  0.2792327990000558
-stream_get elapsed time:  0.07935212699999283
+set deferred=False elapsed time:  0.12506789100007154
+set deferred=True elapsed time:  0.08860314100093092
+get elapsed time:  0.20406127300157095
+stream_get elapsed time:  0.06670699400092417
 """

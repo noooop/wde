@@ -1,3 +1,5 @@
+import numpy as np
+
 from wde.logger import init_logger
 from wde.workflows.decoding.kv_cache.offloading.manager import \
     CPUBlockAllocator
@@ -10,12 +12,29 @@ logger = init_logger(__name__)
 
 class RemoteMemoryKVCache:
 
-    def __init__(self, model, block_size, memory_space, cache_dtype="auto"):
+    def __init__(self,
+                 model,
+                 block_size,
+                 memory_space,
+                 cache_dtype="auto",
+                 *args,
+                 **kwargs):
         self.model = model
         self.block_size = block_size
         self.cache_dtype = cache_dtype
         self.memory_space_bytes = memory_space * GB
 
+        self.num_attention_layers = None
+        self.num_heads = None
+        self.head_size = None
+        self.dtype = None
+        self.cache_block_size = None
+        self.num_blocks = None
+        self.kv_cache = None
+        self.block_allocator = None
+        self.block_shape = None
+
+    def init(self):
         num_attention_layers, num_heads, head_size, dtype = get_cache_shape(
             self.model, self.cache_dtype)
 
@@ -25,7 +44,7 @@ class RemoteMemoryKVCache:
         self.dtype = dtype
 
         self.cache_block_size = get_cache_block_size_bytes(
-            num_attention_layers, block_size, num_heads, head_size, dtype)
+            num_attention_layers, self.block_size, num_heads, head_size, dtype)
 
         self.num_blocks = self.memory_space_bytes // self.cache_block_size
 
@@ -38,6 +57,151 @@ class RemoteMemoryKVCache:
             f"KV cache shape:{self.kv_cache.shape}. KV cache size {self.cache_block_size / MB} MB."
         )
 
+    def set(self, block_hashs, block_data, force):
+        block_shape = self.block_shape
+        block_allocator = self.block_allocator
+
+        total = len(block_hashs)
+        blocks = {}
+
+        error = 0
+        existed = 0
+        forced = 0
+        created = 0
+        duplicated = 0
+
+        for i in range(total):
+            block_hash = block_hashs[i]
+
+            if block_hash in blocks:
+                duplicated += 1
+                continue
+
+            data = block_data[i]
+
+            assert data.shape == block_shape
+
+            block = block_allocator.get_or_create(block_hash)
+
+            if block is None:
+                error += 0
+                # NoFreeBlocksError
+                continue
+
+            if block.lock:
+                existed += 1
+                # doing write
+                continue
+
+            if block.lock is None:
+                created += 1
+            else:
+                existed += 1
+
+                if not force:
+                    continue
+                else:
+                    forced += 1
+
+            block.acquire()
+
+            block_allocator.hold(block)
+            blocks[block_hash] = (block, data)
+
+        def generator():
+            for block, data in blocks.values():
+                self.kv_cache[block.physical_block_id] = data
+
+        def release():
+            for block, data in blocks.values():
+                block.release()
+                block_allocator.free(block)
+
+        info = {
+            "total": total,
+            "error": error,
+            "existed": existed,
+            "duplicated": duplicated,
+            "created": created,
+            "forced": forced
+        }
+
+        return info, blocks, generator, release
+
+    def contains(self, block_hashs, refresh):
+        total = len(block_hashs)
+        dtype = block_hashs.dtype
+
+        block_allocator = self.block_allocator
+
+        hit = []
+        miss = []
+
+        for i in range(total):
+            block_hash = block_hashs[i]
+
+            h = block_hash in block_allocator
+
+            if h and refresh:
+                block = block_allocator.get(block_hash)
+                block_allocator.refresh(block)
+
+            if h:
+                hit.append(block_hash)
+            else:
+                miss.append(block_hash)
+
+        hit = np.array(hit, dtype=dtype)
+        miss = np.array(miss, dtype=dtype)
+
+        return hit, miss
+
+    def get(self, block_hashs):
+        block_allocator = self.block_allocator
+
+        total = len(block_hashs)
+        hit = 0
+        miss = 0
+        duplicate = 0
+
+        blocks = {}
+        for i in range(total):
+            block_hash = block_hashs[i]
+
+            if block_hash in blocks:
+                duplicate += 1
+                continue
+
+            block = block_allocator.get(block_hash)
+
+            if block is None:
+                miss += 1
+                continue
+
+            hit += 1
+            block_allocator.hold(block)
+
+            blocks[block_hash] = (block, i)
+
+        def generator():
+            for block, index in blocks.values():
+                block_hash = block_hashs[index:index + 1]
+                data = self.kv_cache[block.physical_block_id]
+                yield block_hash, data
+
+        def release():
+            for block, index in blocks.values():
+                block_allocator.free(block)
+
+        info = {
+            "total": total,
+            "hit": hit,
+            "miss": miss,
+            "duplicate": duplicate,
+        }
+
+        return info, blocks, generator, release
+
     def __contains__(self, block_hash):
         return block_hash in self.block_allocator
 
@@ -47,24 +211,6 @@ class RemoteMemoryKVCache:
     @property
     def info(self):
         return self.block_allocator.info
-
-    def get(self, block_hash):
-        block = self.block_allocator.get(block_hash)
-
-        return block
-
-    def get_or_create(self, block_hash):
-        block = self.block_allocator.create(block_hash)
-        return block
-
-    def contains(self, block_hash, refresh):
-        o = block_hash in self.block_allocator
-
-        if o and refresh:
-            block = self.block_allocator.get(block_hash)
-            self.block_allocator.refresh(block)
-
-        return o
 
     def _allocate_kv_cache(self):
         kv_cache = allocate_blockwise_kv_cache_np(self.num_blocks,
