@@ -8,6 +8,8 @@ from wde.microservices.framework.zero.schema import (ZeroServerRequest,
                                                      )
 from wde.microservices.framework.zero.server import Z_MethodZeroServer
 from wde.utils import lazy_import
+from wde.workflows.decoding.kv_cache_server.Interface import \
+    RemoteKVCacheInterface
 from wde.workflows.decoding.kv_cache_server.schema import (
     ContainsRequest, ContainsResponse, GetRequest, GetResponse,
     GetResponseStream, InfoResponse, SetRequest, SetResponse)
@@ -20,6 +22,7 @@ class ZeroRemoteKVCacheServer(Z_MethodZeroServer):
 
     RemoteMemoryKVCacheClass = "wde.workflows.decoding.kv_cache_server.memory:RemoteMemoryKVCache"
     RemoteFilesystemKVCache = "wde.workflows.decoding.kv_cache_server.filesystem:RemoteFilesystemKVCache"
+    RemoteHybridKVCacheCache = "wde.workflows.decoding.kv_cache_server.hybrid:RemoteHybridKVCache"
 
     def __init__(self,
                  model,
@@ -44,7 +47,7 @@ class ZeroRemoteKVCacheServer(Z_MethodZeroServer):
         self.block_size = block_size
         self.cache_dtype = cache_dtype
 
-        self._cache = None
+        self._cache: RemoteKVCacheInterface
         self.threads = ThreadPoolExecutor(max_workers)
 
     def init(self):
@@ -61,7 +64,8 @@ class ZeroRemoteKVCacheServer(Z_MethodZeroServer):
             logger.info("remote_kv_cache use RemoteFilesystemKVCache")
         elif validate(self.file_space) and isinstance(
                 self.kv_cache_folder, str) and validate(self.memory_space):
-            pass
+            remote_kv_cache_class = self.RemoteHybridKVCacheCache
+            logger.info("remote_kv_cache use RemoteHybridKVCacheCache")
         else:
             raise ValueError("remote kv cache config not supported")
 
@@ -91,7 +95,7 @@ class ZeroRemoteKVCacheServer(Z_MethodZeroServer):
 
         stream = request.stream
 
-        info, blocks, callback, release = self._cache.get(request.block_hashs)
+        info, callback, release = self._cache.get(request.block_hashs)
 
         info = GetResponse(**info)
 
@@ -139,7 +143,7 @@ class ZeroRemoteKVCacheServer(Z_MethodZeroServer):
                               f"[{len(request.block_hashs)}] != "
                               f"len(request.blocks)! [{len(request.blocks)}]")
 
-        info, blocks, generator, release = self._cache.set(
+        info, generator, release = self._cache.set(
             block_hashs=request.block_hashs,
             block_data=request.blocks,
             force=request.force)

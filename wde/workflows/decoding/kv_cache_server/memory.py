@@ -6,11 +6,13 @@ from wde.workflows.decoding.kv_cache.offloading.manager import \
 from wde.workflows.decoding.kv_cache.remote.util import (
     GB, MB, allocate_blockwise_kv_cache_np, get_cache_block_size_bytes,
     get_cache_shape)
+from wde.workflows.decoding.kv_cache_server.Interface import \
+    RemoteKVCacheInterface
 
 logger = init_logger(__name__)
 
 
-class RemoteMemoryKVCache:
+class RemoteMemoryKVCache(RemoteKVCacheInterface):
 
     def __init__(self,
                  model,
@@ -126,7 +128,7 @@ class RemoteMemoryKVCache:
             "forced": forced
         }
 
-        return info, blocks, generator, release
+        return info, generator, release
 
     def contains(self, block_hashs, refresh):
         total = len(block_hashs)
@@ -200,7 +202,7 @@ class RemoteMemoryKVCache:
             "duplicate": duplicate,
         }
 
-        return info, blocks, generator, release
+        return info, generator, release
 
     def __contains__(self, block_hash):
         return block_hash in self.block_allocator

@@ -7,13 +7,15 @@ from wde.logger import init_logger
 from wde.workflows.decoding.kv_cache.offloading.manager import \
     CPUBlockAllocator
 from wde.workflows.decoding.kv_cache.remote.util import GB, MB, dtype_np_map
+from wde.workflows.decoding.kv_cache_server.Interface import \
+    RemoteKVCacheInterface
 from wde.workflows.decoding.kv_cache_server.memory import (
     get_cache_block_size_bytes, get_cache_shape)
 
 logger = init_logger(__name__)
 
 
-class RemoteFilesystemKVCache:
+class RemoteFilesystemKVCache(RemoteKVCacheInterface):
 
     def __init__(self,
                  model,
@@ -97,7 +99,7 @@ class RemoteFilesystemKVCache:
                 duplicate += 1
                 continue
 
-            s_block_hash = self._get_s_block_hash(block_hashs, i)
+            s_block_hash = self.get_s_block_hash(block_hashs, i)
 
             block = block_allocator.get(s_block_hash)
 
@@ -139,7 +141,7 @@ class RemoteFilesystemKVCache:
             "duplicate": duplicate,
         }
 
-        return info, blocks, generator, release
+        return info, generator, release
 
     def set(self, block_hashs, block_data, force):
         block_shape = self.block_shape
@@ -165,7 +167,7 @@ class RemoteFilesystemKVCache:
 
             assert data.shape == block_shape
 
-            s_block_hash = self._get_s_block_hash(block_hashs, i)
+            s_block_hash = self.get_s_block_hash(block_hashs, i)
 
             block = block_allocator.get_or_create(s_block_hash)
 
@@ -215,7 +217,7 @@ class RemoteFilesystemKVCache:
             "forced": forced
         }
 
-        return info, blocks, generator, release
+        return info, generator, release
 
     def contains(self, block_hashs, refresh):
         total = len(block_hashs)
@@ -229,7 +231,7 @@ class RemoteFilesystemKVCache:
         for i in range(total):
             block_hash = block_hashs[i]
 
-            s_block_hash = self._get_s_block_hash(block_hashs, i)
+            s_block_hash = self.get_s_block_hash(block_hashs, i)
 
             h = s_block_hash in block_allocator
 
@@ -264,7 +266,7 @@ class RemoteFilesystemKVCache:
         filepath = directory / (s_block_hash + ".npy")
         filepath.unlink()
 
-    def _get_s_block_hash(self, block_hashs, i):
+    def get_s_block_hash(self, block_hashs, i):
         return hashlib.md5(self._salt_bytes +
                            block_hashs[i:i + 1].tobytes()).hexdigest()
 

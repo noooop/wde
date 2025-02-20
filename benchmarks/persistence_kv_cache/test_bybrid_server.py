@@ -22,7 +22,7 @@ def benchmark_remote_kv_cache_server(name, N, max_num_batched_tokens,
     args.server_name = server_name
     args.block_size = block_size
     args.cache_dtype = cache_dtype
-    args.memory_space = 0
+    args.memory_space = 40
     args.file_space = 40
     args.kv_cache_folder = "/share/test_kv_cache"
 
