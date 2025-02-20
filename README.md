@@ -11,6 +11,7 @@
 - [实现 prefix caching](./docs/gpu_prefix_caching.md)
 - [实现 offloading prefix caching](./docs/offloading_KV_cache.md)
 - [实现 remote KV cache](./docs/remote_KV_cache.md)
+- [实现 persistence kv cache](./docs/persistence_kv_cache.md)
 
 # 应用
 - [快速入门](./docs/quickstart.md)
