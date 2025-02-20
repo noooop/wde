@@ -294,12 +294,10 @@ class RemoteFilesystemKVCache(RemoteKVCacheInterface):
         blocks.sort()
 
         block_allocator = self.block_allocator
-        for s_block_hash, st_atime in blocks:
+        for st_atime, s_block_hash in blocks:
             block = block_allocator.get_or_create(s_block_hash)
-            block.acquire()
-            block_allocator.hold(block)
-            block.release()
-            block_allocator.free(block)
+            block.lock = False
+            block_allocator.refresh(block)
 
         logger.info("recover %d blocks. info: %s", len(blocks), self.info)
 

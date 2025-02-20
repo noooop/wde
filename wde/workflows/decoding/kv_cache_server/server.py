@@ -24,29 +24,20 @@ class ZeroRemoteKVCacheServer(Z_MethodZeroServer):
     RemoteFilesystemKVCache = "wde.workflows.decoding.kv_cache_server.filesystem:RemoteFilesystemKVCache"
     RemoteHybridKVCacheCache = "wde.workflows.decoding.kv_cache_server.hybrid:RemoteHybridKVCache"
 
-    def __init__(self,
-                 model,
-                 block_size,
-                 memory_space=None,
-                 file_space=None,
-                 kv_cache_folder=None,
-                 cache_dtype="auto",
-                 name=None,
-                 max_workers=4,
-                 **kwargs):
+    def __init__(self, engine_args, **kwargs):
+        model = engine_args["model"]
+        block_size = engine_args["block_size"]
+        name = kwargs.pop("name", None) or f"kv_cache:{model}:{block_size}"
+        max_workers = engine_args.pop("max_workers", 4)
 
-        if name is None:
-            name = f"kv_cache:{model}:{block_size}"
-
-        super().__init__(name=name, port=None, do_register=True, **kwargs)
+        super().__init__(name=name, do_register=True, **kwargs)
 
         self.model = model
-        self.memory_space = memory_space
-        self.file_space = file_space
-        self.kv_cache_folder = kv_cache_folder
+        self.memory_space = engine_args.pop("memory_space", None)
+        self.file_space = engine_args.pop("file_space", None)
+        self.kv_cache_folder = engine_args.pop("kv_cache_folder", None)
         self.block_size = block_size
-        self.cache_dtype = cache_dtype
-
+        self.cache_dtype = engine_args.pop("cache_dtype", "auto")
         self._cache: RemoteKVCacheInterface
         self.threads = ThreadPoolExecutor(max_workers)
 

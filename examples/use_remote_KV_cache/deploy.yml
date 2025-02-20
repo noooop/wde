@@ -1,0 +1,28 @@
+chat:
+  models:
+    -
+      model: "THUDM/glm-4-9b-chat-1m"
+      engine_args:
+        gpu_memory_utilization: 0.9
+        quantization: "fp8"
+        block_size: 16
+        max_num_requests: 1
+        max_num_batched_tokens: 1024
+        max_model_len: 100000
+        swap_space: 20
+        enable_prefix_caching: True
+        remote_kv_cache_server: True
+        trust_remote_code: True
+        default_options:
+          max_tokens: 1024
+
+remote_kv_cache:
+  -
+    model: "THUDM/glm-4-9b-chat-1m"
+    engine_args:
+      block_size: 16
+      memory_space: 0
+      file_space: 100
+      kv_cache_folder: "/share/test_kv_cache"
+
+entrypoints: ["ollama_compatible", "openai_compatible"]

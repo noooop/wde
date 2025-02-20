@@ -2,7 +2,10 @@ from typing import TYPE_CHECKING, Dict, List, Optional
 
 import numpy as np
 
+from wde.logger import init_logger
 from wde.workflows.decoding.kv_cache.remote.util import get_share_memory_np
+
+logger = init_logger(__name__)
 
 if TYPE_CHECKING:
     from wde.workflows.decoding.kv_cache.logic_manager import PrefixHash
@@ -232,5 +235,7 @@ class TransferInManager(BaseTransferManager):
             self.cpu_cache[block.physical_block_id] = data
             count += 1
             task.hits.add(block_hash)
+
+        logger.info("Transfer from remote kv cache %s", metadata)
 
         assert metadata.hit == count

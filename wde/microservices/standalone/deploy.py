@@ -78,12 +78,36 @@ class Deploy:
                 })
             logger.info("%s : %s", "openai_compatible", out)
 
+    def remote_kv_cache(self):
+        protocol = "remote_kv_cache"
+
+        if protocol not in self.config:
+            return
+
+        for config in self.config[protocol]:
+            model = config.model
+            block_size = config.engine_args.block_size
+            config.engine_args["model"] = model
+
+            name = config.get("server_name",
+                              None) or f"kv_cache:{model}:{block_size}"
+            out = self.manager_client.start(
+                name=name,
+                engine_kwargs={
+                    "server_class": const.REMOTE_KVCACHE_ENGINE_CLASS,
+                    "engine_args": config.engine_args
+                })
+            logger.info("%s : %s", config.model, out)
+
+        time.sleep(10)
+
     def __call__(self):
         ensure_zero_manager_available()
 
         self.verify()
         self.root_manager_init()
         self.model_init()
+        self.remote_kv_cache()
         self.http_entrypoint_init()
 
 

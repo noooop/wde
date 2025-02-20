@@ -99,7 +99,7 @@ class ZeroEngine(Z_MethodZeroServer):
         assert self.engine.served_model_name == request.model
 
         options = request.options or {}
-        options = {**options, **self.default_options}
+        options = {**self.default_options, **options}
         skip_empty_delta_text = options.pop("skip_empty_delta_text", True)
         request_id = str(req.req_id)
         sampling_params = SamplingParams(**options)

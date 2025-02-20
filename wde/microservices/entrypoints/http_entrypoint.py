@@ -1,4 +1,4 @@
-from multiprocess import Process
+from multiprocessing import Process
 
 from wde.logger import init_logger
 

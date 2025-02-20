@@ -2,6 +2,8 @@ import time
 
 import numpy as np
 
+from wde import const
+
 
 def test(args, requests):
     from wde import LLMEngine, SamplingParams
@@ -107,27 +109,21 @@ def start_remote_kv_cache(args):
     from wde.microservices.framework.zero.server import ZeroServerProcess
     from wde.microservices.standalone.server import setup_and_run
 
-    remote_server_class = "wde.workflows.decoding.kv_cache_server.server:ZeroRemoteKVCacheServer"
     server = setup_and_run()
     try:
-        kv_cache_server = ZeroServerProcess(server_class=remote_server_class,
-                                            server_kwargs={
-                                                "model":
-                                                args.model,
-                                                "name":
-                                                args.get("server_name", None),
-                                                "block_size":
-                                                args.block_size,
-                                                "memory_space":
-                                                args.memory_space,
-                                                "cache_dtype":
-                                                args.cache_dtype,
-                                                "file_space":
-                                                args.get("file_space", None),
-                                                "kv_cache_folder":
-                                                args.get(
-                                                    "kv_cache_folder", None),
-                                            })
+        kv_cache_server = ZeroServerProcess(
+            server_class=const.REMOTE_KVCACHE_ENGINE_CLASS,
+            server_kwargs={
+                "name": args.get("server_name", None),
+                "engine_args": {
+                    "model": args.model,
+                    "block_size": args.block_size,
+                    "memory_space": args.memory_space,
+                    "cache_dtype": args.cache_dtype,
+                    "file_space": args.get("file_space", None),
+                    "kv_cache_folder": args.get("kv_cache_folder", None),
+                }
+            })
 
         kv_cache_server.start()
     except Exception as e:
