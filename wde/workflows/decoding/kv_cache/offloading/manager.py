@@ -65,11 +65,16 @@ class CPUBlockAllocator:
         self._free_physical_block_ids: Deque[BlockId] = deque(
             range(num_blocks))
 
+        self.evict_block_callbacks = []
+
     def __contains__(self, block_hash):
         return block_hash in self._full_blocks_map
 
     def __len__(self):
         return len(self._full_blocks_map)
+
+    def add_evict_block_callback(self, callback):
+        self.evict_block_callbacks.append(callback)
 
     @property
     def info(self):
@@ -164,6 +169,10 @@ class CPUBlockAllocator:
             pass
 
         full_blocks = self._free_full_blocks.evict()
+
+        for callback in self.evict_block_callbacks:
+            callback(full_blocks)
+
         self._full_blocks_map.pop(full_blocks.block_hash, None)
         return full_blocks.physical_block_id
 

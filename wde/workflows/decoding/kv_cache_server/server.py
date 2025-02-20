@@ -26,7 +26,7 @@ class ZeroRemoteKVCacheServer(Z_MethodZeroServer):
                  block_size,
                  memory_space=None,
                  file_space=None,
-                 file_dir=None,
+                 kv_cache_folder=None,
                  cache_dtype="auto",
                  name=None,
                  max_workers=4,
@@ -40,7 +40,7 @@ class ZeroRemoteKVCacheServer(Z_MethodZeroServer):
         self.model = model
         self.memory_space = memory_space
         self.file_space = file_space
-        self.file_dir = file_dir
+        self.kv_cache_folder = kv_cache_folder
         self.block_size = block_size
         self.cache_dtype = cache_dtype
 
@@ -56,11 +56,11 @@ class ZeroRemoteKVCacheServer(Z_MethodZeroServer):
             remote_kv_cache_class = self.RemoteMemoryKVCacheClass
             logger.info("remote_kv_cache use RemoteMemoryKVCache")
         elif validate(self.file_space) and isinstance(
-                self.file_dir, str) and not validate(self.memory_space):
+                self.kv_cache_folder, str) and not validate(self.memory_space):
             remote_kv_cache_class = self.RemoteFilesystemKVCache
             logger.info("remote_kv_cache use RemoteFilesystemKVCache")
         elif validate(self.file_space) and isinstance(
-                self.file_dir, str) and validate(self.memory_space):
+                self.kv_cache_folder, str) and validate(self.memory_space):
             pass
         else:
             raise ValueError("remote kv cache config not supported")
@@ -69,7 +69,7 @@ class ZeroRemoteKVCacheServer(Z_MethodZeroServer):
             model=self.model,
             memory_space=self.memory_space,
             file_space=self.file_space,
-            file_dir=self.file_dir,
+            kv_cache_folder=self.kv_cache_folder,
             block_size=self.block_size,
             cache_dtype=self.cache_dtype)
 

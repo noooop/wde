@@ -124,8 +124,9 @@ def start_remote_kv_cache(args):
                                                 args.cache_dtype,
                                                 "file_space":
                                                 args.get("file_space", None),
-                                                "file_dir":
-                                                args.get("file_dir", None),
+                                                "kv_cache_folder":
+                                                args.get(
+                                                    "kv_cache_folder", None),
                                             })
 
         kv_cache_server.start()
@@ -149,4 +150,6 @@ def kv_cache_info(args):
         ZeroRemoteKVCacheClient
 
     client = ZeroRemoteKVCacheClient()
-    print(client.info(args.remote_kv_cache_server_name))
+    info = client.info(args.remote_kv_cache_server_name)
+    print(info)
+    return info

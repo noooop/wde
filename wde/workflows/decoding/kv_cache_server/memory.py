@@ -22,7 +22,7 @@ class RemoteMemoryKVCache:
         self.model = model
         self.block_size = block_size
         self.cache_dtype = cache_dtype
-        self.memory_space_bytes = memory_space * GB
+        self.memory_space_bytes = int(memory_space * GB)
 
         self.num_attention_layers = None
         self.num_heads = None

@@ -19,21 +19,22 @@ class RemoteFilesystemKVCache:
                  model,
                  block_size,
                  file_space,
-                 file_dir,
+                 kv_cache_folder,
                  cache_dtype="auto",
                  *args,
                  **kwargs):
         self.model = model
         self.block_size = block_size
         self.cache_dtype = cache_dtype
-        self.file_space_bytes = file_space * GB
+        self.file_space_bytes = int(file_space * GB)
 
         self._salt_str = f"kvcache:{model}:{block_size}"
         self._salt = hashlib.md5(self._salt_str.encode("UTF-8")).hexdigest()
         self._salt_bytes = self._salt.encode("UTF-8")
-        self._filename = self._salt
+        self._folder_name = self._salt
 
-        self.file_dir = pathlib.Path(file_dir) / self._filename
+        self.kv_cache_folder = pathlib.Path(
+            kv_cache_folder) / self._folder_name
 
         self.num_attention_layers = None
         self.num_heads = None
@@ -45,9 +46,9 @@ class RemoteFilesystemKVCache:
         self.block_allocator = None
 
     def init(self):
-        self.file_dir.mkdir(parents=True, exist_ok=True)
+        self.kv_cache_folder.mkdir(parents=True, exist_ok=True)
 
-        if not self.file_dir.exists():
+        if not self.kv_cache_folder.exists():
             raise FileNotFoundError("kv cache file dir Unable to write")
 
         num_attention_layers, num_heads, head_size, dtype = get_cache_shape(
@@ -68,6 +69,8 @@ class RemoteFilesystemKVCache:
         self.block_allocator = CPUBlockAllocator(num_blocks=self.num_blocks,
                                                  block_size=self.block_size)
 
+        self.block_allocator.add_evict_block_callback(
+            self.evict_block_callback)
         self._save_info()
         self._recover()
 
@@ -115,7 +118,7 @@ class RemoteFilesystemKVCache:
             for block, index, s_block_hash in blocks.values():
                 block_hash = block_hashs[index:index + 1]
 
-                directory = (self.file_dir / s_block_hash[:2] /
+                directory = (self.kv_cache_folder / s_block_hash[:2] /
                              s_block_hash[2:4])
 
                 data = np.load(directory / (s_block_hash + ".npy"))
@@ -193,7 +196,7 @@ class RemoteFilesystemKVCache:
 
         def generator():
             for block, data, s_block_hash in blocks.values():
-                directory = (self.file_dir / s_block_hash[:2] /
+                directory = (self.kv_cache_folder / s_block_hash[:2] /
                              s_block_hash[2:4])
                 directory.mkdir(parents=True, exist_ok=True)
                 np.save(directory / s_block_hash, data)
@@ -254,6 +257,13 @@ class RemoteFilesystemKVCache:
     def __len__(self):
         return len(self.block_allocator)
 
+    def evict_block_callback(self, block):
+        s_block_hash = block.block_hash
+        directory = (self.kv_cache_folder / s_block_hash[:2] /
+                     s_block_hash[2:4])
+        filepath = directory / (s_block_hash + ".npy")
+        filepath.unlink()
+
     def _get_s_block_hash(self, block_hashs, i):
         return hashlib.md5(self._salt_bytes +
                            block_hashs[i:i + 1].tobytes()).hexdigest()
@@ -261,7 +271,7 @@ class RemoteFilesystemKVCache:
     def _recover(self):
 
         blocks = []
-        for f in self.file_dir.glob("*/*/*"):
+        for f in self.kv_cache_folder.glob("*/*/*"):
             if not f.is_file():
                 continue
 
@@ -292,7 +302,7 @@ class RemoteFilesystemKVCache:
         logger.info("recover %d blocks. info: %s", len(blocks), self.info)
 
     def _save_info(self):
-        with open(self.file_dir / "README.md", "w") as f:
+        with open(self.kv_cache_folder / "README.md", "w") as f:
             f.write(f"""
 ## Warning
 
@@ -307,3 +317,34 @@ Please do not modify any files.
 - Max num file blocks {self.num_blocks}
 
 """)
+
+
+def rm_cache_dir(model, block_size, kv_cache_folder):
+    import shutil
+
+    salt_str = f"kvcache:{model}:{block_size}"
+    folder_name = hashlib.md5(salt_str.encode("UTF-8")).hexdigest()
+    folder_path = pathlib.Path(kv_cache_folder) / folder_name
+
+    try:
+        shutil.rmtree(str(folder_path))
+    except FileNotFoundError:
+        pass
+
+
+def cache_dir_files(model, block_size, kv_cache_folder):
+    salt_str = f"kvcache:{model}:{block_size}"
+    folder_name = hashlib.md5(salt_str.encode("UTF-8")).hexdigest()
+    folder_path = pathlib.Path(kv_cache_folder) / folder_name
+
+    files = []
+    for f in folder_path.glob("*/*/*"):
+        if not f.is_file():
+            continue
+
+        if f.suffix != ".npy":
+            continue
+
+        files.append(f)
+
+    return files
