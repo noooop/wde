@@ -1,8 +1,8 @@
 from typing import TYPE_CHECKING, Dict, List, Optional
 
-import numpy as np
-
 from wde.logger import init_logger
+from wde.workflows.decoding.kv_cache.prefix_caching.util import \
+    block_hashs_to_numpy_array
 from wde.workflows.decoding.kv_cache.remote.util import get_share_memory_np
 
 logger = init_logger(__name__)
@@ -114,20 +114,22 @@ class TransferOutManager(BaseTransferManager):
             block_hashs.append(block.block_hash)
             hash2block[block.block_hash] = block
 
-        block_hashs = np.array(block_hashs, dtype=np.int64)
+        block_hashs = block_hashs_to_numpy_array(block_hashs)
 
         response = client.contains(self.server_name, self.name, block_hashs)
 
         need_to_transfer_block_hashs = []
         need_to_transfer_blocks = []
         for block_hash in response.miss:
+            block_hash = block_hash.tobytes()
             block = hash2block[block_hash]
             need_to_transfer_block_hashs.append(block_hash)
             need_to_transfer_blocks.append(
                 self.cpu_cache[block.physical_block_id])
 
-        need_to_transfer_block_hashs = np.array(need_to_transfer_block_hashs,
-                                                dtype=np.int64)
+        need_to_transfer_block_hashs = block_hashs_to_numpy_array(
+            need_to_transfer_block_hashs)
+
         client.set(self.server_name, self.name, need_to_transfer_block_hashs,
                    need_to_transfer_blocks)
 
@@ -218,7 +220,7 @@ class TransferInManager(BaseTransferManager):
 
         blocks = task.blocks
 
-        block_hashs = np.array(list(blocks.keys()), dtype=np.int64)
+        block_hashs = block_hashs_to_numpy_array(list(blocks.keys()))
 
         response = client.get(self.server_name,
                               self.name,
@@ -229,13 +231,13 @@ class TransferInManager(BaseTransferManager):
 
         count = 0
         for rep in response:
-            block_hash = rep.block_hash[0]
+            block_hash = rep.block_hash[0].tobytes()
             block = blocks[block_hash]
             data = rep.block
             self.cpu_cache[block.physical_block_id] = data
             count += 1
             task.hits.add(block_hash)
 
-        logger.info("Transfer from remote kv cache %s", metadata)
+        # logger.info("Transfer from remote kv cache %s", metadata)
 
         assert metadata.hit == count

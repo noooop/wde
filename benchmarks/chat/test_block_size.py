@@ -1,5 +1,11 @@
-from benchmarks.chat.util import benchmark
+from benchmarks.chat.util import get_requests, test
 from wde.utils import process_warp_with_exc
+
+
+def benchmark(args):
+    requests = get_requests(args)
+    process_warp_with_exc(test, args, requests)
+
 
 if __name__ == '__main__':
     from easydict import EasyDict as edict

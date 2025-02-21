@@ -1,6 +1,5 @@
 import time
 
-import numpy as np
 import pytest
 from easydict import EasyDict as edict
 
@@ -10,6 +9,8 @@ from benchmarks.remote_kv_cache.util import (kv_cache_info,
 from wde.utils import process_warp
 from wde.workflows.decoding.kv_cache.physical_manager import \
     allocate_blockwise_kv_cache
+from wde.workflows.decoding.kv_cache.prefix_caching.util import (
+    block_hashs_to_numpy_array, get_block_hash, get_prefix_hash)
 from wde.workflows.decoding.kv_cache.remote.util import (get_cache_shape,
                                                          get_share_memory_np)
 from wde.workflows.decoding.kv_cache_server.client import \
@@ -22,6 +23,9 @@ MODELS = ["Qwen/Qwen2.5-0.5B-Instruct", "Qwen/Qwen2.5-1.5B-Instruct"]
 
 def main(args):
     process_warp(wait_service_available, args)
+
+    init_prefix_str = f"kv_cache:{args.model}:{args.block_size}"
+    init_prefix_hash = get_prefix_hash(init_prefix_str.encode())
 
     info = process_warp(kv_cache_info, args)
 
@@ -51,7 +55,8 @@ def main(args):
 
     # not full
     for i in range(1, num_blocks):
-        block_hashs = np.array([i], dtype=np.int64)
+        block_hash = get_block_hash(init_prefix_hash, [i])
+        block_hashs = block_hashs_to_numpy_array([block_hash])
 
         response = client.set(args.server_name,
                               args.model,
@@ -77,7 +82,8 @@ def main(args):
 
     # full
     for i in range(1, num_blocks):
-        block_hashs = np.array([i + num_blocks], dtype=np.int64)
+        block_hash = get_block_hash(init_prefix_hash, [i + num_blocks])
+        block_hashs = block_hashs_to_numpy_array([block_hash])
 
         response = client.set(args.server_name,
                               args.model,

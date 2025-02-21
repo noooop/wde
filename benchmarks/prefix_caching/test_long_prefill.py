@@ -1,5 +1,5 @@
 from benchmarks.chat.util import get_requests
-from benchmarks.offloading_KV_cache.util import test
+from benchmarks.prefix_caching.util import test
 from wde.utils import process_warp_with_exc
 
 
@@ -16,9 +16,9 @@ def test_disable_prefix_caching(args):
     args.block_allocator = "naive"
     process_warp_with_exc(benchmark, args)
 
-    # print("test_disable_prefix_caching")
-    # args.block_allocator = "disable_prefix_caching"
-    # run(args)
+    print("test_disable_prefix_caching")
+    args.block_allocator = "disable_prefix_caching"
+    process_warp_with_exc(benchmark, args)
 
 
 def test_prefix_caching(args):
@@ -29,21 +29,8 @@ def test_prefix_caching(args):
     args.block_allocator = "prefix_caching"
     process_warp_with_exc(benchmark, args)
 
-    # print("test_yoco")
-    # args.block_allocator = "yoco"
-    # run(args)
-
-
-def test_offloading(args):
-    args.swap_space = 40
-    args.repeat = 3
-
-    print("test_offloading+prefix_caching")
-    args.block_allocator = "prefix_caching"
-    process_warp_with_exc(benchmark, args)
-
-    print("test_offloading+no_prefix_caching")
-    args.block_allocator = "disable_prefix_caching"
+    print("test_yoco")
+    args.block_allocator = "yoco"
     process_warp_with_exc(benchmark, args)
 
 
@@ -98,4 +85,3 @@ if __name__ == '__main__':
 
         test_disable_prefix_caching(args)
         test_prefix_caching(args)
-        test_offloading(args)

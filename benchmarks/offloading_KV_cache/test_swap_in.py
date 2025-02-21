@@ -1,14 +1,9 @@
-from benchmarks.offloading_KV_cache.util import get_requests, test
+from benchmarks.chat.util import get_requests
+from benchmarks.offloading_KV_cache.util import test
 from wde.utils import process_warp_with_exc
 
 
 def benchmark(args):
-    import random
-    random.seed(args.seed)
-
-    import wde
-    print(wde.__version__)
-
     requests = get_requests(args)
     process_warp_with_exc(test, args, requests)
 

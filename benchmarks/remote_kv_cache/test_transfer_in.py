@@ -1,6 +1,6 @@
 import random
 
-from benchmarks.offloading_KV_cache.util import get_requests
+from benchmarks.chat.util import get_requests
 from benchmarks.remote_kv_cache.util import (kv_cache_info,
                                              start_remote_kv_cache, test,
                                              wait_service_available)
@@ -9,9 +9,6 @@ from wde.utils import process_warp_with_exc
 
 def benchmark(args):
     random.seed(args.seed)
-
-    import wde
-    print(wde.__version__)
 
     server = start_remote_kv_cache(args)
 

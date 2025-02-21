@@ -1,4 +1,4 @@
-from benchmarks.offloading_KV_cache.util import get_requests
+from benchmarks.chat.util import get_requests
 from benchmarks.remote_kv_cache.util import (kv_cache_info,
                                              start_remote_kv_cache, test,
                                              wait_service_available)
@@ -7,12 +7,6 @@ from wde.workflows.decoding.scheduler import BLOCK_ALLOCATOR_MAP
 
 
 def benchmark(args):
-    import random
-    random.seed(args.seed)
-
-    import wde
-    print(wde.__version__)
-
     server = start_remote_kv_cache(args)
 
     args.remote_kv_cache_server_name = f"kv_cache:{args.model}:{args.block_size}"

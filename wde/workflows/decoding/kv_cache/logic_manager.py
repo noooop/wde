@@ -1,7 +1,6 @@
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, List
 
 BlockId = int
-PrefixHash = Optional[int]
 
 if TYPE_CHECKING:
     from wde.workflows.decoding.kv_cache.prefix_caching.allocator import Block
@@ -81,7 +80,7 @@ class LogicKVCacheManager:
         self.block_allocator.join()
 
 
-class VirtualBlockTable:
+class VirtualBlockTableInterface:
 
     @property
     def seq_len(self):
@@ -121,7 +120,7 @@ class VirtualBlockTable:
         raise NotImplementedError
 
 
-class BlockAllocator:
+class BlockAllocatorInterface:
 
     def create(self):
         raise NotImplementedError

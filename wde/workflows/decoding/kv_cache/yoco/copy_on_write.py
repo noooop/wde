@@ -1,18 +1,24 @@
-from typing import List
+from typing import TYPE_CHECKING, List, Tuple
 
 import torch
 from vllm import _custom_ops as ops
 
 from wde.workflows.decoding.kv_cache.prefix_caching.allocator import Block
 
+if TYPE_CHECKING:
+    from wde.workflows.decoding.kv_cache.yoco.allocator import \
+        YOCOPrefixCachingBlockAllocator
+
 
 class CopyOnWrite:
 
-    def __init__(self, kv_cache: List[torch.Tensor]):
-        self.task = []
+    def __init__(self, kv_cache: List[torch.Tensor],
+                 block_allocator: "YOCOPrefixCachingBlockAllocator"):
+        self.task: List[Tuple[Block, Block]] = []
         self.stream = torch.cuda.Stream()
         self.key_caches = [kv_cache[0] for kv_cache in kv_cache]
         self.value_caches = [kv_cache[1] for kv_cache in kv_cache]
+        self.block_allocator = block_allocator
 
     def submit(self, from_: Block, to_: Block, n_token):
         from_physical_block_id = from_.physical_block_id
@@ -21,8 +27,9 @@ class CopyOnWrite:
         assert from_physical_block_id is not None
         assert to_physical_block_id is not None
 
-        from_.incr()
-        to_.incr()
+        to_.acquire()
+        self.block_allocator.hold(from_)
+        self.block_allocator.hold(to_)
 
         with torch.cuda.stream(self.stream):
             self.ops_copy_blocks(from_physical_block_id, to_physical_block_id,
@@ -53,7 +60,8 @@ class CopyOnWrite:
         self.stream.synchronize()
 
         for from_, to_ in self.task:
-            from_.decr()
-            to_.decr()
+            to_.release()
+            self.block_allocator.free(from_)
+            self.block_allocator.free(to_)
 
         self.task = []

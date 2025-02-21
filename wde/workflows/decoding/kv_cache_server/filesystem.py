@@ -6,6 +6,8 @@ import numpy as np
 from wde.logger import init_logger
 from wde.workflows.decoding.kv_cache.offloading.manager import \
     CPUBlockAllocator
+from wde.workflows.decoding.kv_cache.prefix_caching.util import \
+    block_hashs_to_numpy_array
 from wde.workflows.decoding.kv_cache.remote.util import GB, MB, dtype_np_map
 from wde.workflows.decoding.kv_cache_server.Interface import \
     RemoteKVCacheInterface
@@ -93,15 +95,13 @@ class RemoteFilesystemKVCache(RemoteKVCacheInterface):
 
         blocks = {}
         for i in range(total):
-            block_hash = block_hashs[i]
+            block_hash = block_hashs[i].tobytes()
 
             if block_hash in blocks:
                 duplicate += 1
                 continue
 
-            s_block_hash = self.get_s_block_hash(block_hashs, i)
-
-            block = block_allocator.get(s_block_hash)
+            block = block_allocator.get(block_hash)
 
             if block is None:
                 miss += 1
@@ -110,20 +110,15 @@ class RemoteFilesystemKVCache(RemoteKVCacheInterface):
             hit += 1
             block_allocator.hold(block)
 
-            blocks[block_hash] = (
-                block,
-                i,
-                s_block_hash,
-            )
+            blocks[block_hash] = block
 
         def generator():
-            for block, index, s_block_hash in blocks.values():
-                block_hash = block_hashs[index:index + 1]
+            for block_hash, block in blocks.items():
+                block_hash_str = block_hash.decode("UTF-8")
+                directory = (self.kv_cache_folder / block_hash_str[:2] /
+                             block_hash_str[2:4])
 
-                directory = (self.kv_cache_folder / s_block_hash[:2] /
-                             s_block_hash[2:4])
-
-                data = np.load(directory / (s_block_hash + ".npy"))
+                data = np.load(directory / (block_hash_str + ".npy"))
 
                 assert data.shape == block_shape
                 assert data.dtype == dtype
@@ -131,7 +126,7 @@ class RemoteFilesystemKVCache(RemoteKVCacheInterface):
                 yield block_hash, data
 
         def release():
-            for block, index, s_block_hash in blocks.values():
+            for block in blocks.values():
                 block_allocator.free(block)
 
         info = {
@@ -157,7 +152,7 @@ class RemoteFilesystemKVCache(RemoteKVCacheInterface):
         duplicated = 0
 
         for i in range(total):
-            block_hash = block_hashs[i]
+            block_hash = block_hashs[i].tobytes()
 
             if block_hash in blocks:
                 duplicated += 1
@@ -167,9 +162,7 @@ class RemoteFilesystemKVCache(RemoteKVCacheInterface):
 
             assert data.shape == block_shape
 
-            s_block_hash = self.get_s_block_hash(block_hashs, i)
-
-            block = block_allocator.get_or_create(s_block_hash)
+            block = block_allocator.get_or_create(block_hash)
 
             if block is None:
                 error += 0
@@ -194,17 +187,18 @@ class RemoteFilesystemKVCache(RemoteKVCacheInterface):
             block.acquire()
 
             block_allocator.hold(block)
-            blocks[block_hash] = (block, data, s_block_hash)
+            blocks[block_hash] = (block, data)
 
         def generator():
-            for block, data, s_block_hash in blocks.values():
-                directory = (self.kv_cache_folder / s_block_hash[:2] /
-                             s_block_hash[2:4])
+            for block_hash, (block, data) in blocks.items():
+                block_hash_str = block_hash.decode("UTF-8")
+                directory = (self.kv_cache_folder / block_hash_str[:2] /
+                             block_hash_str[2:4])
                 directory.mkdir(parents=True, exist_ok=True)
-                np.save(directory / s_block_hash, data)
+                np.save(directory / block_hash_str, data)
 
         def release():
-            for block, data, s_block_hash in blocks.values():
+            for block, data in blocks.values():
                 block.release()
                 block_allocator.free(block)
 
@@ -221,7 +215,6 @@ class RemoteFilesystemKVCache(RemoteKVCacheInterface):
 
     def contains(self, block_hashs, refresh):
         total = len(block_hashs)
-        dtype = block_hashs.dtype
 
         block_allocator = self.block_allocator
 
@@ -229,14 +222,12 @@ class RemoteFilesystemKVCache(RemoteKVCacheInterface):
         miss = []
 
         for i in range(total):
-            block_hash = block_hashs[i]
+            block_hash = block_hashs[i].tobytes()
 
-            s_block_hash = self.get_s_block_hash(block_hashs, i)
-
-            h = s_block_hash in block_allocator
+            h = block_hash in block_allocator
 
             if h and refresh:
-                block = block_allocator.get(s_block_hash)
+                block = block_allocator.get(block_hash)
                 block_allocator.refresh(block)
 
             if h:
@@ -244,8 +235,8 @@ class RemoteFilesystemKVCache(RemoteKVCacheInterface):
             else:
                 miss.append(block_hash)
 
-        hit = np.array(hit, dtype=dtype)
-        miss = np.array(miss, dtype=dtype)
+        hit = block_hashs_to_numpy_array(hit)
+        miss = block_hashs_to_numpy_array(miss)
 
         return hit, miss
 
@@ -260,15 +251,12 @@ class RemoteFilesystemKVCache(RemoteKVCacheInterface):
         return len(self.block_allocator)
 
     def evict_block_callback(self, block):
-        s_block_hash = block.block_hash
-        directory = (self.kv_cache_folder / s_block_hash[:2] /
-                     s_block_hash[2:4])
-        filepath = directory / (s_block_hash + ".npy")
+        block_hash = block.block_hash
+        block_hash_str = block_hash.decode("UTF-8")
+        directory = (self.kv_cache_folder / block_hash_str[:2] /
+                     block_hash_str[2:4])
+        filepath = directory / (block_hash_str + ".npy")
         filepath.unlink()
-
-    def get_s_block_hash(self, block_hashs, i):
-        return hashlib.md5(self._salt_bytes +
-                           block_hashs[i:i + 1].tobytes()).hexdigest()
 
     def _recover(self):
 
@@ -286,16 +274,16 @@ class RemoteFilesystemKVCache(RemoteKVCacheInterface):
             if not self.cache_block_size < stat.st_size < self.cache_block_size * 1.01:
                 continue
 
-            s_block_hash = f.stem
+            block_hash = f.stem.encode("UTF-8")
             st_atime = stat.st_atime
 
-            blocks.append((st_atime, s_block_hash))
+            blocks.append((st_atime, block_hash))
 
         blocks.sort()
 
         block_allocator = self.block_allocator
-        for st_atime, s_block_hash in blocks:
-            block = block_allocator.get_or_create(s_block_hash)
+        for st_atime, block_hash in blocks:
+            block = block_allocator.get_or_create(block_hash)
             block.lock = False
             block_allocator.refresh(block)
 

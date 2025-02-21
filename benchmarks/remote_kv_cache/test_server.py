@@ -11,6 +11,8 @@ from benchmarks.remote_kv_cache.util import (kv_cache_info,
 from wde.utils import process_warp_with_exc
 from wde.workflows.decoding.kv_cache.physical_manager import \
     allocate_blockwise_kv_cache
+from wde.workflows.decoding.kv_cache.prefix_caching.util import (
+    block_hashs_to_numpy_array, get_block_hash, get_prefix_hash)
 from wde.workflows.decoding.kv_cache.remote.util import get_share_memory_np
 from wde.workflows.decoding.kv_cache_server.client import \
     ZeroRemoteKVCacheClient
@@ -18,6 +20,10 @@ from wde.workflows.decoding.kv_cache_server.client import \
 
 def test(server_name, name, N, n, num_blocks, block_size, num_attention_layers,
          num_kv_heads, head_size, cache_dtype, pin_memory):
+
+    init_prefix_str = f"kv_cache:{name}:{block_size}"
+    init_prefix_hash = get_prefix_hash(init_prefix_str.encode())
+
     client = ZeroRemoteKVCacheClient()
 
     from_kv_cache = allocate_blockwise_kv_cache(
@@ -48,11 +54,11 @@ def test(server_name, name, N, n, num_blocks, block_size, num_attention_layers,
     for i in range(num_blocks):
         delta_token_ids = tuple(
             random.randint(1, 1000000) for i in range(block_size))
-        block_hash = hash(delta_token_ids)
+        block_hash = get_block_hash(init_prefix_hash, delta_token_ids)
         block_hashs.append(block_hash)
         hash_map[block_hash] = i
 
-    block_hashs = np.array(block_hashs, dtype=np.int64)
+    block_hashs = block_hashs_to_numpy_array(block_hashs)
 
     block_ids = list(range(num_blocks))
 

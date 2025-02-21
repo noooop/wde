@@ -1,40 +1,33 @@
-import random
 import time
 
 import numpy as np
 
 
-def benchmark(args):
-    random.seed(args.seed)
+def get_requests(args):
+    from wde.workflows.decoding.backends.sampling.utils import TokenSampler
 
+    token_sampler = TokenSampler(args.tokenizer)
+
+    prefix_len = int(args.hit_rate * args.input_len)
+    unique_len = args.input_len - prefix_len
+    prefix_token_ids = token_sampler.random_sample(prefix_len)
+
+    requests = []
+    for _ in range(args.num_prompts):
+        unique_part_token_ids = token_sampler.random_sample(unique_len)
+
+        prompt_token_ids = prefix_token_ids + unique_part_token_ids
+        requests.append(prompt_token_ids)
+
+    return requests
+
+
+def run(args, engine_args, requests):
     import wde
     print(wde.__version__)
 
-    from benchmarks.offloading_KV_cache.util import get_requests
     from wde import LLMEngine, SamplingParams
     from wde.workflows.core.schema.engine_io import TokensPrompt
-    from wde.workflows.decoding.arg_utils import \
-        DecodingEngineArgs as EngineArgs
-
-    requests = get_requests(args)
-
-    engine_args = EngineArgs(
-        model=args.model,
-        tokenizer=args.tokenizer,
-        quantization=args.quantization,
-        seed=args.seed,
-        dtype=args.dtype,
-        max_model_len=args.max_model_len,
-        gpu_memory_utilization=args.gpu_memory_utilization,
-        kv_cache_dtype=args.cache_dtype,
-        quantization_param_path=args.quantization_param_path,
-        device=args.device,
-        max_num_batched_tokens=args.max_num_batched_tokens,
-        max_num_requests=args.max_num_requests,
-        scheduling=args.scheduling,
-        frieren_executor_max_workers=args.frieren_executor_max_workers,
-        record_metrics=args.record_metrics,
-        block_size=args.block_size)
 
     engine = LLMEngine.from_engine_args(engine_args)
 
@@ -102,3 +95,28 @@ def benchmark(args):
                 f"Inference time {inference_time * 1000:0.4f} ms, "
                 f"Avg Latency {avg_latency * 1000:0.4f} ms, "
                 f"Latency {latency * 1000:0.4f} ms, n_step {n_step}")
+
+
+def test(args, requests):
+    from wde.workflows.decoding.arg_utils import \
+        DecodingEngineArgs as EngineArgs
+
+    engine_args = EngineArgs(
+        model=args.model,
+        tokenizer=args.tokenizer,
+        quantization=args.quantization,
+        seed=args.seed,
+        dtype=args.dtype,
+        max_model_len=args.max_model_len,
+        gpu_memory_utilization=args.gpu_memory_utilization,
+        kv_cache_dtype=args.cache_dtype,
+        quantization_param_path=args.quantization_param_path,
+        device=args.device,
+        max_num_batched_tokens=args.max_num_batched_tokens,
+        max_num_requests=args.max_num_requests,
+        scheduling=args.scheduling,
+        frieren_executor_max_workers=args.frieren_executor_max_workers,
+        record_metrics=args.record_metrics,
+        block_size=args.block_size)
+
+    run(args, engine_args, requests)

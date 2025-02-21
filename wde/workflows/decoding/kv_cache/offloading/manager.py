@@ -6,12 +6,12 @@ from typing import Deque, Dict, Optional
 
 from wde.workflows.core.executor.stream_pool import StreamPool
 from wde.workflows.decoding.kv_cache.logic_manager import (BlockId,
-                                                           NoFreeBlocksError,
-                                                           PrefixHash)
+                                                           NoFreeBlocksError)
 from wde.workflows.decoding.kv_cache.offloading.swap import (SwapInManager,
                                                              SwapOutManager)
 from wde.workflows.decoding.kv_cache.prefix_caching.lru_evictor import \
     LRUEvictor
+from wde.workflows.decoding.kv_cache.prefix_caching.util import PrefixHash
 from wde.workflows.decoding.schema.engine_io import DecodingSchedulerOutput
 
 

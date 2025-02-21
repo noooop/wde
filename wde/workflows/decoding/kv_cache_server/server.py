@@ -1,4 +1,3 @@
-import numpy as np
 from gevent.threadpool import ThreadPoolExecutor
 
 from wde.logger import init_logger
@@ -8,6 +7,8 @@ from wde.microservices.framework.zero.schema import (ZeroServerRequest,
                                                      )
 from wde.microservices.framework.zero.server import Z_MethodZeroServer
 from wde.utils import lazy_import
+from wde.workflows.decoding.kv_cache.prefix_caching.util import \
+    block_hashs_to_numpy_array
 from wde.workflows.decoding.kv_cache_server.Interface import \
     RemoteKVCacheInterface
 from wde.workflows.decoding.kv_cache_server.schema import (
@@ -100,8 +101,9 @@ class ZeroRemoteKVCacheServer(Z_MethodZeroServer):
                 rep = ZeroServerStreamResponseOk(
                     rep_id=i + 1,
                     snd_more=not i + 1 == info.hit,
-                    msg=GetResponseStream(block_hash=block_hash,
-                                          block=data).dict())
+                    msg=GetResponseStream(
+                        block_hash=block_hashs_to_numpy_array([block_hash]),
+                        block=data).dict())
                 self.zero_send(req, rep)
         else:
             block_data = []
@@ -110,10 +112,7 @@ class ZeroRemoteKVCacheServer(Z_MethodZeroServer):
                 block_hashs.append(block_hash)
                 block_data.append(data)
 
-            block_hashs_np = np.array(block_hashs,
-                                      dtype=request.block_hashs.dtype)
-
-            info.block_hashs = block_hashs_np
+            info.block_hashs = block_hashs_to_numpy_array(block_hashs)
             info.blocks = block_data
 
             rep = ZeroServerResponseOk(msg=info.dict())

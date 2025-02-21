@@ -2,21 +2,20 @@ from collections import deque
 from typing import Deque, Iterable, List, Optional
 
 from wde.logger import init_logger
-from wde.workflows.decoding.kv_cache.logic_manager import (BlockAllocator,
-                                                           BlockId,
-                                                           NoFreeBlocksError,
-                                                           VirtualBlockTable)
+from wde.workflows.decoding.kv_cache.logic_manager import (
+    BlockAllocatorInterface, BlockId, NoFreeBlocksError,
+    VirtualBlockTableInterface)
 from wde.workflows.decoding.kv_cache.utils import get_num_required_blocks
 
 logger = init_logger(__name__)
 
 
-class NaiveVirtualBlockTable(VirtualBlockTable):
+class NaiveVirtualBlockTable(VirtualBlockTableInterface):
 
     def __init__(
         self,
         block_size: int,
-        block_allocator: BlockAllocator,
+        block_allocator: BlockAllocatorInterface,
         _physical_block_ids: Optional[List[BlockId]] = None,
     ):
         if _physical_block_ids is None:
@@ -120,7 +119,7 @@ class NaiveVirtualBlockTable(VirtualBlockTable):
         self._num_computed_tokens = self._num_token_ids
 
 
-class NaiveBlockAllocator(BlockAllocator):
+class NaiveBlockAllocator(BlockAllocatorInterface):
 
     def __init__(self,
                  num_blocks: int,

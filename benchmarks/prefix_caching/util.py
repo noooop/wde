@@ -21,8 +21,6 @@ def test(args, requests):
         scheduling=args.scheduling,
         frieren_executor_max_workers=args.frieren_executor_max_workers,
         record_metrics=args.record_metrics,
-        block_allocator=args.block_allocator,
-        enable_prefix_caching=args.enable_prefix_caching,
-        swap_space=args.swap_space)
+        block_allocator=args.block_allocator)
 
     run(args, engine_args, requests)

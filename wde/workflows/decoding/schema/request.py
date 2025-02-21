@@ -9,7 +9,8 @@ from wde.workflows.core.schema.engine_io import SchedulableRequest
 if TYPE_CHECKING:
     from wde.workflows.decoding.backends.sampling.sampling_params import \
         SamplingParams
-    from wde.workflows.decoding.kv_cache.logic_manager import VirtualBlockTable
+    from wde.workflows.decoding.kv_cache.logic_manager import \
+        VirtualBlockTableInterface
     from wde.workflows.decoding.schema.execute_io import (Logprob,
                                                           PromptLogprobs,
                                                           SampleLogprobs)
@@ -66,7 +67,7 @@ class DecodingSchedulableRequest(SchedulableRequest):
 
     # status
     busy: bool = False
-    vblock: Optional["VirtualBlockTable"] = None
+    vblock: Optional["VirtualBlockTableInterface"] = None
     cached_all_token_ids: List[int] = field(default_factory=list)
 
     token_chunk_size: int = 0

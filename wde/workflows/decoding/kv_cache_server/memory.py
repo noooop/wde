@@ -1,8 +1,8 @@
-import numpy as np
-
 from wde.logger import init_logger
 from wde.workflows.decoding.kv_cache.offloading.manager import \
     CPUBlockAllocator
+from wde.workflows.decoding.kv_cache.prefix_caching.util import \
+    block_hashs_to_numpy_array
 from wde.workflows.decoding.kv_cache.remote.util import (
     GB, MB, allocate_blockwise_kv_cache_np, get_cache_block_size_bytes,
     get_cache_shape)
@@ -73,7 +73,7 @@ class RemoteMemoryKVCache(RemoteKVCacheInterface):
         duplicated = 0
 
         for i in range(total):
-            block_hash = block_hashs[i]
+            block_hash = block_hashs[i].tobytes()
 
             if block_hash in blocks:
                 duplicated += 1
@@ -132,15 +132,13 @@ class RemoteMemoryKVCache(RemoteKVCacheInterface):
 
     def contains(self, block_hashs, refresh):
         total = len(block_hashs)
-        dtype = block_hashs.dtype
-
         block_allocator = self.block_allocator
 
         hit = []
         miss = []
 
         for i in range(total):
-            block_hash = block_hashs[i]
+            block_hash = block_hashs[i].tobytes()
 
             h = block_hash in block_allocator
 
@@ -153,8 +151,8 @@ class RemoteMemoryKVCache(RemoteKVCacheInterface):
             else:
                 miss.append(block_hash)
 
-        hit = np.array(hit, dtype=dtype)
-        miss = np.array(miss, dtype=dtype)
+        hit = block_hashs_to_numpy_array(hit)
+        miss = block_hashs_to_numpy_array(miss)
 
         return hit, miss
 
@@ -168,7 +166,7 @@ class RemoteMemoryKVCache(RemoteKVCacheInterface):
 
         blocks = {}
         for i in range(total):
-            block_hash = block_hashs[i]
+            block_hash = block_hashs[i].tobytes()
 
             if block_hash in blocks:
                 duplicate += 1
@@ -183,16 +181,15 @@ class RemoteMemoryKVCache(RemoteKVCacheInterface):
             hit += 1
             block_allocator.hold(block)
 
-            blocks[block_hash] = (block, i)
+            blocks[block_hash] = block
 
         def generator():
-            for block, index in blocks.values():
-                block_hash = block_hashs[index:index + 1]
+            for block_hash, block in blocks.items():
                 data = self.kv_cache[block.physical_block_id]
                 yield block_hash, data
 
         def release():
-            for block, index in blocks.values():
+            for block in blocks.values():
                 block_allocator.free(block)
 
         info = {

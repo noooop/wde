@@ -4,14 +4,14 @@ from typing import Deque, Dict, Iterable, List, Optional, cast
 import torch
 
 from wde.logger import init_logger
-from wde.workflows.decoding.kv_cache.logic_manager import (BlockAllocator,
-                                                           BlockId,
-                                                           NoFreeBlocksError,
-                                                           PrefixHash,
-                                                           VirtualBlockTable)
+from wde.workflows.decoding.kv_cache.logic_manager import (
+    BlockAllocatorInterface, BlockId, NoFreeBlocksError,
+    VirtualBlockTableInterface)
 from wde.workflows.decoding.kv_cache.prefix_caching.allocator import Block
 from wde.workflows.decoding.kv_cache.prefix_caching.lru_evictor import \
     LRUEvictor
+from wde.workflows.decoding.kv_cache.prefix_caching.util import (
+    PrefixHash, TokenIDs, get_block_hash, get_prefix_hash)
 from wde.workflows.decoding.kv_cache.utils import (chunk_list,
                                                    get_num_required_blocks)
 from wde.workflows.decoding.kv_cache.yoco.copy_on_write import CopyOnWrite
@@ -20,7 +20,7 @@ from wde.workflows.decoding.kv_cache.yoco.trie import Trie
 logger = init_logger(__name__)
 
 
-class YOCOVirtualBlockTable(VirtualBlockTable):
+class YOCOVirtualBlockTable(VirtualBlockTableInterface):
     # | <-                           max capacity                                      -> |
     # | Full blocks...........                            |       last portion block      |
     # | <-           num_token_ids                            ->  | <- num_empty_slots -> |
@@ -202,7 +202,7 @@ class YOCOVirtualBlockTable(VirtualBlockTable):
 
     #####################################
 
-    def update(self, token_ids: List[int]):
+    def update(self, token_ids: TokenIDs):
         num_token_ids = len(token_ids)
         block_size = self._block_size
         num_token_ids_curr = self.num_token_ids
@@ -222,7 +222,7 @@ class YOCOVirtualBlockTable(VirtualBlockTable):
         prefix_hash = last_block.prefix_hash
 
         offset = (len(self._blocks) - 1) * block_size
-        delta_token_ids = tuple(token_ids[offset:offset + block_size])
+        delta_token_ids = token_ids[offset:offset + block_size]
 
         if not num_token_ids_curr % block_size == 0:
             # last block is not full block
@@ -252,7 +252,7 @@ class YOCOVirtualBlockTable(VirtualBlockTable):
         token_ids = token_ids[offset:]
         self._create_blocks(token_ids, prefix_hash=prefix_hash)
 
-    def _create_blocks(self, token_ids: List[int], prefix_hash: PrefixHash):
+    def _create_blocks(self, token_ids: TokenIDs, prefix_hash: PrefixHash):
         block_size = self._block_size
         block_allocator = self._allocator
 
@@ -262,11 +262,9 @@ class YOCOVirtualBlockTable(VirtualBlockTable):
             if stop:
                 break
 
-            delta_token_ids = tuple(delta_token_ids)
-
             if len(delta_token_ids) == block_size:
                 # full_block
-                block_hash = hash((prefix_hash, delta_token_ids))
+                block_hash = get_block_hash(prefix_hash, delta_token_ids)
                 block = block_allocator.get_full_block(block_hash,
                                                        delta_token_ids)
 
@@ -379,7 +377,7 @@ class YOCOVirtualBlockTable(VirtualBlockTable):
         return blocks
 
 
-class YOCOPrefixCachingBlockAllocator(BlockAllocator):
+class YOCOPrefixCachingBlockAllocator(BlockAllocatorInterface):
 
     def __init__(
         self,
@@ -400,10 +398,12 @@ class YOCOPrefixCachingBlockAllocator(BlockAllocator):
 
         self._free_blocks = LRUEvictor()
         self._free_physical_block_ids: Deque[BlockId] = deque(block_ids)
-        self._init_prefix_str = f"kv_cache:{model_name}:{self._block_size}"
-        self._init_prefix_hash = hash(self._init_prefix_str)
 
-        self._cow_thread = CopyOnWrite(kv_cache)
+        self._init_prefix_str = f"kv_cache:{model_name}:{self._block_size}"
+        self._init_prefix_hash = get_prefix_hash(
+            self._init_prefix_str.encode())
+
+        self._cow_thread = CopyOnWrite(kv_cache=kv_cache, block_allocator=self)
 
     def create(self):
         return YOCOVirtualBlockTable(block_size=self._block_size,
@@ -468,13 +468,15 @@ class YOCOPrefixCachingBlockAllocator(BlockAllocator):
     def join(self):
         self._cow_thread.join()
 
-    def get_full_block(self, block_hash, delta_token_ids):
+    def get_full_block(self, block_hash: PrefixHash,
+                       delta_token_ids: TokenIDs):
         assert len(delta_token_ids) == self._block_size
 
         block = self._full_blocks_map.get(block_hash, None)
         return block
 
-    def get_portion_block(self, prefix_hash, delta_token_ids):
+    def get_portion_block(self, prefix_hash: PrefixHash,
+                          delta_token_ids: TokenIDs):
         trie = self._get_or_create_portion_blocks_trie(prefix_hash)
         hit, candidates = trie.find(delta_token_ids)
 
@@ -523,7 +525,8 @@ class YOCOPrefixCachingBlockAllocator(BlockAllocator):
     def num_total_blocks(self) -> int:
         return self._num_blocks
 
-    def _cow(self, block, prefix_hash, delta_token_ids, n_token):
+    def _cow(self, block: Block, prefix_hash: PrefixHash,
+             delta_token_ids: TokenIDs, n_token: int):
         assert n_token < len(block.delta_token_ids)
 
         num_computed_tokens = min(n_token, block.num_computed_tokens)
@@ -552,7 +555,7 @@ class YOCOPrefixCachingBlockAllocator(BlockAllocator):
 
         return trie
 
-    def _maybe_update_full_block(self, block: Block, trie=None):
+    def _maybe_update_full_block(self, block: Block, trie: Trie = None):
         if not block.is_full_block():
             return block
 
@@ -572,7 +575,7 @@ class YOCOPrefixCachingBlockAllocator(BlockAllocator):
             self._free(full_block)
             return block
 
-    def _free(self, block: Block, trie=None):
+    def _free(self, block: Block, trie: Trie = None):
         assert block.ref_count == 1
         assert block not in self._free_blocks
 
@@ -606,7 +609,7 @@ class YOCOPrefixCachingBlockAllocator(BlockAllocator):
         block = self._free_blocks.evict()
         return self._free_block_and_get_physical_block_id(block)
 
-    def _remove_from_free_blocks(self, block):
+    def _remove_from_free_blocks(self, block: Block):
         if block is None:
             return
 
