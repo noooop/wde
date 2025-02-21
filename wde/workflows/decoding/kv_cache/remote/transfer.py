@@ -205,9 +205,10 @@ class TransferInManager(BaseTransferManager):
                     # not newly created
                     continue
 
-                cpu_block.acquire()
-                cpu_block_allocator.hold(cpu_block)
                 need_transfer_in_blocks[block_hash] = cpu_block
+
+        if not need_transfer_in_blocks:
+            return None
 
         return TransferInTask(blocks=need_transfer_in_blocks,
                               requests=need_transfer_in_requests,
