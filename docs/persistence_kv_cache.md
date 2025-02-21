@@ -47,6 +47,7 @@ python -m benchmarks.persistence_kv_cache.baseline.test_leveldb
 - 测试不同文件系统
 - kvdb: leveldb, RocksDB
 - sql: sqlite, mysql
+- Object Storage: minio, Ceph
 - 不同缓存淘汰机制
 - ....
 
@@ -90,8 +91,8 @@ python -m benchmarks.persistence_kv_cache.test_filesystem_server
 - 异常 recover
   - 文件数增多，频繁修改，会不会导致整个文件系统不可用的概率增加？
   - 因为 kv cache 丢数据影响不是很大，重新算一次就可以了，所以不需要引入 WAL (Write-ahead logging)， 节省一些读写
-  - 每个block都是单独的文件，读写异常不会扩散，最好的方法是增加校验，读取时发现错误就可以把这块数据丢掉
-  - 查查文件系统和硬件是否支持自动读取校验，避免套娃实现
+  - 每个block都是单独的文件，读写异常不会扩散，最好的方法是使用纠错码，确保数据的完整性和可靠性，如果读取时发现错误就可以把这块数据丢弃
+  - 查查文件系统和硬件是否支持自动纠错码，避免套娃实现
 
 总体来说 filesystem 实现 persistence kv cache 简单高效，当scale的时候才会有以下的缺点：
 1. 文件数量太多，频繁修改，可能导致性能下降，以及整个文件系统不可用的概率增加
