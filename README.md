@@ -18,6 +18,7 @@
 - [chat_client](./applications/chat_cli)
 - [multi-agent](./applications/agents)
 - [与 ollama 和 openai 兼容的 webserver](https://github.com/noooop/wde/tree/main/examples/webserver)
+- [将内存 和 ssd 作为 kvcache](https://github.com/noooop/wde/tree/main/examples/use_remote_KV_cache)
 
 # Acknowledgement
 - [vLLM](https://github.com/vllm-project/vllm)

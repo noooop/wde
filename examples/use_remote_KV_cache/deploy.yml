@@ -8,7 +8,7 @@ chat:
         block_size: 16
         max_num_requests: 1
         max_num_batched_tokens: 1024
-        max_model_len: 100000
+        max_model_len: 110000
         swap_space: 20
         enable_prefix_caching: True
         remote_kv_cache_server: True
@@ -21,7 +21,7 @@ remote_kv_cache:
     model: "THUDM/glm-4-9b-chat-1m"
     engine_args:
       block_size: 16
-      memory_space: 0
+      memory_space: 20
       file_space: 100
       kv_cache_folder: "/share/test_kv_cache"
 
