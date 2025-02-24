@@ -1,14 +1,17 @@
 """Workflow Defined Engine"""
 
-from wde.engine.offline import LLM
-from wde.workflows.core.llm_engine import LLMEngine
-from wde.workflows.core.modelzoo import ModelRegistry
-from wde.workflows.core.schema.engine_io import TextPrompt
-from wde.workflows.decoding import SamplingParams
-
+from .utils import LazyLoader
 from .version import __version__
 
-__all__ = [
-    "__version__", "LLM", "ModelRegistry", "TextPrompt", "LLMEngine",
-    "SamplingParams"
-]
+_modules = {
+    "LLM": "wde.engine.offline:LLM",
+    "LLMEngine": "wde.workflows.core.llm_engine:LLMEngine",
+    "ModelRegistry": "wde.workflows.core.modelzoo:ModelRegistry",
+    "TextPrompt": "wde.workflows.core.schema.engine_io:TextPrompt",
+    "SamplingParams": "wde.workflows.decoding:SamplingParams",
+}
+
+for _name, _module in _modules.items():
+    globals()[_name] = LazyLoader(_module)
+
+__version__ = __version__

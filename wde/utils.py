@@ -1,3 +1,5 @@
+import importlib
+
 import shortuuid
 
 
@@ -17,9 +19,30 @@ def lazy_import(module):
         return Dummy
 
     module_name, class_name = module.split(":")
-    import importlib
+
     module = importlib.import_module(module_name)
     return getattr(module, class_name)
+
+
+class LazyLoader:
+
+    def __init__(self, module):
+        self.module = module
+        self._mod = None
+
+    def _ensure_import(self):
+        if self._mod is None:
+            self._mod = lazy_import(self.module)
+
+    def __getattr__(self, attr):
+        self._ensure_import()
+
+        return getattr(self._mod, attr)
+
+    def __call__(self, *args, **kwargs):
+        self._ensure_import()
+
+        return self._mod(*args, **kwargs)
 
 
 def process_warp(fn, /, *args, **kwargs):
