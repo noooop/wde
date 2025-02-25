@@ -1,3 +1,7 @@
+import os
+
+os.environ["VLLM_USE_V1"] = "1"
+
 import time
 
 from benchmarks.chat.util import get_requests
@@ -5,6 +9,7 @@ from wde.utils import process_warp_with_exc
 
 
 def benchmark(args):
+
     import vllm
     from vllm import LLM, SamplingParams, TokensPrompt
 
@@ -54,6 +59,8 @@ def benchmark(args):
 
     print(f"Throughput: {len(requests) / elapsed_time:.4f} requests/s, "
           f"{total_num_tokens / elapsed_time:.4f} tokens/s")
+
+    del llm
 
 
 if __name__ == '__main__':
@@ -106,7 +113,7 @@ if __name__ == '__main__':
 
     def test_vary_model(args):
         for model, quantization in [
-            ("Qwen/Qwen2.5-7B-Instruct", None),
+                # ("Qwen/Qwen2.5-7B-Instruct", None),
             ("Qwen/Qwen2.5-3B-Instruct", None),
             ("Qwen/Qwen2.5-7B-Instruct", "fp8"),
         ]:

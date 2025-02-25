@@ -17,5 +17,6 @@ def make_dummy_inputs(model: str, length: int, filename: str):
 def main(model: str, length: int, filename: str):
     make_dummy_inputs(model, length, filename)
 
+
 if __name__ == '__main__':
     main()

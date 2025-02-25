@@ -117,6 +117,7 @@ def test(args, requests):
         scheduling=args.scheduling,
         frieren_executor_max_workers=args.frieren_executor_max_workers,
         record_metrics=args.record_metrics,
-        block_size=args.block_size)
+        block_size=args.get("block_size", 16),
+        block_allocator=args.get("block_allocator", None))
 
     run(args, engine_args, requests)
