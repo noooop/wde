@@ -55,3 +55,14 @@ class FakeGroupCoordinator:
 
 
 _PP: Optional = FakeGroupCoordinator()
+
+
+def patch_parallel_state():
+    import vllm.config as config
+    import vllm.distributed.parallel_state as parallel_state
+
+    parallel_state._WORLD = FakeGroupCoordinator()
+    parallel_state._TP = FakeGroupCoordinator()
+    parallel_state._PP = FakeGroupCoordinator()
+
+    config._current_vllm_config = config.VllmConfig()
