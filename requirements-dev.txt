@@ -1,2 +1,3 @@
 FlagEmbedding==1.2.11  # 1.3.2 very slow
 peft
+pytest-asyncio
