@@ -46,13 +46,16 @@ config.scaling = config.qk_head_dim**-0.5
 
 config.weight_block_size = 128
 
-config.n_blocks = 8192
+config.n_blocks = 2048
 
 config.rope_theta = 10000
 config.rope_scaling = hf_config.rope_scaling
 config.max_position_embeddings = 163840
 
 config.n_routed_experts = 256
+
+config.num_hidden_layers = 61
+config.first_k_dense_replace = 3
 
 torch.set_default_dtype(config.dtype)
 
@@ -327,6 +330,42 @@ def get_moe_weights(layer_idx=3, wo_moe=False):
     return weights
 
 
+def get_backbone_layer_weights(layer_idx=3, wo_moe=False):
+    prefix = f"model.layers.{layer_idx}."
+
+    input_layernorm = torch.rand(config.hidden_size,
+                                 dtype=torch.bfloat16,
+                                 device="cpu")
+    post_attention_layernorm = torch.rand(config.hidden_size,
+                                          dtype=torch.bfloat16,
+                                          device="cpu")
+
+    layernorm_weights = [
+        (prefix + "input_layernorm.weight", input_layernorm),
+        (prefix + "post_attention_layernorm.weight", post_attention_layernorm),
+    ]
+
+    mlp_weights = get_moe_weights(layer_idx, wo_moe)
+    mha_weights = get_self_attn_weights(layer_idx)
+
+    weights = mlp_weights + mha_weights + layernorm_weights
+
+    return weights
+
+
+def get_backbone_weights(wo_moe=False):
+    norm = torch.rand(config.hidden_size, dtype=torch.bfloat16, device="cpu")
+
+    weights = [('model.norm.weight', norm)]
+
+    for i in range(config.num_hidden_layers):
+        if i < config.first_k_dense_replace:
+            weights += get_dense_layer_weights(i)
+        else:
+            weights += get_backbone_layer_weights(i, wo_moe=wo_moe)
+    return weights
+
+
 def load_weights(model: nn.Module, weights: Iterable[Tuple[str, torch.Tensor]],
                  prefix):
     stacked_params_mapping = [
@@ -336,6 +375,9 @@ def load_weights(model: nn.Module, weights: Iterable[Tuple[str, torch.Tensor]],
     ]
 
     params_dict = dict(model.named_parameters())
+
+    params = set(name for name in params_dict.keys()
+                 if "k_scale" not in name and "v_scale" not in name)
 
     for name, loaded_weight in weights:
         try:
@@ -352,6 +394,7 @@ def load_weights(model: nn.Module, weights: Iterable[Tuple[str, torch.Tensor]],
                 weight_loader = param.weight_loader
 
                 weight_loader(param, loaded_weight, shard_id)
+                params.discard(name)
                 break
 
             else:
@@ -360,10 +403,13 @@ def load_weights(model: nn.Module, weights: Iterable[Tuple[str, torch.Tensor]],
                 weight_loader = getattr(param, "weight_loader",
                                         default_weight_loader)
                 weight_loader(param, loaded_weight)
+                params.remove(name)
         except Exception as e:
             print(name)
             print(param.shape, loaded_weight.shape)
             raise e
+
+    assert len(params) == 0, str(params)
 
 
 def load_fused_moe_weights(model: nn.Module,
@@ -387,6 +433,9 @@ def load_fused_moe_weights(model: nn.Module,
 
     params_dict = dict(model.named_parameters())
 
+    params = set(name for name in params_dict.keys()
+                 if "k_scale" not in name and "v_scale" not in name)
+
     for name, loaded_weight in weights:
         name = name.replace(prefix, "")
 
@@ -406,6 +455,8 @@ def load_fused_moe_weights(model: nn.Module,
             param = params_dict[name]
             weight_loader = param.weight_loader
             weight_loader(param, loaded_weight, shard_id)
+
+            params.discard(name)
             break
         else:
             for mapping in expert_params_mapping:
@@ -421,6 +472,7 @@ def load_fused_moe_weights(model: nn.Module,
                               name,
                               shard_id=shard_id,
                               expert_id=expert_id)
+                params.discard(name)
                 break
             else:
                 # Skip loading extra bias for GPTQ models.
@@ -431,7 +483,9 @@ def load_fused_moe_weights(model: nn.Module,
                 weight_loader = getattr(param, "weight_loader",
                                         default_weight_loader)
                 weight_loader(param, loaded_weight)
-    return
+                params.remove(name)
+
+    assert len(params) == 0, str(params)
 
 
 def offloading(model, device, non_blocking):

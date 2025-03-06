@@ -28,10 +28,8 @@ import torch
 from torch import nn
 from transformers import PretrainedConfig
 from vllm.attention import Attention, AttentionMetadata
-from vllm.compilation.decorators import support_torch_compile
 from vllm.config import CacheConfig, ModelConfig, VllmConfig
-from vllm.distributed import (get_pp_group,
-                              get_tensor_model_parallel_world_size,
+from vllm.distributed import (get_tensor_model_parallel_world_size,
                               tensor_model_parallel_all_reduce)
 from vllm.model_executor.layers.activation import SiluAndMul
 from vllm.model_executor.layers.fused_moe import FusedMoE
@@ -44,14 +42,12 @@ from vllm.model_executor.layers.logits_processor import LogitsProcessor
 from vllm.model_executor.layers.quantization import QuantizationConfig
 from vllm.model_executor.layers.rotary_embedding import get_rope
 from vllm.model_executor.layers.sampler import SamplerOutput, get_sampler
-from vllm.model_executor.layers.vocab_parallel_embedding import (
-    ParallelLMHead, VocabParallelEmbedding)
+from vllm.model_executor.layers.vocab_parallel_embedding import ParallelLMHead
 from vllm.model_executor.model_loader.weight_utils import (
     default_weight_loader, maybe_remap_kv_scale_name)
 from vllm.model_executor.models import SupportsPP
-from vllm.model_executor.models.utils import (
-    PPMissingLayer, is_pp_missing_parameter,
-    make_empty_intermediate_tensors_factory, make_layers, maybe_prefix)
+from vllm.model_executor.models.utils import (is_pp_missing_parameter,
+                                              make_layers, maybe_prefix)
 from vllm.model_executor.sampling_metadata import SamplingMetadata
 from vllm.sequence import IntermediateTensors
 
@@ -543,14 +539,13 @@ class DeepseekV2MLAAttention(nn.Module):
 
 class DeepseekV2DecoderLayer(nn.Module):
 
-    def __init__(
-        self,
-        config: PretrainedConfig,
-        prefix: str,
-        model_config: ModelConfig,
-        cache_config: Optional[CacheConfig] = None,
-        quant_config: Optional[QuantizationConfig] = None,
-    ) -> None:
+    def __init__(self,
+                 config: PretrainedConfig,
+                 prefix: str,
+                 model_config: ModelConfig,
+                 cache_config: Optional[CacheConfig] = None,
+                 quant_config: Optional[QuantizationConfig] = None,
+                 remote_moe: bool = True) -> None:
         super().__init__()
         self.hidden_size = config.hidden_size
         rope_theta = getattr(config, "rope_theta", 10000)
@@ -585,11 +580,18 @@ class DeepseekV2DecoderLayer(nn.Module):
         if (config.n_routed_experts is not None
                 and layer_idx >= config.first_k_dense_replace
                 and layer_idx % config.moe_layer_freq == 0):
-            self.mlp = DeepseekV2MoE(
-                config=config,
-                quant_config=quant_config,
-                prefix=f"{prefix}.mlp",
-            )
+            if remote_moe:
+                self.mlp = DeepseekV2RemoteMoE(
+                    config=config,
+                    quant_config=quant_config,
+                    prefix=f"{prefix}.mlp",
+                )
+            else:
+                self.mlp = DeepseekV2MoE(
+                    config=config,
+                    quant_config=quant_config,
+                    prefix=f"{prefix}.mlp",
+                )
         else:
             self.mlp = DeepseekV2MLP(
                 hidden_size=config.hidden_size,
@@ -632,83 +634,46 @@ class DeepseekV2DecoderLayer(nn.Module):
         return hidden_states, residual
 
 
-@support_torch_compile
 class DeepseekV2Model(nn.Module):
     fall_back_to_pt_during_load = False
 
-    def __init__(self, *, vllm_config: VllmConfig, prefix: str = ""):
+    def __init__(self,
+                 config,
+                 model_config,
+                 cache_config,
+                 quant_config,
+                 prefix: str = "",
+                 remote_moe: bool = True):
         super().__init__()
-
-        config = vllm_config.model_config.hf_config
-        model_config = vllm_config.model_config
-        cache_config = vllm_config.cache_config
-        quant_config = vllm_config.quant_config
-
-        self.padding_idx = config.pad_token_id
-        self.vocab_size = config.vocab_size
-
-        if get_pp_group().is_first_rank:
-            self.embed_tokens = VocabParallelEmbedding(
-                config.vocab_size,
-                config.hidden_size,
-                quant_config=quant_config,
-                prefix=f"{prefix}.embed_tokens")
-        else:
-            self.embed_tokens = PPMissingLayer()
 
         self.start_layer, self.end_layer, self.layers = make_layers(
             config.num_hidden_layers,
-            lambda prefix: DeepseekV2DecoderLayer(
-                config,
-                prefix,
-                model_config=model_config,
-                cache_config=cache_config,
-                quant_config=quant_config,
-            ),
-            prefix=f"{prefix}.layers")
+            lambda prefix: DeepseekV2DecoderLayer(config,
+                                                  prefix,
+                                                  model_config=model_config,
+                                                  cache_config=cache_config,
+                                                  quant_config=quant_config,
+                                                  remote_moe=remote_moe),
+            prefix=f"{prefix}.layers",
+        )
 
-        if get_pp_group().is_last_rank:
-            self.norm = RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
-        else:
-            self.norm = PPMissingLayer()
-        self.make_empty_intermediate_tensors = (
-            make_empty_intermediate_tensors_factory(
-                ["hidden_states", "residual"], config.hidden_size))
-
-    def get_input_embeddings(self, input_ids: torch.Tensor) -> torch.Tensor:
-        return self.embed_tokens(input_ids)
+        self.norm = RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
 
     def forward(
         self,
-        input_ids: torch.Tensor,
         positions: torch.Tensor,
         kv_caches: List[torch.Tensor],
         attn_metadata: AttentionMetadata,
-        intermediate_tensors: Optional[IntermediateTensors],
         inputs_embeds: Optional[torch.Tensor] = None,
     ) -> Union[torch.Tensor, IntermediateTensors]:
-        if get_pp_group().is_first_rank:
-            if inputs_embeds is not None:
-                hidden_states = inputs_embeds
-            else:
-                hidden_states = self.get_input_embeddings(input_ids)
-            residual = None
-        else:
-            assert intermediate_tensors is not None
-            hidden_states = intermediate_tensors["hidden_states"]
-            residual = intermediate_tensors["residual"]
+        hidden_states = inputs_embeds
+        residual = None
 
         for i in range(self.start_layer, self.end_layer):
             layer = self.layers[i]
             hidden_states, residual = layer(positions, hidden_states,
                                             kv_caches[i - self.start_layer],
                                             attn_metadata, residual)
-
-        if not get_pp_group().is_last_rank:
-            return IntermediateTensors({
-                "hidden_states": hidden_states,
-                "residual": residual
-            })
 
         hidden_states, _ = self.norm(hidden_states, residual)
         return hidden_states

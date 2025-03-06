@@ -77,7 +77,12 @@ def test_mlp(bs, repeat):
 
 @torch.inference_mode
 def test_offloading(repeat):
-    model = init()
+
+    with DeviceMemoryProfiler(config.device) as m:
+        with torch.device(config.device):
+            model = init()
+
+    model_memory_usage = m.consumed_memory
 
     def test(repeat):
         start = time.perf_counter()
@@ -99,7 +104,8 @@ def test_offloading(repeat):
     elapsed_time = test(repeat=repeat)
 
     print(
-        f"offloading elapsed time: {elapsed_time * 1000 / (repeat * 2):.4f} ms. "
+        f"weights_memory: {model_memory_usage / GB:.4f}, "
+        f"offloading elapsed time: {elapsed_time*1000 / (repeat * 2):.4f} ms. "
     )
 
 
@@ -111,7 +117,6 @@ if __name__ == '__main__':
     batchsize_list = [2**i for i in range(15)]
 
     for bs in batchsize_list:
-        pass
-        #process_warp_with_exc(test_mlp, bs, repeat)
+        process_warp_with_exc(test_mlp, bs, repeat)
 
     process_warp_with_exc(test_offloading, repeat=10)
