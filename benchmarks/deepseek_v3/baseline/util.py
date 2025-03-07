@@ -345,10 +345,13 @@ def get_backbone_layer_weights(layer_idx=3, wo_moe=False):
         (prefix + "post_attention_layernorm.weight", post_attention_layernorm),
     ]
 
-    mlp_weights = get_moe_weights(layer_idx, wo_moe)
     mha_weights = get_self_attn_weights(layer_idx)
 
-    weights = mlp_weights + mha_weights + layernorm_weights
+    weights = mha_weights + layernorm_weights
+
+    if not wo_moe:
+        mlp_weights = get_moe_weights(layer_idx, wo_moe)
+        weights += mlp_weights
 
     return weights
 
