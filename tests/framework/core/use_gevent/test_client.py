@@ -4,13 +4,12 @@ import time
 import pytest
 
 from tests.framework.core.util import (client_url, dummy_server, fake_server,
-                                       server_url)
+                                       server_url, stream_server)
+from wde.microservices.framework.core.schema import ZeroClientTimeOut
+from wde.microservices.framework.core.use_gevent.client import Client
 
 
 def test_timeout1():
-    from wde.microservices.framework.core.schema import ZeroClientTimeOut
-    from wde.microservices.framework.core.use_gevent.client import Client
-
     client = Client(client_url, timeout=1)
 
     with pytest.raises(ZeroClientTimeOut):
@@ -18,9 +17,6 @@ def test_timeout1():
 
 
 def test_timeout2():
-    from wde.microservices.framework.core.schema import ZeroClientTimeOut
-    from wde.microservices.framework.core.use_gevent.client import Client
-
     client = Client(client_url, timeout=1)
 
     ctx = mp.get_context('spawn')
@@ -35,8 +31,6 @@ def test_timeout2():
 
 
 def test_work_properly():
-    from wde.microservices.framework.core.use_gevent.client import Client
-
     client = Client(client_url, timeout=1)
 
     ctx = mp.get_context('spawn')
@@ -49,5 +43,23 @@ def test_work_properly():
 
         assert respons.state == "ok"
         assert respons.msg == "world!"
+    finally:
+        s.terminate()
+
+
+def test_stream():
+    client = Client(client_url, timeout=1)
+
+    ctx = mp.get_context('spawn')
+    s = ctx.Process(target=stream_server, args=(server_url, ))
+    s.start()
+
+    try:
+        for echo in range(1, 10):
+            response = client.query("stream", data={"echo": echo})
+            for i, rep in enumerate(response):
+                assert i < echo
+                assert rep.state == "ok"
+                assert rep.msg == {'index': i}
     finally:
         s.terminate()

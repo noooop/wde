@@ -100,10 +100,50 @@ class AsyncClient(AsyncClientInterface):
                 async with asyncio.timeout(_timeout):
                     await socket.send_multipart([task, metadata] + payload)
                     response = await socket.recv_multipart()
-                    self.socket_pool.put(socket)
-                    return response
             except TimeoutError:
                 self.socket_pool.close(socket)
                 continue
+
+            rep_id, msg, *payload = response
+            rep_id = rep_id.bytes
+            msg = msg.bytes
+
+            response = [rep_id, msg] + payload
+
+            if len(rep_id) == 22:
+                self.socket_pool.put(socket)
+                return response
+            else:
+
+                async def generator(response):
+                    yield response
+
+                    rep_id = response[0]
+                    rcv_more = rep_id[22:23]
+                    payload = response[2:]
+
+                    while rcv_more == b"M":
+                        try:
+                            async with asyncio.timeout(_timeout):
+                                await socket.send_multipart([task, metadata] +
+                                                            payload)
+                                response = await socket.recv_multipart()
+                        except TimeoutError:
+                            self.socket_pool.close(socket)
+                            raise ZeroClientTimeOut(f"{self.addr} timeout.")
+
+                        rep_id, msg, *payload = response
+                        rep_id = rep_id.bytes
+                        msg = msg.bytes
+
+                        response = [rep_id, msg] + payload
+                        rcv_more = rep_id[22:23]
+
+                        yield response
+
+                    self.socket_pool.put(socket)
+
+                return generator(response)
+
         else:
             raise ZeroClientTimeOut(f"{self.addr} timeout.")

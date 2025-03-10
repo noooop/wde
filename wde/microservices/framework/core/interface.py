@@ -1,3 +1,5 @@
+import inspect
+
 from wde.microservices.framework.core.schema import ZeroMSQ, ZeroServerResponse
 
 
@@ -17,9 +19,16 @@ class ClientInterface:
         metadata, payload = ZeroMSQ.load(data)
         response = self._query(method_name, metadata, payload, **kwargs)
 
-        task_id, metadata, *payload = response
+        if not inspect.isgenerator(response):
+            task_id, metadata, *payload = response
+            return ZeroServerResponse(**ZeroMSQ.unload(metadata, payload))
+        else:
 
-        return ZeroServerResponse(**ZeroMSQ.unload(metadata, payload))
+            def generator():
+                for req_id, msg, *payload in response:
+                    yield ZeroServerResponse(**ZeroMSQ.unload(msg, payload))
+
+            return generator()
 
 
 class AsyncClientInterface:
@@ -43,6 +52,13 @@ class AsyncClientInterface:
         metadata, payload = ZeroMSQ.load(data)
         response = await self._query(method_name, metadata, payload, **kwargs)
 
-        task_id, metadata, *payload = response
+        if not inspect.isasyncgen(response):
+            task_id, metadata, *payload = response
+            return ZeroServerResponse(**ZeroMSQ.unload(metadata, payload))
+        else:
 
-        return ZeroServerResponse(**ZeroMSQ.unload(metadata, payload))
+            async def generator():
+                async for req_id, msg, *payload in response:
+                    yield ZeroServerResponse(**ZeroMSQ.unload(msg, payload))
+
+            return generator()

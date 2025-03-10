@@ -101,9 +101,47 @@ class Client(ClientInterface):
             try:
                 socket.send_multipart([task, metadata] + payload)
                 response = socket.recv_multipart()
-                self.socket_pool.put(socket)
-                return response
             except zmq.error.Again:
                 self.socket_pool.close(socket)
+                continue
+
+            rep_id, msg, *payload = response
+            rep_id = rep_id.bytes
+            msg = msg.bytes
+
+            response = [rep_id, msg] + payload
+
+            if len(rep_id) == 22:
+                self.socket_pool.put(socket)
+                return response
+            else:
+
+                def generator(response):
+                    yield response
+
+                    rep_id = response[0]
+                    rcv_more = rep_id[22:23]
+                    payload = response[2:]
+
+                    while rcv_more == b"M":
+                        try:
+                            socket.send_multipart([task, metadata] + payload)
+                            response = socket.recv_multipart()
+                        except zmq.error.Again:
+                            self.socket_pool.close(socket)
+                            raise ZeroClientTimeOut(f"{self.addr} timeout.")
+
+                        rep_id, msg, *payload = response
+                        rep_id = rep_id.bytes
+                        msg = msg.bytes
+
+                        response = [rep_id, msg] + payload
+                        rcv_more = rep_id[22:23]
+
+                        yield response
+
+                    self.socket_pool.put(socket)
+
+                return generator(response)
         else:
             raise ZeroClientTimeOut(f"{self.addr} timeout.")

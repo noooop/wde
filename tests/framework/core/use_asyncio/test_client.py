@@ -4,14 +4,13 @@ import time
 import pytest
 
 from tests.framework.core.util import (client_url, dummy_server, fake_server,
-                                       server_url)
+                                       server_url, stream_server)
+from wde.microservices.framework.core.schema import ZeroClientTimeOut
+from wde.microservices.framework.core.use_asyncio.client import AsyncClient
 
 
 @pytest.mark.asyncio
 async def test_timeout1():
-    from wde.microservices.framework.core.schema import ZeroClientTimeOut
-    from wde.microservices.framework.core.use_asyncio.client import AsyncClient
-
     client = AsyncClient(client_url, timeout=1)
 
     with pytest.raises(ZeroClientTimeOut):
@@ -20,8 +19,6 @@ async def test_timeout1():
 
 @pytest.mark.asyncio
 async def test_timeout2():
-    from wde.microservices.framework.core.schema import ZeroClientTimeOut
-    from wde.microservices.framework.core.use_asyncio.client import AsyncClient
 
     client = AsyncClient(client_url, timeout=1)
 
@@ -39,7 +36,6 @@ async def test_timeout2():
 
 @pytest.mark.asyncio
 async def test_work_properly():
-    from wde.microservices.framework.core.use_asyncio.client import AsyncClient
 
     client = AsyncClient(client_url, timeout=1)
 
@@ -52,5 +48,30 @@ async def test_work_properly():
 
         assert respons.state == "ok"
         assert respons.msg == "world!"
+    finally:
+        s.terminate()
+
+
+@pytest.mark.asyncio
+async def test_stream():
+    client = AsyncClient(client_url, timeout=1)
+
+    ctx = mp.get_context('spawn')
+    s = ctx.Process(target=stream_server, args=(server_url, ))
+    s.start()
+
+    async def async_enumerate(aiterable, start=0):
+        index = start
+        async for value in aiterable:
+            yield index, value
+            index += 1
+
+    try:
+        for echo in range(1, 10):
+            response = await client.query("stream", data={"echo": echo})
+            async for i, rep in async_enumerate(response):
+                assert i < echo
+                assert rep.state == "ok"
+                assert rep.msg == {'index': i}
     finally:
         s.terminate()
