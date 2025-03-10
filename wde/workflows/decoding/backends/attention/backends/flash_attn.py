@@ -3,23 +3,16 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple, Type
 
 import torch
-
-from wde.workflows.decoding.backends.attention.backends.utils import \
-    compute_slot_mapping
-
-try:
-    from vllm.vllm_flash_attn import (flash_attn_varlen_func,
-                                      flash_attn_with_kvcache)
-except ImportError:
-    from vllm_flash_attn import (flash_attn_varlen_func,
-                                 flash_attn_with_kvcache)
-
 from vllm import _custom_ops as ops
 from vllm.utils import is_pin_memory_available, make_tensor_with_pad
 
+from wde.workflows.core.backends.ops.flash_attn_interface import (
+    flash_attn_varlen_func, flash_attn_with_kvcache)
 from wde.workflows.decoding.backends.attention.backends.abstract import (
     AttentionType, DecodeOnlyAttentionBackend, DecodeOnlyAttentionImpl,
     DecodeOnlyAttentionMetadata, DecodeOnlyAttentionMetadataBuilder)
+from wde.workflows.decoding.backends.attention.backends.utils import \
+    compute_slot_mapping
 from wde.workflows.decoding.schema.engine_io import DecodingSchedulableRequest
 
 pin_memory = is_pin_memory_available()

@@ -1,8 +1,9 @@
 from typing import Any, Dict, List, Optional, Type
 
 import torch
-from vllm.vllm_flash_attn import flash_attn_varlen_func
 
+from wde.workflows.core.backends.ops.flash_attn_interface import \
+    flash_attn_varlen_func
 from wde.workflows.prefill_only.backends.attention.backends.abstract import (
     AttentionType, PrefillOnlyAttentionBackend, PrefillOnlyAttentionImpl,
     PrefillOnlyAttentionMetadata)
