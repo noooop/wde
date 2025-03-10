@@ -1,4 +1,5 @@
 import logging
+from functools import lru_cache
 from logging import Logger
 
 from wde import envs
@@ -20,3 +21,16 @@ def init_logger(name: str) -> Logger:
 
 
 _configure_root_logger()
+logger = init_logger(__name__)
+
+
+@lru_cache
+def print_info_once(msg: str) -> None:
+    # Set the stacklevel to 2 to print the caller's line info
+    logger.info(msg, stacklevel=2)
+
+
+@lru_cache
+def print_warning_once(msg: str) -> None:
+    # Set the stacklevel to 2 to print the caller's line info
+    logger.warning(msg, stacklevel=2)

@@ -1,6 +1,6 @@
 import torch
-from vllm.utils import print_warning_once
 
+from wde.logger import print_warning_once
 from wde.workflows.core.backends.quantization.base_config import (
     QuantizationConfig, QuantizeMethodBase)
 
