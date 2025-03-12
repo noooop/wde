@@ -23,6 +23,8 @@ class GPURunner:
         self.model: nn.Module
 
     def load_model(self) -> None:
+        torch.set_default_dtype(self.engine_config.model_config.dtype)
+
         from wde.workflows.core.backends.loader.loader import (
             get_model_loader, initialize_model)
 
