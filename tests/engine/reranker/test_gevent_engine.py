@@ -1,44 +1,11 @@
-import random
-from typing import TypeVar
-
 import numpy as np
 import pytest
 import torch
-import torch.nn as nn
-from transformers import (AutoModelForSequenceClassification, BatchEncoding,
-                          BatchFeature)
 
 from tests.engine.utils import WDEGeventRunner
-from tests.tasks.utils import HfRerankerRunner, sigmoid
-
-_T = TypeVar("_T", nn.Module, torch.Tensor, BatchEncoding, BatchFeature)
-
-
-@pytest.fixture(scope="session")
-def hf_runner():
-    return HfRerankerRunner
-
-
-@pytest.fixture(scope="session")
-def wde_runner():
-    return WDEGeventRunner
-
-
-@pytest.fixture(scope="session")
-def example_prompts():
-    pairs = [
-        ["query", "passage"],
-        ["what is panda?", "hi"],
-        [
-            "what is panda?",
-            "The giant panda (Ailuropoda melanoleuca), "
-            "sometimes called a panda bear or simply panda, "
-            "is a bear species endemic to China.",
-        ],
-    ] * 11
-    random.shuffle(pairs)
-    return pairs
-
+from tests.tasks.reranker.util import (get_reranker_example_prompts,
+                                       hf_reranker_runner, sigmoid)
+from wde.utils import process_warp
 
 MODELS = ["BAAI/bge-reranker-v2-m3"]
 
@@ -49,21 +16,18 @@ MODELS = ["BAAI/bge-reranker-v2-m3"]
 @pytest.mark.parametrize("scheduling", ["sync", "async"])
 @torch.inference_mode
 def test_models(
-    hf_runner,
-    wde_runner,
-    example_prompts,
     model: str,
     dtype: str,
     max_num_requests: int,
     scheduling: str,
 ) -> None:
-    with hf_runner(model,
-                   dtype=dtype,
-                   auto_cls=AutoModelForSequenceClassification) as hf_model:
-        hf_outputs = hf_model.compute_score(example_prompts)
+    example_prompts = get_reranker_example_prompts()
 
-    with wde_runner(model, dtype=dtype,
-                    max_num_requests=max_num_requests) as engine:
+    hf_outputs = process_warp(hf_reranker_runner, model, dtype,
+                              example_prompts)
+
+    with WDEGeventRunner(model, dtype=dtype,
+                         max_num_requests=max_num_requests) as engine:
         outputs = engine.compute_score(example_prompts)
 
     # Without using sigmoid,

@@ -1,39 +1,10 @@
-import random
-from typing import TypeVar
-
 import numpy as np
 import pytest
 import torch
-import torch.nn as nn
-from transformers import BatchEncoding, BatchFeature, BertModel
 
-from tests.engine.utils import WDEZERORunner
-from tests.tasks.utils import BertHfRunner, compare_embeddings_np
-
-_T = TypeVar("_T", nn.Module, torch.Tensor, BatchEncoding, BatchFeature)
-
-
-@pytest.fixture(scope="session")
-def wde_runner():
-    return WDEZERORunner
-
-
-@pytest.fixture(scope="session")
-def hf_runner():
-    return BertHfRunner
-
-
-@pytest.fixture(scope="session")
-def example_prompts():
-    prompts = [
-        "Hello, my name is",
-        "The president of the United States is",
-        "The capital of France is",
-        "The future of AI is",
-    ] * 11
-    random.shuffle(prompts)
-    return prompts
-
+from tests.tasks.utils import (bert_hf_runner, compare_embeddings_np,
+                               get_example_prompts)
+from wde.utils import process_warp
 
 MODELS = ["google-bert/bert-base-uncased"]
 
@@ -52,9 +23,10 @@ def test_models(
     max_num_requests: int,
     scheduling: str,
 ) -> None:
-    with hf_runner(model, dtype=dtype, auto_cls=BertModel) as hf_model:
-        hf_outputs = hf_model.encode(example_prompts)
-        hf_outputs = [x.cpu().numpy() for x in hf_outputs]
+    example_prompts = get_example_prompts()
+
+    hf_outputs = process_warp(bert_hf_runner, model, dtype, example_prompts)
+    hf_outputs = [x.cpu().numpy() for x in hf_outputs]
 
     with wde_runner(model,
                     dtype=dtype,

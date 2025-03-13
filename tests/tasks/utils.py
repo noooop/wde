@@ -1,5 +1,6 @@
 import gc
 import os
+import random
 from typing import Any, Dict, List, Optional, TypeVar
 
 import numpy as np
@@ -158,6 +159,7 @@ class SentenceTransformersRunner(HfRunner):
 
 class HfRerankerRunner(HfRunner):
 
+    @torch.inference_mode
     def compute_score(self, inputs: RerankerInputs) -> List[float]:
         encoded_input = self.tokenizer(inputs,
                                        padding=True,
@@ -210,11 +212,43 @@ def compare_embeddings_np(embeddings1, embeddings2):
     return similarities
 
 
-def sigmoid(x):
-    return 1 / (1 + np.exp(-x))
-
-
 def cleanup():
     gc.collect()
     if not current_platform.is_cpu():
         torch.cuda.empty_cache()
+
+
+def hf_runner(model, dtype, example_prompts):
+    with HfRunner(model, dtype=dtype) as hf_model:
+        hf_outputs = hf_model.encode(example_prompts)
+    return hf_outputs
+
+
+def bert_hf_runner(model, dtype, example_prompts):
+    from transformers import BertModel
+    with BertHfRunner(model, dtype=dtype, auto_cls=BertModel) as hf_model:
+        hf_outputs = hf_model.encode(example_prompts)
+        return hf_outputs
+
+
+def st_runner(model, dtype, example_prompts):
+    with SentenceTransformersRunner(model, dtype=dtype) as hf_model:
+        hf_outputs = hf_model.encode(example_prompts)
+    return hf_outputs
+
+
+def wde_runner(model, method, example_prompts, *args, **kwargs):
+    with WDERunner(model, *args, **kwargs) as engine:
+        outputs = getattr(engine, method)(example_prompts)
+    return outputs
+
+
+def get_example_prompts():
+    prompts = [
+        "Hello, my name is",
+        "The president of the United States is",
+        "The capital of France is",
+        "The future of AI is",
+    ] * 11
+    random.shuffle(prompts)
+    return prompts
