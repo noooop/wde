@@ -3,12 +3,10 @@
 import time
 
 import pytest
-from vllm.transformers_utils.tokenizer import get_tokenizer
 
 from tests.tasks.decode_only.util import (HfDecodingRunner, WDERunner,
                                           check_logprobs_close)
-from wde.workflows.core.backends.models.transformers_utils.config import \
-    model_overwrite
+from wde.workflows.core.backends.tokenizer import get_tokenizer
 
 MODELS = [
     "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B",
@@ -47,7 +45,6 @@ def test_models(model: str, max_tokens: int, scheduling: str) -> None:
 
     NUM_LOG_PROBS = 4
 
-    model = model_overwrite(model)
     tokenizer = get_tokenizer(model, trust_remote_code=True)
 
     prompts = []

@@ -1,13 +1,9 @@
-from vllm.transformers_utils.tokenizer import get_tokenizer
-
-from wde.workflows.core.backends.models.transformers_utils.config import \
-    model_overwrite
+from wde.workflows.core.backends.tokenizer import get_tokenizer
 
 
 class Tokenizer:
 
     def __init__(self, tokenizer_name: str, **kwargs):
-        tokenizer_name = model_overwrite(tokenizer_name)
         self.tokenizer_name = tokenizer_name
         self.tokenizer_kwargs = kwargs
 

@@ -1,12 +1,13 @@
 import random
 from typing import List, Union
 
+from wde.workflows.core.backends.tokenizer import get_tokenizer
+
 
 class TokenSampler:
 
     def __init__(self, tokenizer, trust_remote_code=True):
         if isinstance(tokenizer, str):
-            from vllm.transformers_utils.tokenizer import get_tokenizer
             tokenizer = get_tokenizer(tokenizer,
                                       trust_remote_code=trust_remote_code)
 
