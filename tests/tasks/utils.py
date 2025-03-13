@@ -13,6 +13,8 @@ from vllm.utils import STR_DTYPE_TO_TORCH_DTYPE
 
 from wde import LLM
 from wde.tasks.reranker.schema.engine_io import RerankerInputs
+from wde.workflows.core.backends.models.transformers_utils.config import \
+    model_overwrite
 
 _T = TypeVar("_T", nn.Module, torch.Tensor, BatchEncoding, BatchFeature)
 
@@ -90,20 +92,20 @@ class HfRunner:
     ) -> None:
         torch_dtype = STR_DTYPE_TO_TORCH_DTYPE[dtype]
 
-        self.model_name = model_name
+        self.model_name = model_overwrite(model_name)
 
         model_kwargs = model_kwargs if model_kwargs is not None else {}
 
         self.model = self.wrap_device(
             auto_cls.from_pretrained(
-                model_name,
+                self.model_name,
                 torch_dtype=torch_dtype,
                 trust_remote_code=True,
                 **model_kwargs,
             ))
 
         self.tokenizer = AutoTokenizer.from_pretrained(
-            model_name,
+            self.model_name,
             torch_dtype=torch_dtype,
             trust_remote_code=True,
         )
@@ -139,7 +141,8 @@ class SentenceTransformersRunner(HfRunner):
     ) -> None:
         torch_dtype = STR_DTYPE_TO_TORCH_DTYPE[dtype]
 
-        self.model_name = model_name
+        self.model_name = model_overwrite(model_name)
+
         from sentence_transformers import SentenceTransformer
         self.model = self.wrap_device(
             SentenceTransformer(model_name,
