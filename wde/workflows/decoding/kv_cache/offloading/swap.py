@@ -1,8 +1,8 @@
 from typing import TYPE_CHECKING, Optional
 
 import torch
-from vllm import _custom_ops as ops
 
+import wde.workflows.core.backends.ops.kv_cache_util as ops
 from wde.workflows.decoding.kv_cache.logic_manager import NoFreeBlocksError
 
 if TYPE_CHECKING:

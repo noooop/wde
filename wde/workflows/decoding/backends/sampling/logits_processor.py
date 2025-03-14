@@ -58,9 +58,17 @@ class LogitsProcessor(nn.Module):
                     lm_head: VocabParallelEmbedding,
                     embedding_bias: Optional[torch.Tensor]) -> torch.Tensor:
         # Get the logits for the next tokens.
-        logits = lm_head.linear_method.apply(lm_head,
-                                             hidden_states,
-                                             bias=embedding_bias)
+        if hasattr(lm_head, "linear_method"):
+            logits = lm_head.linear_method.apply(lm_head,
+                                                 hidden_states,
+                                                 bias=embedding_bias)
+        elif hasattr(lm_head, "quant_method"):
+            logits = lm_head.quant_method.apply(lm_head,
+                                                hidden_states,
+                                                bias=embedding_bias)
+        else:
+            assert False
+
         # Remove paddings in vocab (if any).
         if logits is not None:
             logits = logits[:, :self.org_vocab_size]
