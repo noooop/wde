@@ -1,4 +1,9 @@
-from wde.microservices.framework.core.schema import ZeroServerRedirect
+from typing import Any
+
+from wde.microservices.framework.core.engine import SyncZeroEngine
+from wde.microservices.framework.core.schema import (
+    ZeroMSQ, ZeroServerRedirect, ZeroServerRequest, ZeroServerResponse,
+    ZeroServerStreamResponseOk)
 from wde.utils import random_uuid
 
 server_port = "9527"
@@ -24,8 +29,6 @@ def fake_server(url):
 def dummy_server(url):
     import zmq
 
-    from wde.microservices.framework.core.schema import (ZeroMSQ,
-                                                         ZeroServerResponse)
     context = zmq.Context.instance()
     socket = context.socket(zmq.ROUTER)
     socket.bind(url)
@@ -63,10 +66,9 @@ def stream_server(url):
 
         req = ZeroServerRequest(method_name=method_name,
                                 client_id=client_id,
-                                task_id=task_id,
-                                data=data)
+                                task_id=task_id)
 
-        echo = req.data["echo"]
+        echo = data["echo"]
 
         for i in range(echo):
             snd_more = i < echo - 1
@@ -107,10 +109,9 @@ def redirect_server(server_port, redirect_port):
 
         req = ZeroServerRequest(method_name=method_name,
                                 client_id=client_id,
-                                task_id=task_id,
-                                data=data)
+                                task_id=task_id)
 
-        echo = req.data["echo"]
+        echo = data["echo"]
 
         assert echo > 0
 
@@ -120,14 +121,14 @@ def redirect_server(server_port, redirect_port):
                                  access_key=access_key,
                                  timeout=2.)
 
-        data, payload = ZeroMSQ.load(rep)
+        rep_data, rep_payload = ZeroMSQ.load(rep)
 
-        server_socket.send_multipart([req.client_id, req.task_id, data] +
-                                     payload)
+        server_socket.send_multipart([req.client_id, req.task_id, rep_data] +
+                                     rep_payload)
 
-        return access_key, req
+        return access_key, req, data
 
-    def redirect_part(access_key, req):
+    def redirect_part(access_key, req, data):
         goon = True
         while goon:
             client_id, task, metadata, *payload = redirect_socket.recv_multipart(
@@ -140,7 +141,7 @@ def redirect_server(server_port, redirect_port):
             else:
                 continue
 
-            echo = req.data["echo"]
+            echo = data["echo"]
 
             for i in range(echo):
                 snd_more = i < echo - 1
@@ -158,5 +159,28 @@ def redirect_server(server_port, redirect_port):
                                                payload)
 
     while True:
-        access_key, req = server_part()
-        redirect_part(access_key, req)
+        access_key, req, data = server_part()
+        redirect_part(access_key, req, data)
+
+
+class DummyEngine(SyncZeroEngine):
+    method_name = "hello"
+
+    def call(self, req: ZeroServerRequest, data: Any):
+        rep = ZeroServerResponse(state="ok", msg="world!")
+        self.zero_send(req, rep)
+
+
+class StreamEngine(SyncZeroEngine):
+    method_name = "stream"
+
+    def call(self, req: ZeroServerRequest, data: Any):
+        echo = data["echo"]
+
+        for i in range(echo):
+            snd_more = i < echo - 1
+
+            rep = ZeroServerStreamResponseOk(msg={"index": i},
+                                             snd_more=snd_more,
+                                             rep_id=i)
+            self.zero_send(req, rep)

@@ -33,7 +33,6 @@ class ZeroServerRequest(BaseModel):
     method_name: str
     client_id: bytes
     task_id: bytes
-    data: dict
 
 
 class ZeroServerResponse(BaseModel):
