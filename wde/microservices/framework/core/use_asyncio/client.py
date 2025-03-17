@@ -116,17 +116,14 @@ class AsyncClient(AsyncClientInterface):
             else:
 
                 async def generator(response):
-                    yield response
-
                     rep_id = response[0]
                     rcv_more = rep_id[22:23]
-                    payload = response[2:]
 
                     while rcv_more == b"M":
+                        yield response
+
                         try:
                             async with asyncio.timeout(_timeout):
-                                await socket.send_multipart([task, metadata] +
-                                                            payload)
                                 response = await socket.recv_multipart()
                         except TimeoutError:
                             self.socket_pool.close(socket)
@@ -139,9 +136,8 @@ class AsyncClient(AsyncClientInterface):
                         response = [rep_id, msg] + payload
                         rcv_more = rep_id[22:23]
 
-                        yield response
-
                     self.socket_pool.put(socket)
+                    yield response
 
                 return generator(response)
 

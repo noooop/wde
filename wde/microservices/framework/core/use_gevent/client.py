@@ -110,17 +110,14 @@ class Client(ClientInterface):
             else:
 
                 def generator(response):
-                    yield response
-
                     rep_id = response[0]
                     rcv_more = rep_id[22:23]
-                    payload = response[2:]
 
                     while rcv_more == b"M":
+                        yield response
+
                         try:
                             with gevent.Timeout(_timeout):
-                                socket.send_multipart([task, metadata] +
-                                                      payload)
                                 response = socket.recv_multipart()
                         except gevent.timeout.Timeout:
                             self.socket_pool.close(socket)
@@ -133,9 +130,8 @@ class Client(ClientInterface):
                         response = [rep_id, msg] + payload
                         rcv_more = rep_id[22:23]
 
-                        yield response
-
                     self.socket_pool.put(socket)
+                    yield response
 
                 return generator(response)
 

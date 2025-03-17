@@ -55,6 +55,14 @@ class ZeroServerResponseError(ZeroServerResponse):
     state: str = "error"
 
 
+class ZeroServerRedirect(ZeroServerResponse):
+    state: str = "redirect"
+    protocol: str = "zmq"
+    url: str
+    access_key: str
+    timeout: float
+
+
 class Meta(BaseModel):
     name: list
     dtype: str

@@ -1,6 +1,8 @@
 import inspect
 
-from wde.microservices.framework.core.schema import ZeroMSQ, ZeroServerResponse
+from wde.microservices.framework.core.schema import (ZeroMSQ,
+                                                     ZeroServerRedirect,
+                                                     ZeroServerResponse)
 
 
 class ClientInterface:
@@ -21,7 +23,12 @@ class ClientInterface:
 
         if not inspect.isgenerator(response):
             task_id, metadata, *payload = response
-            return ZeroServerResponse(**ZeroMSQ.unload(metadata, payload))
+            msg = ZeroMSQ.unload(metadata, payload)
+
+            if msg["state"] == 'redirect':
+                return ZeroServerRedirect(**msg)
+            else:
+                return ZeroServerResponse(**msg)
         else:
 
             def generator():
@@ -54,7 +61,12 @@ class AsyncClientInterface:
 
         if not inspect.isasyncgen(response):
             task_id, metadata, *payload = response
-            return ZeroServerResponse(**ZeroMSQ.unload(metadata, payload))
+            msg = ZeroMSQ.unload(metadata, payload)
+
+            if msg["state"] == 'redirect':
+                return ZeroServerRedirect(**msg)
+            else:
+                return ZeroServerResponse(**msg)
         else:
 
             async def generator():
