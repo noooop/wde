@@ -129,6 +129,16 @@ class DecodingSchedulableRequest(SchedulableRequest):
     def get_token_len(self):
         return len(self.prompt_token_ids) + len(self.output_token_ids)
 
+    def get_seq_len(self):
+        if self.vblock is None:
+            # profile_run
+            return self.token_chunk_size
+
+        return self.vblock.seq_len
+
+    def get_context_len(self):
+        return self.num_computed_tokens
+
     def get_physical_block_ids(self):
         if self.vblock is None:
             # profile_run

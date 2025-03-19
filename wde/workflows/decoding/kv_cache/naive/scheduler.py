@@ -104,6 +104,9 @@ class NaiveDecodingScheduler(Scheduler):
                    kv_cache_manager)
 
     def _schedule_waiting(self, ) -> SchedulerWaitingOutputs:
+        if not self.waiting:
+            return SchedulerWaitingOutputs.create_empty()
+
         ignored_requests: List[DecodingSchedulableRequest] = []
         scheduled_requests: List[DecodingSchedulableRequest] = []
 
@@ -185,57 +188,76 @@ class NaiveDecodingScheduler(Scheduler):
             if self.record_metrics:
                 scheduled_ts = time.perf_counter()
 
-            num_new_tokens = request.num_new_tokens
-            assert num_new_tokens > 0
+            # 1. write new token ids to vblock
+            self.kv_cache_manager.update(request)
 
-            if request.get_is_prefill(
-            ) and self.kv_cache_manager.high_watermark():
+            # 2. test kv_cache is above high_watermark
+            is_prefill = request.get_is_prefill()
+            if is_prefill and self.kv_cache_manager.high_watermark():
                 break
 
-            # 1. chunked prefill
-            budget_bound_token_chunk_size = min(
-                num_new_tokens, budget.remaining_token_budget())
-
-            if budget_bound_token_chunk_size == 0:
-                # No budget => Stop
-                break
+            # 3. chunked prefill budget
+            token_budget = budget.remaining_token_budget()
+            assert token_budget > 0
 
             running_queue.popleft()
 
-            # 2. try allocate
-            while not self._can_allocate(request,
-                                         budget_bound_token_chunk_size):
-                if running_queue:
-                    # Preempt the lowest-priority request.
-                    victim_request = running_queue.pop()
-                    preempted.append(victim_request)
+            num_new_tokens = request.num_new_tokens
+            assert num_new_tokens > 0
 
-                    while victim_request.num_computed_tokens > 0:
-                        self.kv_cache_manager.free_last_block(victim_request)
+            token_len = request.get_token_len()
+            token_chunk_size = 0
 
-                        if self._can_allocate(request,
-                                              budget_bound_token_chunk_size):
+            # 4. try to allocate
+            while request.get_seq_len() < token_len and token_budget > 0:
+                # allocate one block at a time
+
+                if self.kv_cache_manager.num_free_blocks == 0:
+                    # There is no empty kvcache, perform preemption
+                    while running_queue:
+                        victim_request = running_queue[-1]
+
+                        while victim_request.num_computed_tokens > 0:
+                            self.kv_cache_manager.free_last_block(
+                                victim_request)
+
+                            if self.kv_cache_manager.num_free_blocks > 0:
+                                break
+
+                        if victim_request.num_computed_tokens == 0:
+                            running_queue.pop()
+                            preempted.append(victim_request)
+
+                        if self.kv_cache_manager.num_free_blocks > 0:
                             break
-                else:
-                    preempted.append(request)
+
+                if self.kv_cache_manager.num_free_blocks == 0:
+                    # There is no space after preemption
                     break
+
+                part_size = self.kv_cache_manager.allocate(
+                    request, token_budget)
+                token_chunk_size += part_size
+                token_budget -= part_size
+
+            if token_chunk_size == 0:
+                preempted.append(request)
+                break
+
+            request.token_chunk_size = token_chunk_size
+
+            if request.get_is_prefill():
+                prefill_requests.append(request)
             else:
-                # Can schedule this request.
-                request.token_chunk_size = budget_bound_token_chunk_size
+                decode_requests.append(request)
 
-                self.kv_cache_manager.allocate(request)
+            if self.record_metrics:
+                request.set_scheduled_ts(scheduled_ts)
 
-                if request.get_is_prefill():
-                    prefill_requests.append(request)
-                else:
-                    decode_requests.append(request)
+            budget.add_num_batched_tokens(request.request_id,
+                                          request.token_chunk_size)
 
-                if self.record_metrics:
-                    request.set_scheduled_ts(scheduled_ts)
-
-                budget.add_num_batched_tokens(request.request_id,
-                                              request.token_chunk_size)
-                budget.add_num_requests(request.request_id, 1)
+            budget.add_num_requests(request.request_id, 1)
 
         return SchedulerRunningOutputs(decode_requests=decode_requests,
                                        prefill_requests=prefill_requests,
@@ -304,6 +326,7 @@ class NaiveDecodingScheduler(Scheduler):
                 request.metrics.num_requests = num_requests
                 request.metrics.num_batched_tokens = num_batched_tokens
 
+        self.kv_cache_manager.join()
         return scheduler_outputs
 
     def free_finished_request(self,
@@ -345,9 +368,3 @@ class NaiveDecodingScheduler(Scheduler):
             sorted(running_queue, key=lambda request: request.arrival_time))
 
         return running_queue, busy_requests
-
-    def _can_allocate(self, request: DecodingSchedulableRequest,
-                      budget_bound_token_chunk_size: int):
-        return self.kv_cache_manager.can_allocate(
-            request,
-            budget_bound_token_chunk_size) == budget_bound_token_chunk_size

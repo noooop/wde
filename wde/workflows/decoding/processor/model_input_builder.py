@@ -65,9 +65,9 @@ class DecodingModelInputBuilder(ModelInputBuilder):
         request.c_is_prefill = request.get_is_prefill()
         request.c_is_prompt = request.get_is_prompt()
 
-        request.c_context_len = request.num_computed_tokens
-        request.c_seq_len = min(token_len,
-                                request.c_context_len + token_chunk_size)
+        request.c_context_len = request.get_context_len()
+        request.c_seq_len = request.get_seq_len()
+
         request.c_query_len = token_chunk_size
 
         if request.c_is_prefill:
@@ -81,6 +81,10 @@ class DecodingModelInputBuilder(ModelInputBuilder):
 
         request.c_physical_block_ids = request.get_physical_block_ids()
         request.c_do_sample = token_len == request.c_context_len + token_chunk_size
+
+        assert request.c_seq_len == request.c_context_len + request.c_query_len
+        assert request.c_query_len == len(request.c_input_tokens) == len(
+            request.c_input_positions)
 
     @torch.inference_mode
     def prepare_model_input(

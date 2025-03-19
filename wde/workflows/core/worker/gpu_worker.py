@@ -85,8 +85,9 @@ class GPUWorker(WorkerBase):
     def __call__(self, execute_input: ExecuteInput) -> ExecuteOutput:
         try:
             output = self.runner.execute_model(execute_input)
-        except Exception:
+        except Exception as e:
             traceback.print_exc()
+            raise e
         return output
 
     def non_blocking_h2d(self, execute_input: ExecuteInput):

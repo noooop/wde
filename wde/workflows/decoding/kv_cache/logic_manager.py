@@ -61,13 +61,9 @@ class LogicKVCacheManager:
         token_ids = request.get_token_ids()
         request.vblock.update(token_ids)
 
-    def can_allocate(self, request: "DecodingSchedulableRequest",
-                     budget_bound_token_chunk_size: int) -> int:
-        return request.vblock.can_allocate(budget_bound_token_chunk_size)
-
-    def allocate(self, request: "DecodingSchedulableRequest") -> None:
-        request.vblock.allocate(request.token_chunk_size)
-        assert request.vblock.seq_len == request.vblock.num_computed_tokens + request.token_chunk_size
+    def allocate(self, request: "DecodingSchedulableRequest",
+                 token_budget: int) -> int:
+        return request.vblock.allocate(token_budget)
 
     def free(self, request: "DecodingSchedulableRequest") -> None:
         request.vblock.free()
@@ -81,13 +77,18 @@ class LogicKVCacheManager:
 
 
 class VirtualBlockTableInterface:
+    #####################################
+    # Some intermediate variables, as read-only properties
 
     @property
-    def seq_len(self):
+    def num_token_ids(self):
+        # get_token_len
+        # len(prompt_token_ids) + len(output_token_ids)
         raise NotImplementedError
 
     @property
-    def num_new_tokens(self):
+    def seq_len(self):
+        # len(num_computed_tokens) + token_chunk_size
         raise NotImplementedError
 
     @property
@@ -95,14 +96,55 @@ class VirtualBlockTableInterface:
         raise NotImplementedError
 
     @property
+    def context_len(self):
+        return self.num_computed_tokens
+
+    @property
+    def query_len(self):
+        return self.seq_len - self.context_len
+
+    @property
+    def num_new_tokens(self):
+        num_computed_tokens = self.num_computed_tokens
+        num_token_ids = self.num_token_ids
+
+        if num_computed_tokens == num_token_ids:
+            return 1
+        else:
+            return num_token_ids - num_computed_tokens
+
+    @property
     def physical_block_ids(self):
         raise NotImplementedError
 
-    def can_allocate(self, token_chunk_size: int):
+    #####################################
+    # lock
+
+    def ready(self) -> bool:
         raise NotImplementedError
 
-    def allocate(self, token_chunk_size: int):
+    def acquire(self):
         raise NotImplementedError
+
+    def release(self):
+        raise NotImplementedError
+
+    #####################################
+    # update -> allocate -> update_num_computed_tokens
+
+    def update(self, token_ids: List[int]):
+        # Write new token ids to vblock
+        # PrefixCaching: Try to hit prefix caching
+        raise NotImplementedError
+
+    def allocate(self, token_budget: int):
+        raise NotImplementedError
+
+    def update_num_computed_tokens(self):
+        raise NotImplementedError
+
+    #####################################
+    # free
 
     def free(self):
         raise NotImplementedError
@@ -110,14 +152,10 @@ class VirtualBlockTableInterface:
     def free_last_block(self):
         raise NotImplementedError
 
-    def update_num_computed_tokens(self):
-        raise NotImplementedError
-
-    ##################################
-    # api for PrefixCaching
-
-    def update(self, token_ids: List[int]):
-        raise NotImplementedError
+    #####################################
+    # use for swap_in & swap_out
+    # def new_full_blocks(self):
+    # def get_maybe_swap_in_blocks(self):
 
 
 class BlockAllocatorInterface:
