@@ -1,11 +1,10 @@
 import time
-from typing import List, Optional
+from typing import List
 
 from wde.logger import init_logger
 from wde.workflows.decoding.kv_cache.naive.scheduler import (
     DecodingSchedulingBudget, NaiveDecodingScheduler, SchedulerRunningOutputs)
-from wde.workflows.decoding.schema.engine_io import (
-    DecodingSchedulableRequest, DecodingSchedulerOutput)
+from wde.workflows.decoding.schema.engine_io import DecodingSchedulableRequest
 
 logger = init_logger(__name__)
 
@@ -32,67 +31,80 @@ class PrefixCachingDecodingScheduler(NaiveDecodingScheduler):
             # 1. Write new token ids to vblock & try to hit prefix caching
             self.kv_cache_manager.update(request)
 
-            # 2. Check if hit prefix caching ready
+            # 1.1. Check if hit prefix caching ready
             if not request.vblock.ready():
                 running_queue.popleft()
                 not_ready_requests.append(request)
                 continue
 
+            # 2. test kv_cache is above high_watermark
             is_prefill = request.get_is_prefill()
-
-            # 3. test kv_cache is above high_watermark
             if is_prefill and self.kv_cache_manager.high_watermark():
                 break
+
+            # 3. chunked prefill budget
+            token_budget = budget.remaining_token_budget()
+            assert token_budget > 0
+
+            running_queue.popleft()
 
             num_new_tokens = request.num_new_tokens
             assert num_new_tokens > 0
 
-            # 4. chunked prefill
-            budget_bound_token_chunk_size = min(
-                num_new_tokens, budget.remaining_token_budget())
+            token_len = request.get_token_len()
+            token_chunk_size = 0
 
-            if budget_bound_token_chunk_size == 0:
-                # No budget => Stop
+            # 4. try to allocate
+            while request.get_seq_len() < token_len and token_budget > 0:
+                # allocate one block at a time
+
+                if self.kv_cache_manager.num_free_blocks == 0:
+                    # There is no empty kvcache, perform preemption
+                    while running_queue:
+                        victim_request = running_queue[-1]
+
+                        while victim_request.num_computed_tokens > 0:
+                            self.kv_cache_manager.free_last_block(
+                                victim_request)
+
+                            if self.kv_cache_manager.num_free_blocks > 0:
+                                break
+
+                        if victim_request.num_computed_tokens == 0:
+                            running_queue.pop()
+                            preempted.append(victim_request)
+
+                        if self.kv_cache_manager.num_free_blocks > 0:
+                            break
+
+                if self.kv_cache_manager.num_free_blocks == 0:
+                    # There is no space after preemption
+                    break
+
+                part_size = self.kv_cache_manager.allocate(
+                    request, token_budget)
+                token_chunk_size += part_size
+                token_budget -= part_size
+
+            if token_chunk_size == 0:
+                preempted.append(request)
                 break
 
-            running_queue.popleft()
+            request.vblock.acquire()
+            request.token_chunk_size = token_chunk_size
 
-            # 5. try allocate
-            while not self._can_allocate(request,
-                                         budget_bound_token_chunk_size):
-                if running_queue:
-                    # Preempt the lowest-priority request.
-                    victim_request = running_queue.pop()
-                    preempted.append(victim_request)
-
-                    while victim_request.num_computed_tokens > 0:
-                        self.kv_cache_manager.free_last_block(victim_request)
-
-                        if self._can_allocate(request,
-                                              budget_bound_token_chunk_size):
-                            break
-                else:
-                    preempted.append(request)
-                    break
+            if request.get_is_prefill():
+                prefill_requests.append(request)
             else:
-                # 6. Can schedule this request.
-                request.token_chunk_size = budget_bound_token_chunk_size
+                decode_requests.append(request)
 
-                self.kv_cache_manager.allocate(request)
+            if self.record_metrics:
+                request.set_scheduled_ts(scheduled_ts)
 
-                request.vblock.acquire()
+            budget.add_num_batched_tokens(request.request_id,
+                                          request.token_chunk_size)
 
-                if is_prefill:
-                    prefill_requests.append(request)
-                else:
-                    decode_requests.append(request)
-
-                if self.record_metrics:
-                    request.set_scheduled_ts(scheduled_ts)
-
-                budget.add_num_batched_tokens(request.request_id,
-                                              request.token_chunk_size)
-                budget.add_num_requests(request.request_id, 1)
+            budget.add_num_requests(request.request_id, 1)
 
         # add not ready requests back to waiting queue
         for request in not_ready_requests:
@@ -101,10 +113,3 @@ class PrefixCachingDecodingScheduler(NaiveDecodingScheduler):
         return SchedulerRunningOutputs(decode_requests=decode_requests,
                                        prefill_requests=prefill_requests,
                                        preempted=preempted)
-
-    def schedule(self) -> Optional[DecodingSchedulerOutput]:
-        scheduler_outputs = super().schedule()
-
-        # e.g. Waiting for copy on write done in yoco
-        self.kv_cache_manager.join()
-        return scheduler_outputs

@@ -3,84 +3,87 @@ from typing import Any, Dict, Optional
 from wde.workflows.decoding.kv_cache.logic_manager import NoFreeBlocksError
 
 
+class Node:
+    __slots__ = ("prev", "next", "key", "value")
+
+    #  ↓ next <-    root   -> prev ↓
+    # node <-> node <-> node <->  node
+    #  ↑ head                 tail ↑
+
+    def __init__(self,
+                 prev: Optional["Node"] = None,
+                 next: Optional["Node"] = None,
+                 value: Any = None):
+        self.prev = prev
+        self.next = next
+        self.value = value
+
+    @classmethod
+    def make_circle(cls):
+        root = cls()
+        root.prev = root
+        root.next = root
+        return root
+
+    def reset(self):
+        self.prev = None
+        self.value = None
+
+    def unlink(self):
+        next = self.next
+        prev = self.prev
+        prev.next = next
+        next.prev = prev
+
+    def link_to_head(self, root):
+        """
+        root - next -> curr_head
+           self ↑
+        """
+        self.next = root.next
+        self.prev = root
+
+        root.next.prev = self
+        root.next = self
+
+    def link_to_tail(self, root):
+        """
+        curr_tail <- prev - root
+                 self ↑
+        """
+
+        self.next = root
+        self.prev = root.prev
+
+        root.prev.next = self
+        root.prev = self
+
+    def recycle(self, node: "Node"):
+        # self is object_cache
+        node.reset()
+        node.next = self.next
+        self.next = node.next
+
+    def create(self):
+        # self is object_cache
+        if self.next is self:
+            return Node()
+
+        node = self.next
+        self.next = node.next
+        return node
+
+
 class LRUEvictor:
 
-    class Node:
-        __slots__ = ("prev", "next", "key", "value")
-
-        #  ↓ next <-    root   -> prev ↓
-        # node <-> node <-> node <->  node
-        #  ↑ head                 tail ↑
-
-        def __init__(self,
-                     prev: Optional["LRUEvictor.Node"] = None,
-                     next: Optional["LRUEvictor.Node"] = None,
-                     value: Any = None):
-            self.prev = prev
-            self.next = next
-            self.value = value
-
-        @classmethod
-        def make_circle(cls):
-            root = cls()
-            root.prev = root
-            root.next = root
-            return root
-
-        def reset(self):
-            self.prev = None
-            self.value = None
-
-        def unlink(self):
-            next = self.next
-            prev = self.prev
-            prev.next = next
-            next.prev = prev
-
-        def link_to_head(self, root):
-            """
-            root - next -> curr_head
-               self ↑
-            """
-            self.next = root.next
-            self.prev = root
-
-            root.next.prev = self
-            root.next = self
-
-        def link_to_tail(self, root):
-            """
-            curr_tail <- prev - root
-                     self ↑
-            """
-
-            self.next = root
-            self.prev = root.prev
-
-            root.prev.next = self
-            root.prev = self
-
-        def recycle(self, node: "LRUEvictor.Node"):
-            # self is object_cache
-            node.reset()
-            node.next = self.next
-            self.next = node.next
-
-        def create(self):
-            # self is object_cache
-            if self.next is self:
-                return LRUEvictor.Node()
-
-            node = self.next
-            self.next = node.next
-            return node
-
-    def __init__(self):
-        self.cache: Dict[int, LRUEvictor.Node] = {}
-        self.root = LRUEvictor.Node.make_circle()
+    def __init__(self, node_class=None):
+        assert issubclass(node_class, Node)
+        self.node_class = node_class
+        self.cache: Dict[int, node_class] = {}
+        self.root = self.node_class.make_circle()
 
         # <= num_blocks, will not memory leaks
-        self.object_cache = LRUEvictor.Node.make_circle()
+        self.object_cache = Node.make_circle()
 
     def __contains__(self, o) -> bool:
         return id(o) in self.cache

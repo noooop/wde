@@ -9,6 +9,7 @@ from wde.workflows.core.config import EngineConfig
 from wde.workflows.core.processor.model_input_builder import ModelInputBuilder
 from wde.workflows.decoding.backends.sampling.sampling_metadata import \
     SamplingMetadata
+from wde.workflows.decoding.kv_cache.utils import get_num_required_blocks
 from wde.workflows.decoding.schema.engine_io import (
     DecodingSchedulableRequest, DecodingSchedulerOutput)
 from wde.workflows.decoding.schema.execute_io import (DecodingExecuteInput,
@@ -27,10 +28,11 @@ class DecodingModelInputBuilder(ModelInputBuilder):
         self.engine_config = engine_config
         self.device = engine_config.device_config.device
         self.vocab_size = self.engine_config.model_config.hf_config.vocab_size
+        self.block_size = self.engine_config.cache_config.block_size
 
         self.attn_backend = attn_backend
         self.attn_metadata_builder = attn_backend.make_metadata_builder(
-            self.engine_config.cache_config.block_size)
+            self.block_size)
         self.threads = ThreadPoolExecutor(
             max_workers=self.engine_config.scheduler_config.max_num_on_the_fly)
 
@@ -81,6 +83,10 @@ class DecodingModelInputBuilder(ModelInputBuilder):
 
         request.c_physical_block_ids = request.get_physical_block_ids()
         request.c_do_sample = token_len == request.c_context_len + token_chunk_size
+
+        if self.kv_caches is not None:
+            r = get_num_required_blocks(request.c_seq_len, self.block_size)
+            assert len(request.c_physical_block_ids) == r
 
         assert request.c_seq_len == request.c_context_len + request.c_query_len
         assert request.c_query_len == len(request.c_input_tokens) == len(

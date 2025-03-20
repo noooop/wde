@@ -6,18 +6,17 @@ from wde.logger import init_logger
 from wde.workflows.decoding.kv_cache.logic_manager import (
     BlockAllocatorInterface, BlockId, NoFreeBlocksError,
     VirtualBlockTableInterface)
-from wde.workflows.decoding.kv_cache.prefix_caching.lru_evictor import \
-    LRUEvictor
+from wde.workflows.decoding.kv_cache.prefix_caching.lru_evictor import (
+    LRUEvictor, Node)
 from wde.workflows.decoding.kv_cache.prefix_caching.util import (
     PrefixHash, TokenIDs, get_block_hash, get_prefix_hash)
-from wde.workflows.decoding.kv_cache.utils import (chunk_list,
-                                                   get_num_required_blocks)
+from wde.workflows.decoding.kv_cache.utils import chunk_list
 
 logger = init_logger(__name__)
 
 
 @dataclass
-class Block:
+class Block(Node):
     delta_token_ids: Optional[TokenIDs] = None
 
     # Previous block prefix_hash
@@ -110,145 +109,27 @@ class PrefixCachingVirtualBlockTable(VirtualBlockTableInterface):
         self._seq_len = 0
         self._init_prefix_hash = init_prefix_hash
 
+        # cached
+        # compute by _update_num_computed_tokens
+        self._num_computed_tokens = 0
+        self._head = 0
+        self._tail = 0
+
+    #####################################
+    # Some intermediate variables, as read-only properties
+
     @property
     def num_token_ids(self):
         return self._num_token_ids
-
-    @property
-    def num_computed_tokens(self):
-        _num_computed_tokens = 0
-        for block in self._blocks:
-            _num_computed_tokens += block.num_computed_tokens
-
-            if block.num_computed_tokens != self._block_size:
-                break
-
-        # Force recompute last token
-        return min(self._num_token_ids - 1, _num_computed_tokens)
-
-    @property
-    def num_new_tokens(self):
-        num_computed_tokens = self.num_computed_tokens
-        num_token_ids = self.num_token_ids
-
-        if num_computed_tokens == num_token_ids:
-            return 1
-        else:
-            return num_token_ids - num_computed_tokens
-
-    @property
-    def context_len(self):
-        return self.num_computed_tokens
 
     @property
     def seq_len(self):
         return self._seq_len
 
     @property
-    def query_len(self):
-        return self.seq_len - self.context_len
-
-    def update(self, token_ids: TokenIDs):
-        num_token_ids = len(token_ids)
-        num_token_ids_curr = self.num_token_ids
-
-        assert num_token_ids >= num_token_ids_curr
-        num_blocks_curr = len(self._blocks)
-
-        if num_token_ids == num_blocks_curr:
-            return
-
-        if num_blocks_curr == 0:
-            # Start from scratch
-            self._create_blocks(token_ids, prefix_hash=self._init_prefix_hash)
-            self._num_token_ids = len(token_ids)
-            return
-
-        # deal with last block
-        last_block = self._blocks[-1]
-        num_empty_slots = last_block.num_empty_slots
-
-        if num_empty_slots > 0:
-            offset = (len(self._blocks) - 1) * self._block_size
-            delta_token_ids = token_ids[offset:offset + self._block_size]
-            last_block.delta_token_ids = delta_token_ids
-
-            if len(delta_token_ids) == self._block_size:
-                # become full block
-                new_last_block = self._allocator.update(last_block)
-
-                if new_last_block is not last_block:
-                    # last_block has been released
-                    self._allocator.hold(new_last_block)
-                    self._blocks[-1] = new_last_block
-
-        if num_empty_slots >= num_token_ids - num_token_ids_curr:
-            # No need to create new blocks
-            self._num_token_ids = num_token_ids
-            return
-
-        prefix_hash = self._blocks[-1].block_hash
-
-        offset = len(self._blocks) * self._block_size
-        token_ids = token_ids[offset:]
-        self._create_blocks(token_ids, prefix_hash=prefix_hash)
-        self._num_token_ids = num_token_ids
-
-    def _create_blocks(self, token_ids: TokenIDs, prefix_hash: PrefixHash):
-        block_size = self._block_size
-        block_allocator = self._allocator
-
-        for delta_token_ids in chunk_list(token_ids, block_size):
-            if len(delta_token_ids) == block_size:
-                # full_block
-                block_hash = get_block_hash(prefix_hash, delta_token_ids)
-
-                block = block_allocator.get_full_block(prefix_hash, block_hash,
-                                                       delta_token_ids)
-                prefix_hash = block_hash
-            else:
-                # last portion block
-                block = Block(delta_token_ids=delta_token_ids,
-                              prefix_hash=prefix_hash,
-                              block_hash=None,
-                              _block_size=block_size)
-            self._allocator.hold(block)
-            self._blocks.append(block)
-
-    def can_allocate(self, token_chunk_size: int):
-        (last_computed_block, max_num_blocks, num_computed_tokens,
-         seq_len) = self.get_computed_offset(token_chunk_size)
-
-        last_block = self._blocks[last_computed_block]
-
-        num_empty_slots = last_block.num_empty_slots
-
-        if num_empty_slots >= token_chunk_size:
-            # No allocate required
-            return token_chunk_size
-
-        num_need_allocated_blocks = 0
-        for i in range(last_computed_block, max_num_blocks):
-            if self._blocks[i].physical_block_id is None:
-                num_need_allocated_blocks += 1
-
-        num_free_gpu_blocks = self._allocator.num_free_blocks
-
-        if num_free_gpu_blocks > num_need_allocated_blocks:
-            return token_chunk_size
-        else:
-            return min(
-                token_chunk_size,
-                num_empty_slots + num_free_gpu_blocks * self._block_size)
-
-    def allocate(self, token_chunk_size: int):
-        (last_computed_block, max_num_blocks, num_computed_tokens,
-         seq_len) = self.get_computed_offset(token_chunk_size)
-
-        for i in range(last_computed_block, max_num_blocks):
-            self._allocator.allocate(self._blocks[i])
-
-        self._seq_len = seq_len
+    def num_computed_tokens(self):
+        # Force recompute last token
+        return max(0, min(self._num_token_ids - 1, self._num_computed_tokens))
 
     @property
     def physical_block_ids(self):
@@ -263,25 +144,8 @@ class PrefixCachingVirtualBlockTable(VirtualBlockTableInterface):
 
         return _physical_block_ids
 
-    def get_computed_offset(self, token_chunk_size=None):
-        num_computed_tokens = self.num_computed_tokens
-
-        if token_chunk_size is not None:
-            # new token ids should have been appended to blocks
-            assert num_computed_tokens + token_chunk_size <= self.num_token_ids
-
-            seq_len = num_computed_tokens + token_chunk_size
-        else:
-            seq_len = self.seq_len
-
-        max_num_blocks = get_num_required_blocks(seq_len, self._block_size)
-        assert max_num_blocks <= len(self._blocks)
-
-        last_computed_block = max(
-            0,
-            get_num_required_blocks(num_computed_tokens, self._block_size) - 1)
-
-        return last_computed_block, max_num_blocks, num_computed_tokens, seq_len
+    #####################################
+    # lock
 
     def ready(self) -> bool:
         for block in self._blocks:
@@ -309,6 +173,54 @@ class PrefixCachingVirtualBlockTable(VirtualBlockTableInterface):
 
             block.release()
 
+    #####################################
+    # update -> allocate -> update_num_computed_tokens
+
+    def update(self, token_ids: TokenIDs):
+        num_token_ids = len(token_ids)
+        num_token_ids_curr = self.num_token_ids
+
+        if num_token_ids != num_token_ids_curr:
+            self._update(token_ids)
+            self._num_token_ids = num_token_ids
+
+        self._update_num_computed_tokens()
+
+    def allocate(self, token_budget: int):
+        num_new_tokens = self.num_token_ids - self.seq_len
+
+        assert num_new_tokens > 0
+
+        block = self._blocks[self._tail]
+
+        if block.physical_block_id is None:
+            self._allocator.allocate(block)
+            num_empty_slots = self._block_size
+        else:
+            num_empty_slots = self._block_size - block.num_computed_tokens
+            if num_empty_slots == 0:
+                self._tail += 1
+                block = self._blocks[self._tail]
+                self._allocator.allocate(block)
+                num_empty_slots = self._block_size
+
+        self._tail += 1
+        token_chunk_size = min(token_budget, num_empty_slots, num_new_tokens)
+        self._seq_len += token_chunk_size
+        return token_chunk_size
+
+    def update_num_computed_tokens(self):
+        seq_len = self.seq_len
+        end = self._tail + 1 if self._head == self._tail else self._tail
+
+        for i in range(self._head, end):
+            self._blocks[i].num_computed_tokens = min(
+                seq_len - i * self._block_size, self._block_size)
+            self._blocks[i].release()
+
+    #####################################
+    # free
+
     def free(self):
         for block in self._blocks:
             self._allocator.free(block)
@@ -323,23 +235,16 @@ class PrefixCachingVirtualBlockTable(VirtualBlockTableInterface):
         self._num_token_ids = len(self._blocks) * self._block_size
         self._seq_len = min(self._num_token_ids, self._seq_len)
 
-    def update_num_computed_tokens(self):
-        (last_computed_block, max_num_blocks, num_computed_tokens,
-         seq_len) = self.get_computed_offset()
-
-        for i in range(last_computed_block, max_num_blocks):
-            self._blocks[i].num_computed_tokens = min(
-                seq_len - i * self._block_size, self._block_size)
-            self._blocks[i].release()
+    #####################################
+    # use for swap_in & swap_out
 
     def new_full_blocks(self):
         _new_full_blocks = []
         block_size = self._block_size
+        seq_len = self.seq_len
+        end = self._tail + 1 if self._head == self._tail else self._tail
 
-        (last_computed_block, max_num_blocks, num_computed_tokens,
-         seq_len) = self.get_computed_offset()
-
-        for i in range(last_computed_block, max_num_blocks):
+        for i in range(self._head, end):
             new_num_computed_tokens = min(seq_len - i * self._block_size,
                                           self._block_size)
 
@@ -369,6 +274,85 @@ class PrefixCachingVirtualBlockTable(VirtualBlockTableInterface):
             blocks.append(block)
         return blocks
 
+    #####################################
+    # helper function
+
+    def _update(self, token_ids: TokenIDs):
+        num_token_ids = len(token_ids)
+        num_blocks_curr = len(self._blocks)
+        num_token_ids_curr = self.num_token_ids
+
+        if num_blocks_curr == 0:
+            # Start from scratch
+            self._create_blocks(token_ids, prefix_hash=self._init_prefix_hash)
+            return
+
+        # deal with last block
+        last_block = self._blocks[-1]
+        num_empty_slots = last_block.num_empty_slots
+
+        if num_empty_slots > 0:
+            offset = (len(self._blocks) - 1) * self._block_size
+            delta_token_ids = token_ids[offset:offset + self._block_size]
+            last_block.delta_token_ids = delta_token_ids
+
+            if len(delta_token_ids) == self._block_size:
+                # become full block
+                new_last_block = self._allocator.update(last_block)
+
+                if new_last_block is not last_block:
+                    # last_block has been released
+                    self._allocator.hold(new_last_block)
+                    self._blocks[-1] = new_last_block
+
+        if num_empty_slots >= num_token_ids - num_token_ids_curr:
+            # No need to create new blocks
+            return
+
+        prefix_hash = self._blocks[-1].block_hash
+
+        offset = len(self._blocks) * self._block_size
+        token_ids = token_ids[offset:]
+        self._create_blocks(token_ids, prefix_hash=prefix_hash)
+
+    def _create_blocks(self, token_ids: TokenIDs, prefix_hash: PrefixHash):
+        block_size = self._block_size
+        block_allocator = self._allocator
+
+        for delta_token_ids in chunk_list(token_ids, block_size):
+            if len(delta_token_ids) == block_size:
+                # full_block
+                block_hash = get_block_hash(prefix_hash, delta_token_ids)
+
+                block = block_allocator.get_full_block(prefix_hash, block_hash,
+                                                       delta_token_ids)
+                prefix_hash = block_hash
+            else:
+                # last portion block
+                block = Block(delta_token_ids=delta_token_ids,
+                              prefix_hash=prefix_hash,
+                              block_hash=None,
+                              _block_size=block_size)
+            self._allocator.hold(block)
+            self._blocks.append(block)
+
+    def _update_num_computed_tokens(self):
+        self._num_computed_tokens = 0
+        self._head = 0
+
+        for i, block in enumerate(self._blocks):
+            self._num_computed_tokens += block.num_computed_tokens
+
+            if block.physical_block_id is None:
+                break
+
+            if block.num_computed_tokens != self._block_size:
+                break
+
+            self._head += 1
+
+        self._tail = self._head
+
 
 class PrefixCachingBlockAllocator(BlockAllocatorInterface):
 
@@ -388,7 +372,7 @@ class PrefixCachingBlockAllocator(BlockAllocatorInterface):
         self._num_blocks = num_blocks
         self._full_blocks_map: Dict[PrefixHash, Block] = {}
 
-        self._free_full_blocks = LRUEvictor()
+        self._free_full_blocks = LRUEvictor(Block)
         self._free_physical_block_ids: Deque[BlockId] = deque(block_ids)
 
         self._init_prefix_str = f"kv_cache:{model_name}:{self._block_size}"
