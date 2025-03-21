@@ -54,37 +54,41 @@ class PrefixCachingDecodingScheduler(NaiveDecodingScheduler):
             token_len = request.get_token_len()
             token_chunk_size = 0
 
-            # 4. try to allocate
-            while request.get_seq_len() < token_len and token_budget > 0:
-                # allocate one block at a time
+            if request.get_seq_len() == token_len:
+                # All tokens are hit kv_cache
+                token_chunk_size = 1
+            else:
+                # 4. try to allocate
+                while request.get_seq_len() < token_len and token_budget > 0:
+                    # allocate one block at a time
 
-                if self.kv_cache_manager.num_free_blocks == 0:
-                    # There is no empty kvcache, perform preemption
-                    while running_queue:
-                        victim_request = running_queue[-1]
+                    if self.kv_cache_manager.num_free_blocks == 0:
+                        # There is no empty kvcache, perform preemption
+                        while running_queue:
+                            victim_request = running_queue[-1]
 
-                        while victim_request.num_computed_tokens > 0:
-                            self.kv_cache_manager.free_last_block(
-                                victim_request)
+                            while victim_request.num_computed_tokens > 0:
+                                self.kv_cache_manager.free_last_block(
+                                    victim_request)
+
+                                if self.kv_cache_manager.num_free_blocks > 0:
+                                    break
+
+                            if victim_request.num_computed_tokens == 0:
+                                running_queue.pop()
+                                preempted.append(victim_request)
 
                             if self.kv_cache_manager.num_free_blocks > 0:
                                 break
 
-                        if victim_request.num_computed_tokens == 0:
-                            running_queue.pop()
-                            preempted.append(victim_request)
+                    if self.kv_cache_manager.num_free_blocks == 0:
+                        # There is no space after preemption
+                        break
 
-                        if self.kv_cache_manager.num_free_blocks > 0:
-                            break
-
-                if self.kv_cache_manager.num_free_blocks == 0:
-                    # There is no space after preemption
-                    break
-
-                part_size = self.kv_cache_manager.allocate(
-                    request, token_budget)
-                token_chunk_size += part_size
-                token_budget -= part_size
+                    part_size = self.kv_cache_manager.allocate(
+                        request, token_budget)
+                    token_chunk_size += part_size
+                    token_budget -= part_size
 
             if token_chunk_size == 0:
                 preempted.append(request)

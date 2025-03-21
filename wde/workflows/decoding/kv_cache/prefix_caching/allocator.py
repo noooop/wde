@@ -351,7 +351,13 @@ class PrefixCachingVirtualBlockTable(VirtualBlockTableInterface):
 
             self._head += 1
 
+        # fix corner case. When all tokens hit the cache,
+        # and the token is multiple of block_size
+        self._head = min(self._head, len(self._blocks) - 1)
         self._tail = self._head
+
+        # update hit the cache block
+        self._seq_len = self._num_computed_tokens
 
 
 class PrefixCachingBlockAllocator(BlockAllocatorInterface):

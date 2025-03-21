@@ -147,8 +147,7 @@ class DecodingSchedulableRequest(SchedulableRequest):
         return self.vblock.physical_block_ids
 
     def get_is_prefill(self):
-        return self.num_computed_tokens == 0 or self.num_computed_tokens < self.get_token_len(
-        ) - 1
+        return self.num_computed_tokens == 0 or self.num_new_tokens > 1
 
     def get_is_prompt(self):
         return self.num_computed_tokens < self.num_prompt_token_ids
