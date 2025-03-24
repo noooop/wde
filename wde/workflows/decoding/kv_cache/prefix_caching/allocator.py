@@ -357,7 +357,7 @@ class PrefixCachingVirtualBlockTable(VirtualBlockTableInterface):
         self._tail = self._head
 
         # update hit the cache block
-        self._seq_len = self._num_computed_tokens
+        self._seq_len = min(self.num_token_ids, self._num_computed_tokens)
 
 
 class PrefixCachingBlockAllocator(BlockAllocatorInterface):
