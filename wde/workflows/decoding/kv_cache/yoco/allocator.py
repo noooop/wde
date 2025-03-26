@@ -260,7 +260,7 @@ class YOCOPrefixCachingBlockAllocator(PrefixCachingBlockAllocator):
                          block_ids=block_ids)
 
         self._portion_blocks_tries: Dict[PrefixHash, Trie] = {}
-        self._free_blocks = LRUEvictor(Block)
+        self._free_blocks = LRUEvictor()
         self._cow_thread = CopyOnWrite(kv_cache=kv_cache, block_allocator=self)
 
     def create(self):

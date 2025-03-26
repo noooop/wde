@@ -378,7 +378,7 @@ class PrefixCachingBlockAllocator(BlockAllocatorInterface):
         self._num_blocks = num_blocks
         self._full_blocks_map: Dict[PrefixHash, Block] = {}
 
-        self._free_full_blocks = LRUEvictor(Block)
+        self._free_full_blocks = LRUEvictor()
         self._free_physical_block_ids: Deque[BlockId] = deque(block_ids)
 
         self._init_prefix_str = f"kv_cache:{model_name}:{self._block_size}"

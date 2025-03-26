@@ -76,11 +76,9 @@ class Node:
 
 class LRUEvictor:
 
-    def __init__(self, node_class=None):
-        assert issubclass(node_class, Node)
-        self.node_class = node_class
-        self.cache: Dict[int, node_class] = {}
-        self.root = self.node_class.make_circle()
+    def __init__(self):
+        self.cache: Dict[int, Node] = {}
+        self.root = Node.make_circle()
 
         # <= num_blocks, will not memory leaks
         self.object_cache = Node.make_circle()
