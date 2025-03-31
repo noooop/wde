@@ -205,11 +205,10 @@ class NaiveDecodingScheduler(Scheduler):
             num_new_tokens = request.num_new_tokens
             assert num_new_tokens > 0
 
-            token_len = request.get_token_len()
             token_chunk_size = 0
 
             # 4. try to allocate
-            while request.get_seq_len() < token_len and token_budget > 0:
+            while request.has_unscheduled_tokens() and token_budget > 0:
                 # allocate one block at a time
 
                 if self.kv_cache_manager.num_free_blocks == 0:

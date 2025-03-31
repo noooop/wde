@@ -119,6 +119,9 @@ class DecodingSchedulableRequest(SchedulableRequest):
         else:
             return num_uncomputed_tokens
 
+    def has_unscheduled_tokens(self):
+        return self.get_seq_len() < self.get_token_len()
+
     @property
     def finished(self):
         return RequestStatus.is_finished(self.status)
