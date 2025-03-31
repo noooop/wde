@@ -1,5 +1,6 @@
 from typing import Dict, Iterable, List, Optional, cast
 
+import numpy as np
 import torch
 
 from wde.logger import init_logger
@@ -178,7 +179,7 @@ class YOCOVirtualBlockTable(PrefixCachingVirtualBlockTable):
 
         self._num_token_ids = offset
 
-        if delta_token_ids != last_block.delta_token_ids:
+        if delta_token_ids != last_block.get_delta_token_ids():
             new_last_block, num_tokens = block_allocator.get_portion_block(
                 prefix_hash, delta_token_ids)
 
@@ -218,9 +219,9 @@ class YOCOVirtualBlockTable(PrefixCachingVirtualBlockTable):
 
             if len(delta_token_ids) == block_size:
                 # full_block
-                block_hash = get_block_hash(prefix_hash, delta_token_ids)
-                block = block_allocator.get_full_block(block_hash,
-                                                       delta_token_ids)
+                delta_token_ids_np = np.array(delta_token_ids, dtype=np.int64)
+                block_hash = get_block_hash(prefix_hash, delta_token_ids_np)
+                block = block_allocator.get_full_block(block_hash)
 
                 if block is not None:
                     # match full_block
@@ -286,16 +287,19 @@ class YOCOPrefixCachingBlockAllocator(PrefixCachingBlockAllocator):
                 self._full_blocks_map.pop(block.block_hash, None)
                 trie = self._get_or_create_portion_blocks_trie(
                     block.prefix_hash)
-                trie.delete(block.delta_token_ids, block)
+                delta_token_ids = block.get_delta_token_ids()
+                trie.delete(delta_token_ids, block)
         else:
             trie = self._get_or_create_portion_blocks_trie(block.prefix_hash)
-            hit, candidates = trie.find(block.delta_token_ids)
+            delta_token_ids = block.get_delta_token_ids()
+
+            hit, candidates = trie.find(delta_token_ids)
             if len(candidates) == 1:
                 if block.physical_block_id is not None:
                     self._free_blocks.add(block)
             else:
                 # There's no need to keep so many candidates
-                trie.delete(block.delta_token_ids, block)
+                trie.delete(delta_token_ids, block)
 
                 if block.physical_block_id is not None:
                     self._free_physical_block_ids.append(
@@ -307,16 +311,14 @@ class YOCOPrefixCachingBlockAllocator(PrefixCachingBlockAllocator):
         if trie is None:
             trie = self._get_or_create_portion_blocks_trie(block.prefix_hash)
 
-        trie.insert(block.delta_token_ids, block)
+        delta_token_ids = block.get_delta_token_ids()
+        trie.insert(delta_token_ids, block)
         return block
 
     def join(self):
         self._cow_thread.join()
 
-    def get_full_block(self, block_hash: PrefixHash,
-                       delta_token_ids: TokenIDs):
-        assert len(delta_token_ids) == self._block_size
-
+    def get_full_block(self, block_hash: PrefixHash):
         block = self._full_blocks_map.get(block_hash, None)
         return block
 
@@ -329,14 +331,13 @@ class YOCOPrefixCachingBlockAllocator(PrefixCachingBlockAllocator):
 
         # 1. empty list: not candidates
         if not candidates:
-            block = Block(delta_token_ids=delta_token_ids,
-                          prefix_hash=prefix_hash,
-                          _block_size=self._block_size)
+            block = Block(prefix_hash=prefix_hash, block_size=self.block_size)
+            block.set_token_ids(delta_token_ids)
             block = self.update(block, trie=trie)
             return block, num_tokens
 
         block = cast(Block, candidates[0])
-        block_num_tokens = len(block.delta_token_ids)
+        block_num_tokens = block.num_token_ids
 
         assert hit <= num_tokens
         assert hit <= block_num_tokens
@@ -352,7 +353,7 @@ class YOCOPrefixCachingBlockAllocator(PrefixCachingBlockAllocator):
         # hit < num_tokens
         if hit == block_num_tokens:
             # 4. append to this block
-            block.delta_token_ids = delta_token_ids
+            block.set_token_ids(delta_token_ids)
             block = self.update(block, trie=trie)
             return block, num_tokens
 
@@ -364,7 +365,7 @@ class YOCOPrefixCachingBlockAllocator(PrefixCachingBlockAllocator):
 
     def _cow(self, block: Block, prefix_hash: PrefixHash,
              delta_token_ids: TokenIDs, n_token: int):
-        assert n_token < len(block.delta_token_ids)
+        assert n_token < block.num_token_ids
 
         num_computed_tokens = min(n_token, block.num_computed_tokens)
 
@@ -374,11 +375,11 @@ class YOCOPrefixCachingBlockAllocator(PrefixCachingBlockAllocator):
             num_computed_tokens = 0
             physical_block_id = None
 
-        block_new = Block(delta_token_ids=delta_token_ids,
-                          prefix_hash=prefix_hash,
-                          _block_size=self._block_size,
+        block_new = Block(prefix_hash=prefix_hash,
+                          block_size=self.block_size,
                           physical_block_id=physical_block_id,
                           num_computed_tokens=num_computed_tokens)
+        block_new.set_token_ids(delta_token_ids)
 
         if num_computed_tokens > 0:
             self._cow_thread.submit(block, block_new, num_computed_tokens)
@@ -419,7 +420,8 @@ class YOCOPrefixCachingBlockAllocator(PrefixCachingBlockAllocator):
         if trie is None:
             trie = self._get_or_create_portion_blocks_trie(block.prefix_hash)
 
-        trie.delete(block.delta_token_ids, block)
+        delta_token_ids = block.get_delta_token_ids()
+        trie.delete(delta_token_ids, block)
 
         if block.physical_block_id is not None:
             self._free_physical_block_ids.append(block.physical_block_id)
@@ -432,7 +434,9 @@ class YOCOPrefixCachingBlockAllocator(PrefixCachingBlockAllocator):
             del self._full_blocks_map[block.block_hash]
 
         trie = self._get_or_create_portion_blocks_trie(block.prefix_hash)
-        trie.delete(block.delta_token_ids, block)
+
+        delta_token_ids = block.get_delta_token_ids()
+        trie.delete(delta_token_ids, block)
 
         return block.physical_block_id
 

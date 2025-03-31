@@ -46,6 +46,9 @@ class Block(Node):
         self.delta_token_ids[:num_token_ids] = token_ids
         self.num_token_ids = num_token_ids
 
+    def get_delta_token_ids(self):
+        return self.delta_token_ids[:self.num_token_ids].tolist()
+
     def is_full_block(self):
         return self.num_token_ids == self.block_size
 
