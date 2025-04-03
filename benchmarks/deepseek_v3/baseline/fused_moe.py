@@ -1,5 +1,9 @@
 # ruff: noqa: F841, E402
 
+import os
+
+os.environ["VLLM_USE_V1"] = "0"
+
 import gc
 import time
 
@@ -114,7 +118,7 @@ if __name__ == '__main__':
 
     repeat = 100
 
-    batchsize_list = [2**i for i in range(15)]
+    batchsize_list = [2**i for i in range(14)]
 
     for bs in batchsize_list:
         process_warp_with_exc(test_mlp, bs, repeat)

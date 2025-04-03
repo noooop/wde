@@ -1,5 +1,9 @@
 # ruff: noqa: F841, E402
 
+import os
+
+os.environ["VLLM_USE_V1"] = "0"
+
 import gc
 import os
 import time
@@ -97,7 +101,9 @@ def test_prefill(n, repeat):
     model, kv_cache, model_memory_usage, baseline_snapshot = init()
 
     forward_context._forward_context = forward_context.ForwardContext(
-        attn_layers={'model.layers.3.self_attn.attn': model.self_attn.attn},
+        no_compile_layers={
+            'model.layers.3.self_attn.attn': model.self_attn.attn
+        },
         attn_metadata=attn_metadata,
         virtual_engine=0)
 
@@ -114,9 +120,7 @@ def test_prefill(n, repeat):
     inputs = {
         "positions": positions,
         "hidden_states": hidden_states,
-        "residual": residual,
-        "kv_cache": kv_cache,
-        "attn_metadata": attn_metadata,
+        "residual": residual
     }
 
     def test(repeat):
@@ -186,7 +190,9 @@ def test_decoding(n, repeat):
     model, kv_cache, model_memory_usage, baseline_snapshot = init()
 
     forward_context._forward_context = forward_context.ForwardContext(
-        attn_layers={'model.layers.3.self_attn.attn': model.self_attn.attn},
+        no_compile_layers={
+            'model.layers.3.self_attn.attn': model.self_attn.attn
+        },
         attn_metadata=attn_metadata,
         virtual_engine=0)
 
@@ -203,9 +209,7 @@ def test_decoding(n, repeat):
     inputs = {
         "positions": positions,
         "hidden_states": hidden_states,
-        "residual": residual,
-        "kv_cache": kv_cache,
-        "attn_metadata": attn_metadata,
+        "residual": residual
     }
 
     def test(repeat):

@@ -1,12 +1,15 @@
 # ruff: noqa: F841, E402
 
-import gc
 import os
+
+os.environ["VLLM_USE_V1"] = "0"
+
+import gc
 import time
 
 import torch
 from vllm import forward_context
-from vllm.attention.backends.triton_mla import TritonMLAMetadata
+from vllm.attention.backends.mla.common import MLACommonMetadata
 from vllm.model_executor.models.deepseek_v2 import DeepseekV2DecoderLayer
 from vllm.utils import DeviceMemoryProfiler, MemorySnapshot, memory_profiling
 
@@ -62,7 +65,7 @@ def test_prefill(n, repeat):
 
     positions = torch.tensor(range(n), dtype=torch.long, device=config.device)
 
-    attn_metadata = TritonMLAMetadata(
+    attn_metadata = MLACommonMetadata(
         num_prefills=1,
         num_prefill_tokens=n,
         num_decode_tokens=0,
@@ -96,7 +99,7 @@ def test_prefill(n, repeat):
     model, kv_cache, model_memory_usage, baseline_snapshot = init()
 
     forward_context._forward_context = forward_context.ForwardContext(
-        attn_layers={
+        no_compile_layers={
             'model.layers.0.self_attn.attn': model.self_attn.mla_attn
         },
         attn_metadata=attn_metadata,
@@ -114,9 +117,7 @@ def test_prefill(n, repeat):
     inputs = {
         "positions": positions,
         "hidden_states": hidden_states,
-        "residual": residual,
-        "kv_cache": kv_cache,
-        "attn_metadata": attn_metadata,
+        "residual": residual
     }
 
     def test(repeat):
@@ -154,7 +155,7 @@ def test_decoding(n, repeat):
 
     positions = torch.tensor(range(n), dtype=torch.long, device=config.device)
 
-    attn_metadata = TritonMLAMetadata(
+    attn_metadata = MLACommonMetadata(
         num_prefills=0,
         num_prefill_tokens=0,
         num_decode_tokens=1,
@@ -190,7 +191,7 @@ def test_decoding(n, repeat):
     model, kv_cache, model_memory_usage, baseline_snapshot = init()
 
     forward_context._forward_context = forward_context.ForwardContext(
-        attn_layers={
+        no_compile_layers={
             'model.layers.0.self_attn.attn': model.self_attn.mla_attn
         },
         attn_metadata=attn_metadata,
@@ -209,9 +210,7 @@ def test_decoding(n, repeat):
     inputs = {
         "positions": positions,
         "hidden_states": hidden_states,
-        "residual": residual,
-        "kv_cache": kv_cache,
-        "attn_metadata": attn_metadata,
+        "residual": residual
     }
 
     def test(repeat):

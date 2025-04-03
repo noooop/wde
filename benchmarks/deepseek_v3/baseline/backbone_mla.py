@@ -1,5 +1,9 @@
 # ruff: noqa: F841, E402
 
+import os
+
+os.environ["VLLM_USE_V1"] = "0"
+
 import gc
 import os
 import time
@@ -106,7 +110,9 @@ def test_prefill(n, repeat):
     )
 
     forward_context._forward_context = forward_context.ForwardContext(
-        attn_layers=attn_layers, attn_metadata=attn_metadata, virtual_engine=0)
+        no_compile_layers=attn_layers,
+        attn_metadata=attn_metadata,
+        virtual_engine=0)
 
     positions = torch.tensor(range(n), dtype=torch.long, device=config.device)
     inputs_embeds = torch.rand(n,
@@ -115,9 +121,9 @@ def test_prefill(n, repeat):
                                device=config.device)
 
     inputs = {
+        "input_ids": None,
+        "intermediate_tensors": None,
         "positions": positions,
-        "kv_caches": [kv_cache for i in range(config.num_hidden_layers)],
-        "attn_metadata": attn_metadata,
         "inputs_embeds": inputs_embeds,
     }
 
@@ -192,7 +198,9 @@ def test_decoding(n, repeat):
     )
 
     forward_context._forward_context = forward_context.ForwardContext(
-        attn_layers=attn_layers, attn_metadata=attn_metadata, virtual_engine=0)
+        no_compile_layers=attn_layers,
+        attn_metadata=attn_metadata,
+        virtual_engine=0)
 
     positions = torch.tensor(range(1), dtype=torch.long, device=config.device)
     inputs_embeds = torch.rand(1,
@@ -200,9 +208,9 @@ def test_decoding(n, repeat):
                                dtype=torch.bfloat16,
                                device=config.device)
     inputs = {
+        "input_ids": None,
+        "intermediate_tensors": None,
         "positions": positions,
-        "kv_caches": [kv_cache for i in range(config.num_hidden_layers)],
-        "attn_metadata": attn_metadata,
         "inputs_embeds": inputs_embeds,
     }
 

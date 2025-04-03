@@ -1,16 +1,20 @@
 # ruff: noqa: F841, E402
 
+import os
+
+os.environ["VLLM_USE_V1"] = "0"
+
 import gc
 import time
 
 import torch
-from vllm.model_executor.models.deepseek_v2 import DeepseekV2MLP
 from vllm.utils import DeviceMemoryProfiler, MemorySnapshot, memory_profiling
 
 from benchmarks.deepseek_v3.baseline.util import (GB, config,
                                                   get_expert_weights,
                                                   load_weights, offloading,
                                                   quant_config)
+from wde.tasks.decode_only.modelzoo.deepseek_v2 import DeepseekV2MLP
 
 
 def init():

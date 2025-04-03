@@ -1,13 +1,18 @@
 # ruff: noqa: F841, E402
 
+import os
+
+os.environ["VLLM_USE_V1"] = "0"
+
 import gc
 import time
 
 import torch
 from vllm import forward_context
 from vllm.attention.backends.flash_attn import FlashAttentionMetadata
-from vllm.model_executor.models.deepseek_v2 import DeepseekV2Attention
 from vllm.utils import DeviceMemoryProfiler, MemorySnapshot, memory_profiling
+
+from wde.tasks.decode_only.modelzoo.deepseek_v2 import DeepseekV2Attention
 
 from .util import (GB, cache_config, config, get_self_attn_weights, hf_config,
                    load_weights, quant_config)
@@ -99,7 +104,7 @@ def test_prefill(n, repeat):
     model, kv_cache, model_memory_usage, baseline_snapshot = init()
 
     forward_context._forward_context = forward_context.ForwardContext(
-        attn_layers={'model.layers.0.self_attn.attn': model.attn},
+        no_compile_layers={'model.layers.0.self_attn.attn': model.attn},
         attn_metadata=attn_metadata,
         virtual_engine=0)
 
@@ -109,12 +114,7 @@ def test_prefill(n, repeat):
                                dtype=torch.bfloat16,
                                device=config.device)
 
-    inputs = {
-        "positions": positions,
-        "hidden_states": hidden_states,
-        "kv_cache": kv_cache,
-        "attn_metadata": attn_metadata
-    }
+    inputs = {"positions": positions, "hidden_states": hidden_states}
 
     def test(repeat):
         start = time.perf_counter()
@@ -183,7 +183,7 @@ def test_decoding(n, repeat):
     model, kv_cache, model_memory_usage, baseline_snapshot = init()
 
     forward_context._forward_context = forward_context.ForwardContext(
-        attn_layers={'model.layers.0.self_attn.attn': model.attn},
+        no_compile_layers={'model.layers.0.self_attn.attn': model.attn},
         attn_metadata=attn_metadata,
         virtual_engine=0)
 
@@ -193,12 +193,7 @@ def test_decoding(n, repeat):
                                dtype=torch.bfloat16,
                                device="cuda")
 
-    inputs = {
-        "positions": positions,
-        "hidden_states": hidden_states,
-        "kv_cache": kv_cache,
-        "attn_metadata": attn_metadata
-    }
+    inputs = {"positions": positions, "hidden_states": hidden_states}
 
     def test(repeat):
         start = time.perf_counter()

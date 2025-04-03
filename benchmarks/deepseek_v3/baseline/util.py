@@ -380,7 +380,8 @@ def load_weights(model: nn.Module, weights: Iterable[Tuple[str, torch.Tensor]],
     params_dict = dict(model.named_parameters())
 
     params = set(name for name in params_dict.keys()
-                 if "k_scale" not in name and "v_scale" not in name)
+                 if "k_scale" not in name and "v_scale" not in name
+                 and "q_scale" not in name and "q_scale")
 
     for name, loaded_weight in weights:
         try:
@@ -437,7 +438,8 @@ def load_fused_moe_weights(model: nn.Module,
     params_dict = dict(model.named_parameters())
 
     params = set(name for name in params_dict.keys()
-                 if "k_scale" not in name and "v_scale" not in name)
+                 if "k_scale" not in name and "v_scale" not in name
+                 and "q_scale" not in name and "q_scale")
 
     for name, loaded_weight in weights:
         name = name.replace(prefix, "")

@@ -1,5 +1,9 @@
 # ruff: noqa: F841, E402
 
+import os
+
+os.environ["VLLM_USE_V1"] = "0"
+
 import gc
 import time
 
@@ -96,13 +100,15 @@ def test_prefill(n, repeat, use_direct_call):
     attn.use_direct_call = use_direct_call
 
     forward_context._forward_context = forward_context.ForwardContext(
-        attn_layers={"": attn}, attn_metadata=attn_metadata, virtual_engine=0)
+        no_compile_layers={"": attn},
+        attn_metadata=attn_metadata,
+        virtual_engine=0)
 
     def test(repeat):
         start = time.perf_counter()
 
         for i in range(repeat):
-            attn_output = attn(q, k, v, kv_cache, attn_metadata)
+            attn_output = attn(q, k, v)
             assert attn_output.shape == (n * config.num_attention_heads,
                                          config.qk_head_dim)
             torch.cuda.synchronize()
@@ -183,13 +189,15 @@ def test_decoding(n, repeat, use_direct_call):
     attn.use_direct_call = use_direct_call
 
     forward_context._forward_context = forward_context.ForwardContext(
-        attn_layers={"": attn}, attn_metadata=attn_metadata, virtual_engine=0)
+        no_compile_layers={"": attn},
+        attn_metadata=attn_metadata,
+        virtual_engine=0)
 
     def test(repeat):
         start = time.perf_counter()
 
         for i in range(repeat):
-            attn_output = attn(q, k, v, kv_cache, attn_metadata)
+            attn_output = attn(q, k, v)
             assert attn_output.shape == (1 * config.num_attention_heads,
                                          config.qk_head_dim)
             torch.cuda.synchronize()

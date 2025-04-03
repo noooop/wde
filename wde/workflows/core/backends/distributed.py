@@ -4,7 +4,9 @@ import torch
 
 
 def get_pp_group():
-    return _PP
+    import vllm.distributed.parallel_state as parallel_state
+
+    return parallel_state._PP
 
 
 def get_tensor_model_parallel_world_size():
@@ -54,9 +56,6 @@ class FakeGroupCoordinator:
         return input_
 
 
-_PP: Optional = FakeGroupCoordinator()
-
-
 def patch_parallel_state():
     import vllm.config as config
     import vllm.distributed.parallel_state as parallel_state
@@ -64,5 +63,6 @@ def patch_parallel_state():
     parallel_state._WORLD = FakeGroupCoordinator()
     parallel_state._TP = FakeGroupCoordinator()
     parallel_state._PP = FakeGroupCoordinator()
+    parallel_state._DP = FakeGroupCoordinator()
 
     config._current_vllm_config = config.VllmConfig()

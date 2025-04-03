@@ -1,13 +1,17 @@
 # ruff: noqa: F841, E402
-import gc
 import os
+
+os.environ["VLLM_USE_V1"] = "0"
+
+import gc
 import time
 
 import torch
 from vllm import forward_context
 from vllm.attention.backends.flash_attn import FlashAttentionMetadata
-from vllm.model_executor.models.deepseek_v2 import DeepseekV2DecoderLayer
 from vllm.utils import DeviceMemoryProfiler, MemorySnapshot, memory_profiling
+
+from wde.tasks.decode_only.modelzoo.deepseek_v2 import DeepseekV2DecoderLayer
 
 from .util import (GB, cache_config, config, get_dense_layer_weights,
                    hf_config, load_weights, model_config, offloading,
@@ -92,7 +96,9 @@ def test_prefill(n, repeat):
     model, kv_cache, model_memory_usage, baseline_snapshot = init()
 
     forward_context._forward_context = forward_context.ForwardContext(
-        attn_layers={'model.layers.0.self_attn.attn': model.self_attn.attn},
+        no_compile_layers={
+            'model.layers.0.self_attn.attn': model.self_attn.attn
+        },
         attn_metadata=attn_metadata,
         virtual_engine=0)
 
@@ -109,9 +115,7 @@ def test_prefill(n, repeat):
     inputs = {
         "positions": positions,
         "hidden_states": hidden_states,
-        "residual": residual,
-        "kv_cache": kv_cache,
-        "attn_metadata": attn_metadata,
+        "residual": residual
     }
 
     def test(repeat):
@@ -181,7 +185,9 @@ def test_decoding(n, repeat):
     model, kv_cache, model_memory_usage, baseline_snapshot = init()
 
     forward_context._forward_context = forward_context.ForwardContext(
-        attn_layers={'model.layers.0.self_attn.attn': model.self_attn.attn},
+        no_compile_layers={
+            'model.layers.0.self_attn.attn': model.self_attn.attn
+        },
         attn_metadata=attn_metadata,
         virtual_engine=0)
 
@@ -198,9 +204,7 @@ def test_decoding(n, repeat):
     inputs = {
         "positions": positions,
         "hidden_states": hidden_states,
-        "residual": residual,
-        "kv_cache": kv_cache,
-        "attn_metadata": attn_metadata,
+        "residual": residual
     }
 
     def test(repeat):
