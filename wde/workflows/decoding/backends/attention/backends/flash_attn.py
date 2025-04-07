@@ -1,13 +1,12 @@
 """Attention layer with FlashAttention."""
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple, Type
+from typing import Any, Dict, List, Optional, Type
 
 import torch
 from vllm.utils import is_pin_memory_available, make_tensor_with_pad
 
-import wde.workflows.core.backends.ops.kv_cache_util as ops
 from wde.workflows.core.backends.ops.flash_attn_interface import (
-    flash_attn_varlen_func, flash_attn_with_kvcache)
+    flash_attn_varlen_func, flash_attn_with_kvcache, get_flash_attn_version)
 from wde.workflows.decoding.backends.attention.backends.abstract import (
     AttentionType, DecodeOnlyAttentionBackend, DecodeOnlyAttentionImpl,
     DecodeOnlyAttentionMetadata, DecodeOnlyAttentionMetadataBuilder)
@@ -40,40 +39,6 @@ class DecodeOnlyFlashAttentionBackend(DecodeOnlyAttentionBackend):
     def get_builder_cls() -> Type["DecodeOnlyFlashAttentionMetadataBuilder"]:
         return DecodeOnlyFlashAttentionMetadataBuilder
 
-    @staticmethod
-    def get_kv_cache_shape(
-        num_blocks: int,
-        block_size: int,
-        num_kv_heads: int,
-        head_size: int,
-    ) -> Tuple[int, ...]:
-        if block_size % 16 != 0:
-            raise ValueError("Block size must be a multiple of 16.")
-        return (2, num_blocks, block_size, num_kv_heads, head_size)
-
-    @staticmethod
-    def swap_blocks(
-        src_kv_cache: torch.Tensor,
-        dst_kv_cache: torch.Tensor,
-        src_to_dst: torch.Tensor,
-    ) -> None:
-        src_key_cache = src_kv_cache[0]
-        dst_key_cache = dst_kv_cache[0]
-        ops.swap_blocks(src_key_cache, dst_key_cache, src_to_dst)
-
-        src_value_cache = src_kv_cache[1]
-        dst_value_cache = dst_kv_cache[1]
-        ops.swap_blocks(src_value_cache, dst_value_cache, src_to_dst)
-
-    @staticmethod
-    def copy_blocks(
-        kv_caches: List[torch.Tensor],
-        src_to_dists: torch.Tensor,
-    ) -> None:
-        key_caches = [kv_cache[0] for kv_cache in kv_caches]
-        value_caches = [kv_cache[1] for kv_cache in kv_caches]
-        ops.copy_blocks(key_caches, value_caches, src_to_dists)
-
 
 @dataclass
 class DecodeOnlyFlashAttentionMetadata(DecodeOnlyAttentionMetadata):
@@ -98,22 +63,12 @@ class DecodeOnlyFlashAttentionMetadata(DecodeOnlyAttentionMetadata):
     # |-------------------- seq_len ---------------------|
     #                                   |-- query_len ---|
 
-    # Maximum query length in the batch. None for decoding.
-    max_query_len: Optional[int]
     # Maximum sequence length among prefill batch. 0 if there are decoding
     # requests only.
     max_prefill_seq_len: int
     # Maximum sequence length among decode batch. 0 if there are prefill
     # requests only.
     max_decode_seq_len: int
-    # (batch_size + 1,). The cumulative subquery lengths of the sequences in
-    # the batch, used to index into subquery. E.g., if the subquery length
-    # is [4, 6], it is [0, 4, 10].
-    query_start_loc: Optional[torch.Tensor]
-    # (batch_size + 1,). The cumulative sequence lengths of the sequences in
-    # the batch, used to index into sequence. E.g., if the sequence length is
-    # [4, 6], it is [0, 4, 10].
-    seq_start_loc: Optional[torch.Tensor]
     # (batch_size,) A tensor of context lengths (tokens that are computed
     # so far).
     context_lens_tensor: Optional[torch.Tensor]
@@ -125,6 +80,21 @@ class DecodeOnlyFlashAttentionMetadata(DecodeOnlyAttentionMetadata):
     # 2nd dimensions are padded up to max_blocks_per_seq if it is cuda-graph
     # captured.
     block_tables: Optional[torch.Tensor]
+
+    # Maximum query length in the batch.
+    max_query_len: Optional[int] = None
+
+    # Max number of query tokens among request in the batch.
+    max_decode_query_len: Optional[int] = None
+
+    # (batch_size + 1,). The cumulative subquery lengths of the sequences in
+    # the batch, used to index into subquery. E.g., if the subquery length
+    # is [4, 6], it is [0, 4, 10].
+    query_start_loc: Optional[torch.Tensor] = None
+    # (batch_size + 1,). The cumulative sequence lengths of the sequences in
+    # the batch, used to index into sequence. E.g., if the sequence length is
+    # [4, 6], it is [0, 4, 10].
+    seq_start_loc: Optional[torch.Tensor] = None
 
     _cached_prefill_metadata: Optional[
         "DecodeOnlyFlashAttentionMetadata"] = None
@@ -141,26 +111,38 @@ class DecodeOnlyFlashAttentionMetadata(DecodeOnlyAttentionMetadata):
 
         assert self.seq_lens is not None
         assert self.seq_lens_tensor is not None
-        assert self.query_start_loc is not None
-        assert self.context_lens_tensor is not None
-        assert self.block_tables is not None
-        assert self.seq_start_loc is not None
+
+        # Compute some attn_metadata fields which default to None
+        query_start_loc = (None if self.query_start_loc is None else
+                           self.query_start_loc[:self.num_prefills + 1])
+        slot_mapping = (None if self.slot_mapping is None else
+                        self.slot_mapping[:self.num_prefill_tokens])
+        seq_lens = (None if self.seq_lens is None else
+                    self.seq_lens[:self.num_prefills])
+        seq_lens_tensor = (None if self.seq_lens_tensor is None else
+                           self.seq_lens_tensor[:self.num_prefills])
+        seq_start_loc = (None if self.seq_start_loc is None else
+                         self.seq_start_loc[:self.num_prefills + 1])
+        context_lens_tensor = (None if self.context_lens_tensor is None else
+                               self.context_lens_tensor[:self.num_prefills])
+        block_tables = (None if self.block_tables is None else
+                        self.block_tables[:self.num_prefills])
 
         self._cached_prefill_metadata = DecodeOnlyFlashAttentionMetadata(
             num_prefills=self.num_prefills,
             num_prefill_tokens=self.num_prefill_tokens,
             num_decode_tokens=0,
-            slot_mapping=self.slot_mapping[:self.num_prefill_tokens],
-            seq_lens=self.seq_lens[:self.num_prefills],
-            seq_lens_tensor=self.seq_lens_tensor[:self.num_prefills],
+            slot_mapping=slot_mapping,
+            seq_lens=seq_lens,
+            seq_lens_tensor=seq_lens_tensor,
             max_query_len=self.max_query_len,
             max_prefill_seq_len=self.max_prefill_seq_len,
+            max_decode_query_len=0,
             max_decode_seq_len=0,
-            query_start_loc=self.query_start_loc[:self.num_prefills + 1],
-            seq_start_loc=self.seq_start_loc[:self.num_prefills + 1],
-            context_lens_tensor=self.context_lens_tensor[:self.num_prefills],
-            block_tables=self.block_tables[:self.num_prefills],
-        )
+            query_start_loc=query_start_loc,
+            seq_start_loc=seq_start_loc,
+            context_lens_tensor=context_lens_tensor,
+            block_tables=block_tables)
         return self._cached_prefill_metadata
 
     @property
@@ -170,24 +152,37 @@ class DecodeOnlyFlashAttentionMetadata(DecodeOnlyAttentionMetadata):
 
         if self._cached_decode_metadata is not None:
             return self._cached_decode_metadata
-        assert self.block_tables is not None
         assert self.seq_lens_tensor is not None
+
+        # Compute some attn_metadata fields which default to None
+        slot_mapping = (None if self.slot_mapping is None else
+                        self.slot_mapping[self.num_prefill_tokens:])
+        seq_lens_tensor = (None if self.seq_lens_tensor is None else
+                           self.seq_lens_tensor[self.num_prefills:])
+        block_tables = (None if self.block_tables is None else
+                        self.block_tables[self.num_prefills:])
 
         self._cached_decode_metadata = DecodeOnlyFlashAttentionMetadata(
             num_prefills=0,
             num_prefill_tokens=0,
             num_decode_tokens=self.num_decode_tokens,
-            slot_mapping=self.slot_mapping[self.num_prefill_tokens:],
+            slot_mapping=slot_mapping,
             seq_lens=None,
-            seq_lens_tensor=self.seq_lens_tensor[self.num_prefills:],
-            max_query_len=None,
+            seq_lens_tensor=seq_lens_tensor,
+            max_decode_query_len=self.max_decode_query_len,
+            max_query_len=self.max_query_len,
             max_prefill_seq_len=0,
             max_decode_seq_len=self.max_decode_seq_len,
-            query_start_loc=None,
-            seq_start_loc=None,
+            # Batch may be composed of prefill|decodes, adjust query start
+            # indices to refer to the start of decodes. E.g.
+            # in tokens:[3 prefills|6 decodes], query_start_loc=[3,9] => [0,6].
+            query_start_loc=(self.query_start_loc[self.num_prefills:] -
+                             self.query_start_loc[self.num_prefills])
+            if self.query_start_loc is not None else None,
+            seq_start_loc=self.seq_start_loc[self.num_prefills:]
+            if self.seq_start_loc is not None else None,
             context_lens_tensor=None,
-            block_tables=self.block_tables[self.num_prefills:],
-        )
+            block_tables=block_tables)
         return self._cached_decode_metadata
 
     def to(self, device, non_blocking=True):
@@ -233,22 +228,22 @@ class DecodeOnlyFlashAttentionMetadataBuilder(
             device="cpu",
             pin_memory=pin_memory)
 
-        query_start_loc = torch.zeros(query_lens_tensor.shape[0] + 1,
-                                      dtype=torch.int32,
-                                      device="cpu",
-                                      pin_memory=pin_memory)
-        seq_start_loc = torch.zeros(seq_lens_tensor.shape[0] + 1,
-                                    dtype=torch.int32,
-                                    device="cpu",
-                                    pin_memory=pin_memory)
+        query_start_loc_tensor = torch.zeros(query_lens_tensor.shape[0] + 1,
+                                             dtype=torch.int32,
+                                             device="cpu",
+                                             pin_memory=pin_memory)
+        seq_start_loc_tensor = torch.zeros(seq_lens_tensor.shape[0] + 1,
+                                           dtype=torch.int32,
+                                           device="cpu",
+                                           pin_memory=pin_memory)
         torch.cumsum(seq_lens_tensor,
                      dim=0,
-                     dtype=seq_start_loc.dtype,
-                     out=seq_start_loc[1:])
+                     dtype=seq_start_loc_tensor.dtype,
+                     out=seq_start_loc_tensor[1:])
         torch.cumsum(query_lens_tensor,
                      dim=0,
-                     dtype=query_start_loc.dtype,
-                     out=query_start_loc[1:])
+                     dtype=query_start_loc_tensor.dtype,
+                     out=query_start_loc_tensor[1:])
 
         slot_mapping = []
         for request in scheduled_requests:
@@ -287,6 +282,13 @@ class DecodeOnlyFlashAttentionMetadataBuilder(
             for request in scheduled_requests if not request.c_is_prefill
         ],
                                  default=0)
+
+        max_decode_query_len = max([
+            request.c_query_len
+            for request in scheduled_requests if not request.c_is_prefill
+        ],
+                                   default=0)
+
         num_decode_tokens = sum(1 for request in scheduled_requests
                                 if not request.c_is_prefill)
 
@@ -298,10 +300,11 @@ class DecodeOnlyFlashAttentionMetadataBuilder(
             seq_lens=seq_lens,
             seq_lens_tensor=seq_lens_tensor,
             max_query_len=max_query_len,
+            max_decode_query_len=max_decode_query_len,
             max_prefill_seq_len=max_prefill_seq_len,
             max_decode_seq_len=max_decode_seq_len,
-            query_start_loc=query_start_loc,
-            seq_start_loc=seq_start_loc,
+            query_start_loc=query_start_loc_tensor,
+            seq_start_loc=seq_start_loc_tensor,
             context_lens_tensor=context_lens_tensor,
             block_tables=block_tables,
         )
@@ -355,9 +358,12 @@ class DecodeOnlyFlashAttentionImpl(DecodeOnlyAttentionImpl):
         if alibi_slopes is not None:
             alibi_slopes = torch.tensor(alibi_slopes, dtype=torch.float32)
         self.alibi_slopes = alibi_slopes
-        self.sliding_window = ((sliding_window, sliding_window)
-                               if sliding_window is not None else (-1, -1))
+        self.sliding_window = ((sliding_window - 1,
+                                0) if sliding_window is not None else (-1, -1))
         self.kv_cache_dtype = kv_cache_dtype
+        self.vllm_flash_attn_version = get_flash_attn_version(
+            requires_alibi=self.alibi_slopes is not None)
+
         if logits_soft_cap is None:
             # In flash-attn, setting logits_soft_cap as 0 means no soft cap.
             logits_soft_cap = 0
@@ -366,18 +372,16 @@ class DecodeOnlyFlashAttentionImpl(DecodeOnlyAttentionImpl):
         assert self.num_heads % self.num_kv_heads == 0
         self.num_queries_per_kv = self.num_heads // self.num_kv_heads
 
-        if sliding_window is not None:
-            # NOTE(woosuk): flash-attn's sliding window does not work with
-            # paged KV cache.
-            raise ValueError(
-                "Sliding window is not supported in FlashAttention.")
-
-        support_head_sizes = (
-            DecodeOnlyFlashAttentionBackend.get_supported_head_sizes())
+        support_head_sizes = DecodeOnlyFlashAttentionBackend.get_supported_head_sizes(
+        )
         if head_size not in support_head_sizes:
             raise ValueError(
                 f"Head size {head_size} is not supported by FlashAttention. "
                 f"Supported head sizes are: {support_head_sizes}.")
+
+        self._q_scale = torch.tensor(1.0, dtype=torch.float32)
+        self._k_scale = torch.tensor(1.0, dtype=torch.float32)
+        self._v_scale = torch.tensor(1.0, dtype=torch.float32)
 
     def forward(
         self,
@@ -386,71 +390,77 @@ class DecodeOnlyFlashAttentionImpl(DecodeOnlyAttentionImpl):
         value: torch.Tensor,
         kv_cache: torch.Tensor,
         attn_metadata: DecodeOnlyFlashAttentionMetadata,
-        k_scale: float = 1.0,
-        v_scale: float = 1.0,
         attn_type: AttentionType = AttentionType.DECODER,
     ) -> torch.Tensor:
         """Forward pass with FlashAttention.
 
         Args:
-            query: shape = [num_tokens, num_heads * head_size]
-            key: shape = [num_tokens, num_kv_heads * head_size]
-            value: shape = [num_tokens, num_kv_heads * head_size]
+            query: shape = [num_tokens, num_heads, head_size]
+            key: shape = [num_tokens, num_kv_heads, head_size]
+            value: shape = [num_tokens, num_kv_heads, head_size]
             kv_cache = [2, num_blocks, block_size, num_kv_heads, head_size]
+                NOTE: kv_cache will be None for profiling run.
             attn_metadata: Metadata for attention.
-        Returns:
-            shape = [num_tokens, num_heads * head_size]
+        NOTE: It in-place updates the output tensor.
+        NOTE: FP8 quantization, flash-attn expect the size of
+              {q,k,v}_descale to be (num_sequences, num_kv_heads).
+              We use torch's .expand() to avoid duplicating values
         """
-        if attn_type != AttentionType.DECODER:
-            raise NotImplementedError("Encoder self-attention and "
-                                      "encoder/decoder cross-attention "
-                                      "are not implemented for "
-                                      "FlashAttentionImpl")
 
-        # NOTE(woosuk): FlashAttention does not support FP8 KV cache.
-        assert k_scale == 1.0 and v_scale == 1.0, (
-            "key/v_scale is not supported in FlashAttention.")
+        output_shape = query.shape
 
-        num_tokens, hidden_size = query.shape
-        # Reshape the query, key, and value tensors.
+        output = torch.empty(output_shape,
+                             dtype=query.dtype,
+                             device=query.device)
+
+        hidden_size = output_shape[-1]
+
+        if kv_cache is None:
+            return output
+
         query = query.view(-1, self.num_heads, self.head_size)
         key = key.view(-1, self.num_kv_heads, self.head_size)
         value = value.view(-1, self.num_kv_heads, self.head_size)
+        output = output.view(-1, self.num_heads, self.head_size)
+
+        kv_cache_dtype: str = self.kv_cache_dtype
+        softmax_scale: float = self.scale
+        window_size = self.sliding_window
+        alibi_slopes: Optional[torch.Tensor] = self.alibi_slopes
+        logits_soft_cap: Optional[float] = self.logits_soft_cap
 
         if kv_cache is not None:
             key_cache = kv_cache[0]
             value_cache = kv_cache[1]
 
+            updated_slot_mapping = attn_metadata.slot_mapping
+
             # Reshape the input keys and values and store them in the cache.
             # If kv_cache is not provided, the new key and value tensors are
-            # not cached. This happens during the initial memory profiling run.
-            ops.reshape_and_cache_flash(
+            # not cached. This happens during the initial memory
+            # profiling run.
+            torch.ops._C_cache_ops.reshape_and_cache_flash(
                 key,
                 value,
-                key_cache,
-                value_cache,
-                attn_metadata.slot_mapping.flatten(),
-                self.kv_cache_dtype,
-                k_scale,
-                v_scale,
+                kv_cache[0],
+                kv_cache[1],
+                updated_slot_mapping.flatten(),  # type: ignore[union-attr]
+                kv_cache_dtype,
+                self._k_scale,
+                self._v_scale,
             )
 
-        num_prefill_tokens = attn_metadata.num_prefill_tokens
-        num_decode_tokens = attn_metadata.num_decode_tokens
+        num_prefill_query_tokens = attn_metadata.num_prefill_tokens
+        num_prefill_kv_tokens = attn_metadata.num_prefill_tokens
+        num_decode_query_tokens = attn_metadata.num_decode_tokens
 
-        assert key.shape[0] == num_prefill_tokens + num_decode_tokens
-        assert value.shape[0] == num_prefill_tokens + num_decode_tokens
-
-        output = torch.empty_like(query)
-        # Query for decode. KV is not needed because it is already cached.
-        decode_query = query[num_prefill_tokens:]
+        decode_query = query[num_prefill_query_tokens:]
+        decode_output = output[num_prefill_query_tokens:]
         # QKV for prefill.
-        query = query[:num_prefill_tokens]
-        key = key[:num_prefill_tokens]
-        value = value[:num_prefill_tokens]
-
-        assert query.shape[0] == num_prefill_tokens
-        assert decode_query.shape[0] == num_decode_tokens
+        query = query[:num_prefill_query_tokens]
+        prefill_output = output[:num_prefill_query_tokens]
+        assert query.shape[0] == num_prefill_query_tokens
+        assert decode_query.shape[0] == num_decode_query_tokens
 
         if prefill_meta := attn_metadata.prefill_metadata:
             # Prompt run.
@@ -459,53 +469,115 @@ class DecodeOnlyFlashAttentionImpl(DecodeOnlyAttentionImpl):
                 # normal attention
                 # When block_tables are not filled, it means q and k are the
                 # prompt, and they have the same length.
-                out = flash_attn_varlen_func(
+
+                q_seq_start_loc = attn_metadata.seq_start_loc
+                q_seq_len = attn_metadata.max_prefill_seq_len
+                k_seq_start_loc = attn_metadata.seq_start_loc
+                k_seq_len = attn_metadata.max_prefill_seq_len
+
+                key = key[:num_prefill_kv_tokens]
+                value = value[:num_prefill_kv_tokens]
+
+                descale_shape = (q_seq_start_loc.shape[0] - 1, key.shape[1])
+                flash_attn_varlen_func(
                     q=query,
                     k=key,
                     v=value,
-                    cu_seqlens_q=prefill_meta.seq_start_loc,
-                    cu_seqlens_k=prefill_meta.seq_start_loc,
-                    max_seqlen_q=prefill_meta.max_prefill_seq_len,
-                    max_seqlen_k=prefill_meta.max_prefill_seq_len,
-                    softmax_scale=self.scale,
+                    cu_seqlens_q=q_seq_start_loc,
+                    cu_seqlens_k=k_seq_start_loc,
+                    max_seqlen_q=q_seq_len,
+                    max_seqlen_k=k_seq_len,
+                    softmax_scale=softmax_scale,
                     causal=True,
-                    window_size=self.sliding_window,
-                    alibi_slopes=self.alibi_slopes,
-                    softcap=self.logits_soft_cap,
+                    window_size=window_size,
+                    alibi_slopes=alibi_slopes,
+                    softcap=logits_soft_cap,
+                    out=prefill_output,
+                    fa_version=self.vllm_flash_attn_version,
+                    q_descale=self._q_scale.expand(descale_shape),
+                    k_descale=self._k_scale.expand(descale_shape),
+                    v_descale=self._v_scale.expand(descale_shape),
                 )
-                assert output[:num_prefill_tokens].shape == out.shape
-                output[:num_prefill_tokens] = out
             else:
                 # prefix-enabled attention
                 assert prefill_meta.seq_lens is not None
+                assert prefill_meta.query_start_loc is not None
                 max_seq_len = max(prefill_meta.seq_lens)
-                output[:num_prefill_tokens] = flash_attn_varlen_func(
+                descale_shape = (prefill_meta.query_start_loc.shape[0] - 1,
+                                 key.shape[1])
+                flash_attn_varlen_func(  # noqa
                     q=query,
                     k=key_cache,
                     v=value_cache,
                     cu_seqlens_q=prefill_meta.query_start_loc,
                     max_seqlen_q=prefill_meta.max_query_len,
-                    cu_seqlens_k=prefill_meta.seq_start_loc,
+                    seqused_k=prefill_meta.seq_lens_tensor,
                     max_seqlen_k=max_seq_len,
-                    softmax_scale=self.scale,
+                    softmax_scale=softmax_scale,
                     causal=True,
-                    alibi_slopes=self.alibi_slopes,
+                    window_size=window_size,
+                    alibi_slopes=alibi_slopes,
                     block_table=prefill_meta.block_tables,
-                    softcap=self.logits_soft_cap,
+                    softcap=logits_soft_cap,
+                    out=prefill_output,
+                    fa_version=self.vllm_flash_attn_version,
+                    q_descale=self._q_scale.expand(descale_shape),
+                    k_descale=self._k_scale.expand(descale_shape),
+                    v_descale=self._v_scale.expand(descale_shape),
                 )
 
         if decode_meta := attn_metadata.decode_metadata:
             # Decoding run.
-            output[num_prefill_tokens:] = flash_attn_with_kvcache(
-                decode_query.unsqueeze(1),
-                key_cache,
-                value_cache,
-                block_table=decode_meta.block_tables,
-                cache_seqlens=decode_meta.seq_lens_tensor,
-                softmax_scale=self.scale,
-                causal=True,
-                alibi_slopes=self.alibi_slopes,
-            ).squeeze(1)
+            # Use flash_attn_varlen_func kernel for speculative decoding
+            # because different queries might have different lengths.
 
-        # Reshape the output tensor.
-        return output.view(num_tokens, hidden_size)
+            assert decode_meta.max_decode_query_len is not None
+            # use only for actual varlen decoding
+            if decode_meta.max_decode_query_len > 1:
+                assert decode_meta.query_start_loc is not None
+                descale_shape = (decode_meta.query_start_loc.shape[0] - 1,
+                                 key.shape[1])
+                flash_attn_varlen_func(
+                    q=decode_query,
+                    k=key_cache,
+                    v=value_cache,
+                    cu_seqlens_q=decode_meta.query_start_loc,
+                    max_seqlen_q=decode_meta.max_decode_query_len,
+                    seqused_k=decode_meta.seq_lens_tensor,
+                    max_seqlen_k=decode_meta.max_decode_seq_len,
+                    softmax_scale=softmax_scale,
+                    causal=True,
+                    window_size=window_size,
+                    alibi_slopes=alibi_slopes,
+                    softcap=logits_soft_cap,
+                    block_table=decode_meta.block_tables,
+                    out=decode_output,
+                    fa_version=self.vllm_flash_attn_version,
+                    q_descale=self._q_scale.expand(descale_shape),
+                    k_descale=self._k_scale.expand(descale_shape),
+                    v_descale=self._v_scale.expand(descale_shape),
+                )
+            else:
+                # Use flash_attn_with_kvcache for normal decoding.
+                seq_lens = decode_meta.seq_lens_tensor
+                block_tables = decode_meta.block_tables
+                descale_shape = (block_tables.shape[0], key_cache.shape[-2])
+
+                flash_attn_with_kvcache(
+                    q=decode_query.unsqueeze(1),
+                    k_cache=key_cache,
+                    v_cache=value_cache,
+                    block_table=block_tables,
+                    cache_seqlens=seq_lens,
+                    softmax_scale=softmax_scale,
+                    causal=True,
+                    window_size=window_size,
+                    alibi_slopes=alibi_slopes,
+                    softcap=logits_soft_cap,
+                    out=decode_output.unsqueeze(1),
+                    fa_version=self.vllm_flash_attn_version,
+                    q_descale=self._q_scale.expand(descale_shape),
+                    k_descale=self._k_scale.expand(descale_shape),
+                    v_descale=self._v_scale.expand(descale_shape),
+                )
+        return output.view(-1, hidden_size)

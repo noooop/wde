@@ -118,8 +118,6 @@ class PrefillOnlyAttentionImpl(ABC):
         value: torch.Tensor,
         kv_cache: Optional[torch.Tensor],
         attn_metadata: T,
-        k_scale: float = 1.0,
-        v_scale: float = 1.0,
         attn_type: AttentionType = AttentionType.DECODER,
     ) -> torch.Tensor:
         raise NotImplementedError

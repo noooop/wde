@@ -26,7 +26,7 @@ from wde.workflows.core.backends.loader.weight_utils import (
     get_quant_config, np_cache_weights_iterator, pt_weights_iterator,
     safetensors_weights_iterator)
 from wde.workflows.core.backends.models.transformers_utils.config import \
-    model_overwrite
+    maybe_model_redirect
 from wde.workflows.core.backends.quantization import QuantizationConfig
 from wde.workflows.core.backends.utils import set_weight_attrs
 from wde.workflows.core.config import (CacheConfig, DeviceConfig, EngineConfig,
@@ -272,7 +272,7 @@ class DefaultModelLoader(BaseModelLoader):
                    scheduler_config: Optional[SchedulerConfig] = None,
                    cache_config: Optional[CacheConfig] = None) -> nn.Module:
 
-        model_name_or_path = model_overwrite(model_config.model)
+        model_name_or_path = maybe_model_redirect(model_config.model)
 
         target_device = torch.device(device_config.device)
         with set_default_torch_dtype(model_config.dtype):

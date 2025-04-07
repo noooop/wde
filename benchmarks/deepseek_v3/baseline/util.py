@@ -9,13 +9,14 @@ from vllm.model_executor.model_loader.weight_utils import default_weight_loader
 
 from wde.workflows.core.backends.distributed import patch_parallel_state
 from wde.workflows.core.backends.models.transformers_utils.config import (
-    get_config, model_overwrite)
+    get_config, maybe_model_redirect)
 
 patch_parallel_state()
 
 model = "deepseek-ai/DeepSeek-R1"
 
-hf_config = get_config(model=model_overwrite(model), trust_remote_code=True)
+hf_config = get_config(model=maybe_model_redirect(model),
+                       trust_remote_code=True)
 
 GB = 1 << 30
 
@@ -71,7 +72,7 @@ cache_config = CacheConfig(
     cache_dtype="auto",
 )
 
-model_config = ModelConfig(model=model_overwrite(model),
+model_config = ModelConfig(model=maybe_model_redirect(model),
                            task="generate",
                            tokenizer=model,
                            tokenizer_mode="auto",

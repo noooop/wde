@@ -3,7 +3,8 @@ from typing import Optional
 import torch
 from vllm import _custom_ops as ops
 from vllm.platforms import current_platform
-from vllm.utils import print_warning_once
+
+from wde.logger import print_warning_once
 
 from .marlin_utils import marlin_make_workspace, marlin_permute_scales
 

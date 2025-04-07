@@ -4,11 +4,11 @@ from vllm.transformers_utils.tokenizer import \
     get_tokenizer as vllm_get_tokenizer
 
 from wde.workflows.core.backends.models.transformers_utils.config import \
-    model_overwrite
+    maybe_model_redirect
 
 
 def get_tokenizer(tokenizer_name, *args, **kwargs):
-    tokenizer_name = model_overwrite(tokenizer_name)
+    tokenizer_name = maybe_model_redirect(tokenizer_name)
     return vllm_get_tokenizer(tokenizer_name, *args, **kwargs)
 
 

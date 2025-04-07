@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Dict, Generic, List, Optional, Tuple, Type, TypeVar
+from typing import Any, Dict, Generic, List, Optional, Type, TypeVar
 
 import torch
 
@@ -40,33 +40,6 @@ class DecodeOnlyAttentionBackend(AttentionBackend, ABC):
     def make_metadata_builder(
             cls, *args, **kwargs) -> "DecodeOnlyAttentionMetadataBuilder":
         return cls.get_builder_cls()(*args, **kwargs)
-
-    @staticmethod
-    @abstractmethod
-    def get_kv_cache_shape(
-        num_blocks: int,
-        block_size: int,
-        num_kv_heads: int,
-        head_size: int,
-    ) -> Tuple[int, ...]:
-        raise NotImplementedError
-
-    @staticmethod
-    @abstractmethod
-    def swap_blocks(
-        src_kv_cache: torch.Tensor,
-        dst_kv_cache: torch.Tensor,
-        src_to_dst: torch.Tensor,
-    ) -> None:
-        raise NotImplementedError
-
-    @staticmethod
-    @abstractmethod
-    def copy_blocks(
-        kv_caches: List[torch.Tensor],
-        src_to_dists: torch.Tensor,
-    ) -> None:
-        raise NotImplementedError
 
 
 @dataclass
@@ -133,8 +106,6 @@ class DecodeOnlyAttentionImpl(AttentionImpl, ABC, Generic[T]):
         value: torch.Tensor,
         kv_cache: torch.Tensor,
         attn_metadata: T,
-        k_scale: float = 1.0,
-        v_scale: float = 1.0,
         attn_type: AttentionType = AttentionType.DECODER,
     ) -> torch.Tensor:
         raise NotImplementedError

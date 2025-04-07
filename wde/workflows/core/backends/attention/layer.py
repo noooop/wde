@@ -56,8 +56,7 @@ class Attention(nn.Module):
         # expect the pre-quantized k/v_scale to be loaded along
         # with the model weights.
         self.kv_cache_dtype = kv_cache_dtype
-        self._k_scale = 1.0
-        self._v_scale = 1.0
+
         quant_method = quant_config.get_quant_method(
             self, prefix=prefix) if quant_config else None
         if quant_method is not None:
@@ -92,8 +91,7 @@ class Attention(nn.Module):
     ) -> torch.Tensor:
         if hasattr(self.attn_backend, "attn_type"):
             return self.impl.forward(query, key, value, kv_cache,
-                                     attn_metadata, self._k_scale,
-                                     self._v_scale,
+                                     attn_metadata,
                                      self.attn_backend.attn_type)
 
         return self.impl.forward(query,
@@ -101,8 +99,6 @@ class Attention(nn.Module):
                                  value,
                                  kv_cache,
                                  attn_metadata,
-                                 self._k_scale,
-                                 self._v_scale,
                                  attn_type=attn_type)
 
     def extra_repr(self) -> str:

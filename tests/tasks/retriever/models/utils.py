@@ -8,7 +8,7 @@ from vllm.platforms import current_platform
 
 from tests.tasks.utils import cleanup
 from wde.workflows.core.backends.models.transformers_utils.config import \
-    model_overwrite
+    maybe_model_redirect
 
 _T = TypeVar("_T", nn.Module, torch.Tensor, BatchEncoding, BatchFeature)
 
@@ -35,7 +35,7 @@ class FlagEmbeddingRunner:
         # depend on FlagEmbedding peft
         from FlagEmbedding import FlagModel
 
-        self.model_name = model_overwrite(model_name)
+        self.model_name = maybe_model_redirect(model_name)
 
         model = FlagModel(self.model_name, use_fp16=dtype == "half")
         self.model = model

@@ -64,8 +64,6 @@ class PrefillOnlyXFormersImpl(PrefillOnlyAttentionImpl):
         value: torch.Tensor,
         kv_cache: Optional[torch.Tensor],
         attn_metadata: PrefillOnlyAttentionMetadata,
-        k_scale: float = 1.0,
-        v_scale: float = 1.0,
         attn_type: AttentionType = AttentionType.DECODER,
     ) -> torch.Tensor:
 

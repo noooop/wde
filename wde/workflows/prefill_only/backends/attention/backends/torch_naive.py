@@ -68,15 +68,10 @@ class PrefillOnlyTorchNaiveBackendImpl(PrefillOnlyAttentionImpl):
         value: torch.Tensor,
         kv_cache: Optional[torch.Tensor],
         attn_metadata: PrefillOnlyAttentionMetadata,
-        k_scale: float = 1.0,
-        v_scale: float = 1.0,
         attn_type: AttentionType = AttentionType.DECODER,
     ) -> torch.Tensor:
 
         assert kv_cache is None
-
-        assert k_scale == 1.0 and v_scale == 1.0, (
-            "key/v_scale is not supported in Torch Naive.")
 
         if attn_type == AttentionType.ENCODER:
             causal = False

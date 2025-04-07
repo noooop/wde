@@ -79,8 +79,6 @@ class PrefillOnlyFlashAttentionImpl(PrefillOnlyAttentionImpl):
         value: torch.Tensor,
         kv_cache: Optional[torch.Tensor],
         attn_metadata: PrefillOnlyAttentionMetadata,
-        k_scale: float = 1.0,
-        v_scale: float = 1.0,
         attn_type: AttentionType = AttentionType.DECODER,
     ) -> torch.Tensor:
 
@@ -94,9 +92,6 @@ class PrefillOnlyFlashAttentionImpl(PrefillOnlyAttentionImpl):
             raise NotImplementedError("Encoder/decoder cross-attention "
                                       "are not implemented for "
                                       "PrefillOnlyFlashAttentionImpl")
-
-        assert k_scale == 1.0 and v_scale == 1.0, (
-            "key/v_scale is not supported in FlashAttention.")
 
         num_tokens, hidden_size = query.shape
         # Reshape the query, key, and value tensors.
