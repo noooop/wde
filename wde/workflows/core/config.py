@@ -1,7 +1,7 @@
 import enum
 import json
 from dataclasses import dataclass, field, fields
-from typing import List, Optional, Union
+from typing import Any, Callable, List, Optional, Union
 
 import torch
 from transformers import PretrainedConfig
@@ -15,6 +15,8 @@ from wde.workflows.core.backends.quantization import QUANTIZATION_METHODS
 logger = init_logger(__name__)
 
 _GB = 1 << 30
+HfOverrides = Union[dict[str, Any], Callable[[PretrainedConfig],
+                                             PretrainedConfig]]
 
 
 class DeviceConfig:
@@ -223,53 +225,6 @@ class CacheConfig:
 
 
 class ModelConfig:
-    """Configuration for the model.
-
-    Args:
-        model: Name or path of the huggingface model to use.
-            It is also used as the content for `model_name` tag in metrics
-            output when `served_model_name` is not specified.
-        tokenizer: Name or path of the huggingface tokenizer to use.
-        tokenizer_mode: Tokenizer mode. "auto" will use the fast tokenizer if
-            available, and "slow" will always use the slow tokenizer.
-        trust_remote_code: Trust remote code (e.g., from HuggingFace) when
-            downloading the model and tokenizer.
-        dtype: Data type for model weights and activations. The "auto" option
-            will use FP16 precision for FP32 and FP16 models, and BF16 precision
-            for BF16 models.
-        seed: Random seed for reproducibility.
-        revision: The specific model version to use. It can be a branch name,
-            a tag name, or a commit id. If unspecified, will use the default
-            version.
-        code_revision: The specific revision to use for the model code on
-            Hugging Face Hub. It can be a branch name, a tag name, or a
-            commit id. If unspecified, will use the default version.
-        rope_scaling: Dictionary containing the scaling configuration for the
-            RoPE embeddings. When using this flag, don't update
-            `max_position_embeddings` to the expected new maximum.
-        tokenizer_revision: The specific tokenizer version to use. It can be a
-            branch name, a tag name, or a commit id. If unspecified, will use
-            the default version.
-        max_model_len: Maximum length of a sequence (including prompt and
-            output). If None, will be derived from the model.
-        quantization: Quantization method that was used to quantize the model
-            weights. If None, we assume the model weights are not quantized.
-        quantization_param_path: Path to JSON file containing scaling factors.
-            Used to load KV cache scaling factors into the model when KV cache
-            type is FP8_E4M3 on ROCm (AMD GPU). In the future these will also
-            be used to load activation and weight scaling factors when the
-            model dtype is FP8_E4M3 on ROCm.
-        disable_sliding_window: Whether to disable sliding window. If True,
-            we will disable the sliding window functionality of the model.
-            If the model does not support sliding window, this argument is
-            ignored.
-        skip_tokenizer_init: If true, skip initialization of tokenizer and
-            detokenizer.
-        served_model_name: The model name used in metrics tag `model_name`,
-            matches the model name exposed via the APIs. If multiple model
-            names provided, the first name will be used. If not specified,
-            the model name will be the same as `model`.
-    """
 
     def __init__(
         self,
@@ -281,9 +236,8 @@ class ModelConfig:
         seed: int,
         revision: Optional[str] = None,
         code_revision: Optional[str] = None,
-        rope_scaling: Optional[dict] = None,
-        rope_theta: Optional[float] = None,
         tokenizer_revision: Optional[str] = None,
+        hf_overrides: Optional[HfOverrides] = None,
         max_model_len: Optional[int] = None,
         quantization: Optional[str] = None,
         quantization_param_path: Optional[str] = None,
@@ -298,8 +252,6 @@ class ModelConfig:
         self.seed = seed
         self.revision = revision
         self.code_revision = code_revision
-        self.rope_scaling = rope_scaling
-        self.rope_theta = rope_theta
         # The tokenizer version is consistent with the model version by default.
         if tokenizer_revision is None:
             self.tokenizer_revision = revision
@@ -310,8 +262,27 @@ class ModelConfig:
         self.disable_sliding_window = disable_sliding_window
         self.skip_tokenizer_init = skip_tokenizer_init
 
-        self.hf_config = get_config(self.model, trust_remote_code, revision,
-                                    code_revision, rope_scaling, rope_theta)
+        if hf_overrides is None:
+            hf_overrides = {}
+
+        if callable(hf_overrides):
+            hf_overrides_kw = {}
+            hf_overrides_fn = hf_overrides
+        else:
+            hf_overrides_kw = hf_overrides
+            hf_overrides_fn = None
+
+        hf_config = get_config(self.model, trust_remote_code, revision,
+                               code_revision)
+
+        if hf_overrides_kw:
+            logger.info("Overriding HF config with %s", hf_overrides_kw)
+            hf_config.update(hf_overrides_kw)
+        if hf_overrides_fn:
+            logger.info("Overriding HF config with %s", hf_overrides_fn)
+            hf_config = hf_overrides_fn(hf_config)
+
+        self.hf_config = hf_config
         self.hf_text_config = get_hf_text_config(self.hf_config)
         self.dtype = _get_and_verify_dtype(self.hf_text_config, dtype)
 

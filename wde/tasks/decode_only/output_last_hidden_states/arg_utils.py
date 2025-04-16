@@ -41,8 +41,6 @@ class DecodeOnlyOutputLastHiddenStatesEngineArgs(EngineArgs):
             seed=self.seed,
             revision=self.revision,
             code_revision=self.code_revision,
-            rope_scaling=self.rope_scaling,
-            rope_theta=self.rope_theta,
             tokenizer_revision=self.tokenizer_revision,
             max_model_len=self.max_model_len,
             quantization=self.quantization,

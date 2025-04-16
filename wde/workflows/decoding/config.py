@@ -103,8 +103,7 @@ class DecodingEngineConfig(EngineConfig):
             "Initializing an LLM engine (v%s) with config: "
             "model=%r, tokenizer=%r, "
             "skip_tokenizer_init=%s, tokenizer_mode=%s, revision=%s, "
-            "rope_scaling=%r, rope_theta=%r, tokenizer_revision=%s, "
-            "trust_remote_code=%s, dtype=%s, max_seq_len=%d, "
+            "tokenizer_revision=%s, trust_remote_code=%s, dtype=%s, max_seq_len=%d, "
             "download_dir=%r, load_format=%s, "
             "quantization=%s, kv_cache_dtype=%s, "
             "quantization_param_path=%s, device_config=%s, "
@@ -113,7 +112,6 @@ class DecodingEngineConfig(EngineConfig):
             VLLM_VERSION, self.model_config.model, self.model_config.tokenizer,
             self.model_config.skip_tokenizer_init,
             self.model_config.tokenizer_mode, self.model_config.revision,
-            self.model_config.rope_scaling, self.model_config.rope_theta,
             self.model_config.tokenizer_revision,
             self.model_config.trust_remote_code, self.model_config.dtype,
             self.model_config.max_model_len, self.load_config.download_dir,

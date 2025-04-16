@@ -22,8 +22,6 @@ class EngineArgs:
 
     revision: Optional[str] = None
     code_revision: Optional[str] = None
-    rope_scaling: Optional[dict] = None
-    rope_theta: Optional[float] = None
     tokenizer_revision: Optional[str] = None
     quantization: Optional[str] = None
     quantization_param_path: Optional[str] = None
@@ -63,8 +61,6 @@ class EngineArgs:
             seed=self.seed,
             revision=self.revision,
             code_revision=self.code_revision,
-            rope_scaling=self.rope_scaling,
-            rope_theta=self.rope_theta,
             tokenizer_revision=self.tokenizer_revision,
             max_model_len=self.max_model_len,
             quantization=self.quantization,
