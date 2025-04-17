@@ -88,6 +88,7 @@ class HfRunner:
         model_name: str,
         dtype: str = "half",
         *,
+        trust_remote_code=True,
         model_kwargs: Optional[Dict[str, Any]] = None,
         auto_cls=AutoModelForCausalLM,
     ) -> None:
@@ -101,14 +102,14 @@ class HfRunner:
             auto_cls.from_pretrained(
                 self.model_name,
                 torch_dtype=torch_dtype,
-                trust_remote_code=True,
+                trust_remote_code=trust_remote_code,
                 **model_kwargs,
             ))
 
         self.tokenizer = AutoTokenizer.from_pretrained(
             self.model_name,
             torch_dtype=torch_dtype,
-            trust_remote_code=True,
+            trust_remote_code=trust_remote_code,
         )
 
     @torch.inference_mode

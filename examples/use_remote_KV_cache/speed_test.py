@@ -30,7 +30,7 @@ def speed_test(model, filename):
 
 
 @click.command()
-@click.option('--model', default="THUDM/glm-4-9b-chat-1m")
+@click.option('--model', default="THUDM/glm-4-9b-chat-1m-hf")
 @click.option("--filename", default="dummy.txt")
 def main(model, filename):
     speed_test(model, filename)

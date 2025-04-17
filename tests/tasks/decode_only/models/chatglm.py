@@ -5,7 +5,7 @@ import pytest
 from tests.tasks.decode_only.util import (HfDecodingRunner, WDERunner,
                                           check_logprobs_close)
 
-MODELS = ["THUDM/glm-4-9b-chat-1m"]
+MODELS = ["THUDM/glm-4-9b-chat-1m-hf"]
 
 
 @pytest.fixture(scope="session")
@@ -29,7 +29,7 @@ def test_models(hf_runner, wde_runner, example_prompts, model: str, dtype: str,
 
     NUM_LOG_PROBS = 4
 
-    with hf_runner(model, dtype=dtype) as hf_model:
+    with hf_runner(model, dtype=dtype, trust_remote_code=False) as hf_model:
         hf_outputs = hf_model.generate_greedy_logprobs(example_prompts,
                                                        max_tokens,
                                                        NUM_LOG_PROBS)
@@ -37,6 +37,7 @@ def test_models(hf_runner, wde_runner, example_prompts, model: str, dtype: str,
                     dtype=dtype,
                     scheduling=scheduling,
                     enable_prefix_caching=enable_prefix_caching,
+                    trust_remote_code=False,
                     quantization="fp8") as wde_model:
         outputs = wde_model.generate_greedy_logprobs(example_prompts,
                                                      max_tokens, NUM_LOG_PROBS)

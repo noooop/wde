@@ -69,7 +69,7 @@ python -m benchmarks.persistence_kv_cache.test_filesystem_server
 | Qwen/Qwen2.5-32B-Instruct-GPTQ-Int4 | 0.586                      | 0.406                     | 0.893      | 0.346             | 1.086                          | 0.340                         | 1.148          | 0.462                 |
 | Qwen/Qwen2.5-7B-Instruct            | 0.113                      | 0.081                     | 0.228      | 0.074             | 0.252                          | 0.083                         | 0.261          | 0.143                 |
 | Qwen/Qwen2.5-3B-Instruct            | 0.077                      | 0.055                     | 0.137      | 0.048             | 0.178                          | 0.059                         | 0.185          | 0.098                 |
-| THUDM/glm-4-9b-chat-1m              | 0.154                      | 0.110                     | 0.274      | 0.078             | 0.345                          | 0.115                         | 0.370          | 0.161                 |
+| THUDM/glm-4-9b-chat-1m-hf              | 0.154                      | 0.110                     | 0.274      | 0.078             | 0.345                          | 0.115                         | 0.370          | 0.161                 |
 | NousResearch/Hermes-3-Llama-3.1-8B  | 0.270                      | 0.205                     | 0.427      | 0.106             | 0.569                          | 0.183                         | 0.556          | 0.227                 |
 
 > 表2 filesystem 对比 内存 性能甚至差距不大， amazing. set(deferred=False) 两倍差距， stream_get 两倍差距
@@ -135,7 +135,7 @@ python -m benchmarks.persistence_kv_cache.test_bybrid_server
 | Qwen/Qwen2.5-32B-Instruct-GPTQ-Int4 | 0.399                     | 0.338                         | 0.402                     | 0.348             | 0.457                 | 0.356             | 
 | Qwen/Qwen2.5-7B-Instruct            | 0.081                     | 0.084                         | 0.098                     | 0.064             | 0.126                 | 0.061             | 
 | Qwen/Qwen2.5-3B-Instruct            | 0.056                     | 0.059                         | 0.069                     | 0.054             | 0.101                 | 0.048             | 
-| THUDM/glm-4-9b-chat-1m              | 0.109                     | 0.117                         | 0.130                     | 0.076             | 0.166                 | 0.085             | 
+| THUDM/glm-4-9b-chat-1m-hf              | 0.109                     | 0.117                         | 0.130                     | 0.076             | 0.166                 | 0.085             | 
 | NousResearch/Hermes-3-Llama-3.1-8B  | 0.208                     | 0.170                         | 0.231                     | 0.112             | 0.233                 | 0.120             | 
 
 性能略高于 filesystem 略低于 memory。 符合预期

@@ -158,11 +158,12 @@ class WDERunner:
         model_name: str,
         max_model_len: int = 1024,
         dtype: str = "auto",
+        trust_remote_code=True,
         **kwargs,
     ) -> None:
         self.model = LLM(
             model=model_name,
-            trust_remote_code=True,
+            trust_remote_code=trust_remote_code,
             dtype=dtype,
             max_model_len=max_model_len,
             gpu_memory_utilization=0.7,

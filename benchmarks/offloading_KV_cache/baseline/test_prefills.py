@@ -105,8 +105,8 @@ if __name__ == '__main__':
         ("Qwen/Qwen2.5-7B-Instruct", None),
         ("Qwen/Qwen2.5-7B-Instruct", "fp8"),
         ("Qwen/Qwen2.5-3B-Instruct", None),
-        ("THUDM/glm-4-9b-chat-1m", None),
-        ("THUDM/glm-4-9b-chat-1m", "fp8"),
+        ("THUDM/glm-4-9b-chat-1m-hf", None),
+        ("THUDM/glm-4-9b-chat-1m-hf", "fp8"),
         ("NousResearch/Hermes-3-Llama-3.1-8B", None),
         ("NousResearch/Hermes-3-Llama-3.1-8B", "fp8"),
     ]

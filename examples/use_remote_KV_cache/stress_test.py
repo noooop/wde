@@ -7,7 +7,7 @@ from .speed_test import speed_test
 
 
 @click.command()
-@click.option('--model', default="THUDM/glm-4-9b-chat-1m")
+@click.option('--model', default="THUDM/glm-4-9b-chat-1m-hf")
 @click.option("--length", default=100000)
 @click.option("--filename", default="dummy.txt")
 @click.option("--n", default=6)

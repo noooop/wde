@@ -1,7 +1,7 @@
 chat:
   models:
     -
-      model: "THUDM/glm-4-9b-chat-1m"
+      model: "THUDM/glm-4-9b-chat-1m-hf"
       engine_args:
         gpu_memory_utilization: 0.9
         quantization: "fp8"
@@ -18,7 +18,7 @@ chat:
 
 remote_kv_cache:
   -
-    model: "THUDM/glm-4-9b-chat-1m"
+    model: "THUDM/glm-4-9b-chat-1m-hf"
     engine_args:
       block_size: 16
       memory_space: 20
