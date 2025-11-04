@@ -1,5 +1,8 @@
-from vllm.transformers_utils.detokenizer import (convert_prompt_ids_to_tokens,
-                                                 detokenize_incrementally)
+from vllm.transformers_utils.detokenizer_utils import (
+    AnyTokenizer,
+    convert_prompt_ids_to_tokens,
+    detokenize_incrementally,
+)
 from vllm.transformers_utils.tokenizer import \
     get_tokenizer as vllm_get_tokenizer
 

@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, Generic, List, Optional, Type, TypeVar
 
 import torch
-from vllm.utils import is_pin_memory_available
+from vllm.utils.platform_utils import is_pin_memory_available
 
 from wde.workflows.core.backends.attention.abstract import AttentionType
 

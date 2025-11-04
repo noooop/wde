@@ -25,6 +25,9 @@ class DecodingSchedulerConfig(SchedulerConfig):
                  max_num_batched_tokens: Optional[int],
                  max_num_requests: int,
                  max_model_len: int,
+                 max_num_partial_prefills: Optional[int] = 1,
+                 max_long_partial_prefills: Optional[int] = 1,
+                 long_prefill_token_threshold: Optional[int] = 0,
                  preemption_mode: Optional[str] = None,
                  max_num_on_the_fly: Optional[int] = None,
                  scheduling: str = "async") -> None:
@@ -36,6 +39,20 @@ class DecodingSchedulerConfig(SchedulerConfig):
         logger.info(
             "Chunked prefill is enabled with max_num_batched_tokens=%d.",
             self.max_num_batched_tokens)
+
+        self.max_num_partial_prefills = max_num_partial_prefills
+        self.max_long_partial_prefills = max_long_partial_prefills
+        self.long_prefill_token_threshold = long_prefill_token_threshold
+        if self.max_num_partial_prefills > 1:
+            if self.long_prefill_token_threshold == 0:
+                self.long_prefill_token_threshold = int(max_model_len * 0.04)
+
+            logger.info(
+                "Concurrent partial prefills enabled with "
+                "max_num_partial_prefills=%d, max_long_partial_prefills=%d, "
+                "long_prefill_token_threshold=%d",
+                self.max_num_partial_prefills, self.max_long_partial_prefills,
+                self.long_prefill_token_threshold)
 
         if max_num_on_the_fly is None:
             if scheduling == "sync":
@@ -62,6 +79,25 @@ class DecodingSchedulerConfig(SchedulerConfig):
             raise ValueError(
                 f"max_num_on_the_fly {self.max_num_on_the_fly} must "
                 "be greater than 0")
+
+        if self.max_num_partial_prefills < 1:
+            raise ValueError(
+                f"max_num_partial_prefills ({self.max_num_partial_prefills}) "
+                "must be greater than or equal to 1.")
+        elif self.max_num_partial_prefills > 1:
+            if self.long_prefill_token_threshold > self.max_model_len:
+                raise ValueError(
+                    "long_prefill_token_threshold "
+                    f"({self.long_prefill_token_threshold}) cannot be greater "
+                    f"than the max_model_len ({self.max_model_len}).")
+
+        if (self.max_long_partial_prefills
+                < 1) or (self.max_long_partial_prefills
+                         > self.max_num_partial_prefills):
+            raise ValueError(
+                f"max_long_partial_prefills ({self.max_long_partial_prefills}) "
+                "must be greater than or equal to 1 and less than or equal to "
+                f"max_num_partial_prefills ({self.max_num_partial_prefills}).")
 
 
 class DecodingOffloadingSchedulerConfig(DecodingSchedulerConfig):

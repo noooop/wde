@@ -2,7 +2,7 @@ from typing import Dict, List, Protocol, Tuple
 
 import torch
 from torch.func import functional_call
-from vllm.utils import is_pin_memory_available
+from vllm.utils.platform_utils import is_pin_memory_available
 
 
 class LayerFn(Protocol):

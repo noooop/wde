@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Dict, List
 
 import torch
-from vllm.utils import is_pin_memory_available, make_tensor_with_pad
+from vllm.utils.platform_utils import is_pin_memory_available, make_tensor_with_pad
 
 from .sampling_params import SamplingType
 

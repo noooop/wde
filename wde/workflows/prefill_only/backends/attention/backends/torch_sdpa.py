@@ -2,7 +2,7 @@ from typing import Any, Dict, List, Optional, Type
 
 import torch
 from torch.nn.functional import scaled_dot_product_attention
-from vllm.utils import is_pin_memory_available
+from vllm.utils.platform_utils import is_pin_memory_available
 
 from wde.workflows.prefill_only.backends.attention.backends.abstract import (
     AttentionType, PrefillOnlyAttentionBackend, PrefillOnlyAttentionImpl,

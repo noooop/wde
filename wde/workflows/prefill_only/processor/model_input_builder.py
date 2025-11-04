@@ -1,5 +1,5 @@
 import torch
-from vllm.utils import is_pin_memory_available
+from vllm.utils.platform_utils import is_pin_memory_available
 
 from wde.workflows.core.llm_engine import LLMEngine
 from wde.workflows.core.processor.model_input_builder import ModelInputBuilder

@@ -176,91 +176,12 @@ class NaiveDecodingScheduler(Scheduler):
 
     def _schedule_running(self, budget: DecodingSchedulingBudget,
                           running_queue) -> SchedulerRunningOutputs:
-        prefill_requests = []
-        decode_requests = []
-        preempted = []
+        max_num_partial_prefills = self.scheduler_config.max_num_partial_prefills
 
-        while running_queue:
-            if budget.full():
-                break
-
-            request = running_queue[0]
-            if self.record_metrics:
-                scheduled_ts = time.perf_counter()
-
-            # 1. write new token ids to vblock
-            self.kv_cache_manager.update(request)
-
-            # 2. test kv_cache is above high_watermark
-            is_prefill = request.get_is_prefill()
-            if is_prefill and self.kv_cache_manager.high_watermark():
-                break
-
-            # 3. chunked prefill budget
-            token_budget = budget.remaining_token_budget()
-            assert token_budget > 0
-
-            running_queue.popleft()
-
-            num_new_tokens = request.num_new_tokens
-            assert num_new_tokens > 0
-
-            token_chunk_size = 0
-
-            # 4. try to allocate
-            while request.has_unscheduled_tokens() and token_budget > 0:
-                # allocate one block at a time
-
-                if self.kv_cache_manager.num_free_blocks == 0:
-                    # There is no empty kvcache, perform preemption
-                    while running_queue:
-                        victim_request = running_queue[-1]
-
-                        while victim_request.num_computed_tokens > 0:
-                            self.kv_cache_manager.free_last_block(
-                                victim_request)
-
-                            if self.kv_cache_manager.num_free_blocks > 0:
-                                break
-
-                        if victim_request.num_computed_tokens == 0:
-                            running_queue.pop()
-                            preempted.append(victim_request)
-
-                        if self.kv_cache_manager.num_free_blocks > 0:
-                            break
-
-                if self.kv_cache_manager.num_free_blocks == 0:
-                    # There is no space after preemption
-                    break
-
-                part_size = self.kv_cache_manager.allocate(
-                    request, token_budget)
-                token_chunk_size += part_size
-                token_budget -= part_size
-
-            if token_chunk_size == 0:
-                preempted.append(request)
-                break
-
-            request.token_chunk_size = token_chunk_size
-
-            if request.get_is_prefill():
-                prefill_requests.append(request)
-            else:
-                decode_requests.append(request)
-
-            if self.record_metrics:
-                request.set_scheduled_ts(scheduled_ts)
-
-            budget.add_num_batched_tokens(request.request_id,
-                                          request.token_chunk_size)
-
-            budget.add_num_requests(request.request_id, 1)
-
-        return SchedulerRunningOutputs(decode_requests=decode_requests,
-                                       prefill_requests=prefill_requests,
-                                       preempted=preempted)
+        if max_num_partial_prefills > 1:
+            return self._schedule_running_fair(budget, running_queue)
+        else:
+            return self._schedule_running_fcfs(budget, running_queue)
 
     def _schedule(self) -> DecodingSchedulerOutput:
         if not self.waiting and not self.running:
@@ -367,3 +288,181 @@ class NaiveDecodingScheduler(Scheduler):
             sorted(running_queue, key=lambda request: request.arrival_time))
 
         return running_queue, busy_requests
+
+    def _allocate_step(self, request, token_budget, running_queue, preempted):
+        if self.kv_cache_manager.num_free_blocks == 0:
+            # There is no empty kvcache, perform preemption
+            while running_queue:
+                victim_request = running_queue[-1]
+
+                while victim_request.num_computed_tokens > 0:
+                    self.kv_cache_manager.free_last_block(victim_request)
+
+                    if self.kv_cache_manager.num_free_blocks > 0:
+                        break
+
+                if victim_request.num_computed_tokens == 0:
+                    running_queue.pop()
+                    preempted.append(victim_request)
+
+                if self.kv_cache_manager.num_free_blocks > 0:
+                    break
+
+        if self.kv_cache_manager.num_free_blocks == 0:
+            # There is no space after preemption
+            return 0
+
+        part_size = self.kv_cache_manager.allocate(request, token_budget)
+        return part_size
+
+    def _schedule_running_fcfs(self, budget: DecodingSchedulingBudget,
+                               running_queue) -> SchedulerRunningOutputs:
+        prefill_requests = []
+        decode_requests = []
+        preempted = []
+
+        while running_queue:
+            if budget.full():
+                break
+
+            request = running_queue[0]
+            if self.record_metrics:
+                scheduled_ts = time.perf_counter()
+
+            # 1. write new token ids to vblock
+            self.kv_cache_manager.update(request)
+
+            # 2. test kv_cache is above high_watermark
+            is_prefill = request.get_is_prefill()
+            if is_prefill and self.kv_cache_manager.high_watermark():
+                break
+
+            # 3. chunked prefill budget
+            token_budget = budget.remaining_token_budget()
+            assert token_budget > 0
+
+            running_queue.popleft()
+
+            num_new_tokens = request.num_new_tokens
+            assert num_new_tokens > 0
+
+            token_chunk_size = 0
+
+            # 4. try to allocate
+            while request.has_unscheduled_tokens() and token_budget > 0:
+                # allocate one block at a time
+                part_size = self._allocate_step(request, token_budget,
+                                                running_queue, preempted)
+
+                if part_size == 0:
+                    break
+
+                token_chunk_size += part_size
+                token_budget -= part_size
+
+            if token_chunk_size == 0:
+                preempted.append(request)
+                break
+
+            request.token_chunk_size = token_chunk_size
+
+            if request.get_is_prefill():
+                prefill_requests.append(request)
+            else:
+                decode_requests.append(request)
+
+            if self.record_metrics:
+                request.set_scheduled_ts(scheduled_ts)
+
+            budget.add_num_batched_tokens(request.request_id,
+                                          request.token_chunk_size)
+
+            budget.add_num_requests(request.request_id, 1)
+
+        return SchedulerRunningOutputs(decode_requests=decode_requests,
+                                       prefill_requests=prefill_requests,
+                                       preempted=preempted)
+
+    def _schedule_running_fair(self, budget: DecodingSchedulingBudget,
+                               running_queue) -> SchedulerRunningOutputs:
+        max_num_partial_prefills = self.scheduler_config.max_num_prefill_requests
+
+        partial_prefills = []
+        prefill_requests = []
+        decode_requests = []
+        preempted = []
+
+        while running_queue:
+            if budget.full():
+                break
+
+            request = running_queue[0]
+            if self.record_metrics:
+                scheduled_ts = time.perf_counter()
+
+            # 1. write new token ids to vblock
+            self.kv_cache_manager.update(request)
+
+            # 2. test kv_cache is above high_watermark
+            is_prefill = request.get_is_prefill()
+            if is_prefill and self.kv_cache_manager.high_watermark():
+                break
+
+            # 3. chunked prefill budget
+            token_budget = budget.remaining_token_budget()
+            assert token_budget > 0
+
+            running_queue.popleft()
+
+            num_new_tokens = request.num_new_tokens
+            assert num_new_tokens > 0
+
+            if not is_prefill:
+                token_chunk_size = self._allocate_step(request, token_budget,
+                                                       running_queue,
+                                                       preempted)
+
+                if token_chunk_size == 0:
+                    preempted.append(request)
+                    break
+
+                request.token_chunk_size = token_chunk_size
+                decode_requests.append(request)
+
+                if self.record_metrics:
+                    request.set_scheduled_ts(scheduled_ts)
+
+                budget.add_num_batched_tokens(request.request_id,
+                                              request.token_chunk_size)
+
+                budget.add_num_requests(request.request_id, 1)
+            else:
+                request.token_chunk_size = 0
+                partial_prefills.append(request)
+
+                if len(partial_prefills) < max_num_partial_prefills:
+                    continue
+                else:
+                    token_budget = budget.remaining_token_budget()
+
+                    while True:
+                        if token_budget == 0:
+                            break
+
+                        partial_prefills_next = []
+
+                        for request in partial_prefills:
+                            if token_budget == 0:
+                                break
+
+                            if request.has_unscheduled_tokens():
+                                part_size = self._allocate_step(
+                                    request, token_budget, running_queue,
+                                    preempted)
+                                request.token_chunk_size += part_size
+                                token_budget -= part_size
+                                partial_prefills_next.append(request)
+
+        return SchedulerRunningOutputs(decode_requests=decode_requests,
+                                       prefill_requests=prefill_requests,
+                                       preempted=preempted)

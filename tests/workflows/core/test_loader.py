@@ -1,5 +1,5 @@
 import pytest
-from vllm.utils import DeviceMemoryProfiler
+from vllm.utils.mem_utils import DeviceMemoryProfiler
 
 from wde.tasks.encode_only.arg_utils import EncodeOnlyEngineArgs as EngineArgs
 from wde.workflows.core.backends.attention import AttentionBackend

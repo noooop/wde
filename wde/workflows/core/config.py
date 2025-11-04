@@ -27,18 +27,8 @@ class DeviceConfig:
             # Automated device type detection
             if current_platform.is_cuda_alike():
                 self.device_type = "cuda"
-            elif current_platform.is_neuron():
-                self.device_type = "neuron"
-            elif current_platform.is_hpu():
-                self.device_type = "hpu"
-            elif current_platform.is_openvino():
-                self.device_type = "openvino"
-            elif current_platform.is_tpu():
-                self.device_type = "tpu"
             elif current_platform.is_cpu():
                 self.device_type = "cpu"
-            elif current_platform.is_xpu():
-                self.device_type = "xpu"
             else:
                 raise RuntimeError("Failed to infer device type")
         else:
@@ -116,18 +106,6 @@ class LoadConfig:
 
         load_format = self.load_format.lower()
         self.load_format = LoadFormat(load_format)
-
-        rocm_not_supported_load_format: List[str] = []
-        if current_platform.is_hpu(
-        ) and load_format in rocm_not_supported_load_format:
-            rocm_supported_load_format = [
-                f for f in LoadFormat.__members__
-                if (f not in rocm_not_supported_load_format)
-            ]
-            raise ValueError(
-                f"load format '{load_format}' is not supported in ROCm. "
-                f"Supported load formats are "
-                f"{rocm_supported_load_format}")
 
 
 class CacheConfig:

@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from vllm.utils import DeviceMemoryProfiler
+from vllm.utils.mem_utils import DeviceMemoryProfiler
 
 from wde.logger import init_logger
 from wde.workflows.core.backends.attention import AttentionBackend

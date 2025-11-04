@@ -10,7 +10,7 @@ def benchmark_wde(args):
         EncodeOnlyEngineArgs as EngineArgs
     from wde.workflows.core.llm_engine import LLMEngine
 
-    prompt = "if" * args.input_len
+    prompt = "你" * (args.input_len-2)
     requests = [prompt for _ in range(args.num_prompts)]
 
     engine_args = EngineArgs(
@@ -40,15 +40,28 @@ def benchmark_wde(args):
         for i in range(20):
             engine.step()
 
-        with torch.profiler.profile(activities=[
+        worker_name = f"{scheduling}-{args.frieren_executor_max_workers}-{max_num_requests}"
+
+        torch_profiler_trace_dir = "./"
+
+        profiler = torch.profiler.profile(
+            activities=[
                 torch.profiler.ProfilerActivity.CPU,
                 torch.profiler.ProfilerActivity.CUDA,
-        ]) as prof:
-            for i in range(10):
-                engine.step()
-        prof.export_chrome_trace(f"{scheduling}-"
-                                 f"{args.frieren_executor_max_workers}-"
-                                 f"{max_num_requests}.json")
+            ],
+            record_shapes=False,
+            profile_memory=False,
+            with_stack=True,
+            with_flops=False,
+            on_trace_ready=torch.profiler.tensorboard_trace_handler(
+                torch_profiler_trace_dir, worker_name=worker_name, use_gzip=True
+            ),
+        )
+
+        profiler.start()
+        for i in range(10):
+            engine.step()
+        profiler.stop()
 
         engine.scheduler.clear()
         engine.executor.shutdown_execute_loop()
@@ -61,7 +74,7 @@ if __name__ == '__main__':
     args.input_len = 32
     args.num_prompts = 10000
 
-    args.model = 'BAAI/bge-m3'
+    args.model = 'BAAI/bge-base-en-v1.5'
 
     args.trust_remote_code = False
     args.tokenizer = args.model

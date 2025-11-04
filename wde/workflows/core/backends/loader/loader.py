@@ -13,7 +13,7 @@ import numpy as np
 import torch
 from huggingface_hub import HfApi, hf_hub_download
 from torch import nn
-from vllm.utils import is_pin_memory_available
+from vllm.utils.platform_utils import is_pin_memory_available
 
 from wde.envs import USE_MODELSCOPE
 from wde.logger import init_logger

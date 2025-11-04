@@ -5,7 +5,8 @@
 
 from vllm.vllm_flash_attn import (flash_attn_varlen_func,
                                   flash_attn_with_kvcache)
-from vllm.vllm_flash_attn.fa_utils import (flash_attn_supports_fp8,
+
+from vllm.attention.utils.fa_utils import (flash_attn_supports_fp8,
                                            get_flash_attn_version)
 
 __all__ = [

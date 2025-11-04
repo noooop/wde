@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Type
 
 import torch
-from vllm.utils import is_pin_memory_available, make_tensor_with_pad
+from vllm.utils.platform_utils import is_pin_memory_available, make_tensor_with_pad
 
 from wde.workflows.core.backends.ops.flash_attn_interface import (
     flash_attn_varlen_func, flash_attn_with_kvcache, get_flash_attn_version)
